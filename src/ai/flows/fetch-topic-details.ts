@@ -1,3 +1,4 @@
+
 // src/ai/flows/fetch-topic-details.ts
 'use server';
 
@@ -18,7 +19,7 @@ const FetchTopicDetailsInputSchema = z.object({
 export type FetchTopicDetailsInput = z.infer<typeof FetchTopicDetailsInputSchema>;
 
 const FetchTopicDetailsOutputSchema = z.object({
-  details: z.string().describe('The details of the topic.'),
+  details: z.string().describe('The details of the topic. Should use LaTeX for math, e.g., $E=mc^2$ or $$x^2$$'),
 });
 export type FetchTopicDetailsOutput = z.infer<typeof FetchTopicDetailsOutputSchema>;
 
@@ -31,6 +32,10 @@ const prompt = ai.definePrompt({
   input: {schema: FetchTopicDetailsInputSchema},
   output: {schema: FetchTopicDetailsOutputSchema},
   prompt: `You are a helpful AI assistant. The user will provide you with a topic, and you will respond with details about the topic.
+If the 'details' include mathematical formulas or expressions, you MUST use LaTeX notation.
+For inline math, use single dollar signs (e.g., $E=mc^2$).
+For display/block math (equations on their own line), use double dollar signs (e.g., $$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$).
+Ensure the LaTeX is syntactically correct.
 
 Topic: {{{topic}}}
 

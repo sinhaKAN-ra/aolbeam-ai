@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Send, Loader2 } from 'lucide-react';
 import type { GeneratePracticeProblemOutput } from '@/ai/flows/generate-practice-problem';
 import type { ProblemType } from '@/types';
+import MathRenderer from './MathRenderer';
 
 interface ProblemDisplayProps {
   problem: GeneratePracticeProblemOutput;
@@ -45,7 +46,9 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, isLoading
         <CardTitle className="text-xl font-semibold">Practice Problem: <span className="text-primary">{currentTopic}</span></CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="mb-4 text-base whitespace-pre-wrap">{problem.problemStatement}</p>
+        <div className="mb-4 text-base prose max-w-none dark:prose-invert">
+          <MathRenderer content={problem.problemStatement} />
+        </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           {problemType === 'theory' ? (
             <div className="space-y-2">
@@ -71,7 +74,9 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, isLoading
                 {problem.multipleChoiceOptions?.map((option, index) => (
                   <div key={index} className="flex items-center space-x-2 p-3 border rounded-md hover:border-primary transition-colors data-[state=checked]:border-primary data-[state=checked]:bg-primary/10">
                     <RadioGroupItem value={option} id={`option-${index}`} />
-                    <Label htmlFor={`option-${index}`} className="cursor-pointer text-base flex-1">{option}</Label>
+                    <Label htmlFor={`option-${index}`} className="cursor-pointer text-base flex-1 prose prose-sm max-w-none dark:prose-invert">
+                        <MathRenderer content={option}/>
+                    </Label>
                   </div>
                 ))}
               </RadioGroup>

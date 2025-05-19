@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Info, Loader2, BookOpen } from 'lucide-react';
+import MathRenderer from './MathRenderer';
 
 interface TopicRevisionProps {
   topic: string | null;
@@ -47,8 +48,8 @@ export function TopicRevision({ topic, details, onFetchDetails, isLoading }: Top
         {details && (
           <>
             <ScrollArea className="h-60 w-full rounded-md border p-4 bg-muted/30">
-              <div className="prose prose-sm max-w-none whitespace-pre-wrap">
-                {details}
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <MathRenderer content={details} />
               </div>
             </ScrollArea>
             <Button onClick={() => onFetchDetails(topic)} disabled={isLoading} className="w-full mt-4 text-base py-3" variant="outline">
