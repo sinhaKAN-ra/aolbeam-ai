@@ -17,7 +17,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2 } from 'lucide-react';
+import { RefreshCcw, FilePlus2, UserCircle } from 'lucide-react'; // Added UserCircle
 
 import type { InteractionHistoryItem, ProblemType } from '@/types';
 import { ProblemGenerator } from '@/components/ProblemGenerator';
@@ -25,7 +25,7 @@ import { ProblemDisplay } from '@/components/ProblemDisplay';
 import { EvaluationResult } from '@/components/EvaluationResult';
 import { TopicRevision } from '@/components/TopicRevision';
 import { HistoryView } from '@/components/HistoryView';
-import { PaywallModal } from '@/components/PaywallModal'; // Import PaywallModal
+import { PaywallModal } from '@/components/PaywallModal';
 
 const FREE_INTERACTION_LIMIT = 5;
 
@@ -207,64 +207,79 @@ export default function ExamPrepPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-4 md:p-6 lg:p-8">
+    <div className="min-h-screen bg-background text-foreground"> {/* Removed overall p-4 md:p-6 lg:p-8, will be handled by container or sections */}
       <PaywallModal
         isOpen={showPaywall}
         onClose={() => setShowPaywall(false)}
         onSubscribe={handleSubscribe}
         onLoginRegister={handleLoginRegister}
       />
-      <header className="mb-8 text-center">
-        <h1 className="text-4xl font-bold text-primary">Exam Prep AI</h1>
-        <p className="text-lg text-muted-foreground">Your Personal AI Tutor for Competitive Exams</p>
+      <header className="mb-6 md:mb-8 py-4 bg-card/50 border-b">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div>
+              <h1 className="text-3xl sm:text-4xl font-bold text-primary">Exam Prep AI</h1>
+              <p className="text-md sm:text-lg text-muted-foreground mt-1">Your Personal AI Tutor</p>
+            </div>
+            <div>
+              <Button variant="outline" onClick={handleLoginRegister} className="w-full sm:w-auto">
+                <UserCircle className="mr-2 h-5 w-5" /> Login / Sign Up
+              </Button>
+            </div>
+          </div>
+        </div>
       </header>
 
-      <div className="flex flex-col lg:flex-row gap-6 xl:gap-8">
-        <div className="lg:w-2/5 flex flex-col gap-6">
-          <ProblemGenerator
-            onGenerate={handleGenerateProblem}
-            isLoading={isLoadingProblem}
-            defaultTopic={currentTopic}
-            defaultProblemType={currentProblemType}
-          />
-          {currentProblem && (
-            <>
-            <div className="flex gap-2 mt-0">
-                <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1">
-                    <RefreshCcw className="mr-2 h-4 w-4" /> Another (Same Topic)
-                </Button>
-                <Button onClick={handleStartNew} variant="outline" className="flex-1">
-                    <FilePlus2 className="mr-2 h-4 w-4" /> Start New Topic
-                </Button>
-            </div>
-            <ProblemDisplay
-              problem={currentProblem}
-              problemType={currentProblemType}
-              onSubmitAnswer={handleEvaluateAnswer}
-              isLoading={isLoadingEvaluation}
-              currentTopic={currentTopic}
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        <div className="flex flex-col lg:flex-row gap-6 xl:gap-8">
+          <div className="lg:w-2/5 flex flex-col gap-6">
+            <ProblemGenerator
+              onGenerate={handleGenerateProblem}
+              isLoading={isLoadingProblem}
+              defaultTopic={currentTopic}
+              defaultProblemType={currentProblemType}
             />
-            </>
-          )}
-          {evaluationResult && <EvaluationResult evaluation={evaluationResult} />}
-        </div>
+            {currentProblem && (
+              <>
+              <div className="flex gap-2 mt-0">
+                  <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1">
+                      <RefreshCcw className="mr-2 h-4 w-4" /> Another (Same Topic)
+                  </Button>
+                  <Button onClick={handleStartNew} variant="outline" className="flex-1">
+                      <FilePlus2 className="mr-2 h-4 w-4" /> Start New Topic
+                  </Button>
+              </div>
+              <ProblemDisplay
+                problem={currentProblem}
+                problemType={currentProblemType}
+                onSubmitAnswer={handleEvaluateAnswer}
+                isLoading={isLoadingEvaluation}
+                currentTopic={currentTopic}
+              />
+              </>
+            )}
+            {evaluationResult && <EvaluationResult evaluation={evaluationResult} />}
+          </div>
 
-        <div className="lg:w-1/5 flex flex-col gap-6">
-          <TopicRevision
-            topic={currentProblem ? currentTopic : null}
-            details={topicDetails}
-            onFetchDetails={handleFetchTopicDetails}
-            isLoading={isLoadingDetails}
-          />
-        </div>
+          <div className="lg:w-1/5 flex flex-col gap-6">
+            <TopicRevision
+              topic={currentProblem ? currentTopic : null}
+              details={topicDetails}
+              onFetchDetails={handleFetchTopicDetails}
+              isLoading={isLoadingDetails}
+            />
+          </div>
 
-        <div className="lg:w-2/5 flex flex-col">
-          <HistoryView history={history} />
+          <div className="lg:w-2/5 flex flex-col">
+            <HistoryView history={history} />
+          </div>
         </div>
-      </div>
-      <footer className="text-center mt-12 py-6 border-t">
-        <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} Exam Prep AI. Powered by GenAI.</p>
-        {!isUserSubscribed && <p className="text-xs text-muted-foreground">Free interactions remaining: {Math.max(0, FREE_INTERACTION_LIMIT - interactionCount)}</p>}
+      </main>
+      <footer className="text-center mt-12 py-6 border-t bg-card/50">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+            <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} Exam Prep AI. Powered by GenAI.</p>
+            {!isUserSubscribed && <p className="text-xs text-muted-foreground mt-1">Free interactions remaining: {Math.max(0, FREE_INTERACTION_LIMIT - interactionCount)}</p>}
+        </div>
       </footer>
     </div>
   );
