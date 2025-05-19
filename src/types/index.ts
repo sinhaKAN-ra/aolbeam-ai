@@ -15,3 +15,12 @@ export interface InteractionHistoryItem {
   isTopicRevised?: boolean;
   topicDetails?: string | null;
 }
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  price: string;
+  duration: string;
+  features: string[];
+  highlight?: boolean;
+}

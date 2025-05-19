@@ -25,7 +25,9 @@ import { ProblemDisplay } from '@/components/ProblemDisplay';
 import { EvaluationResult } from '@/components/EvaluationResult';
 import { TopicRevision } from '@/components/TopicRevision';
 import { HistoryView } from '@/components/HistoryView';
-import { Separator } from '@/components/ui/separator';
+import { PaywallModal } from '@/components/PaywallModal'; // Import PaywallModal
+
+const FREE_INTERACTION_LIMIT = 5;
 
 export default function ExamPrepPage() {
   const { toast } = useToast();
@@ -41,9 +43,28 @@ export default function ExamPrepPage() {
   const [isLoadingDetails, setIsLoadingDetails] = useState<boolean>(false);
 
   const [history, setHistory] = useLocalStorage<InteractionHistoryItem[]>('examPrepHistory', []);
+  const [interactionCount, setInteractionCount] = useLocalStorage<number>('examPrepInteractionCount', 0);
+  const [isUserSubscribed, setIsUserSubscribed] = useLocalStorage<boolean>('examPrepIsUserSubscribed', false);
+  const [showPaywall, setShowPaywall] = useState<boolean>(false);
+
+
+  const checkUsageLimit = useCallback(() => {
+    if (!isUserSubscribed && interactionCount >= FREE_INTERACTION_LIMIT) {
+      setShowPaywall(true);
+      return true; // Limit reached
+    }
+    return false; // Limit not reached
+  }, [interactionCount, isUserSubscribed]);
+
+  const incrementInteraction = useCallback(() => {
+    if (!isUserSubscribed) {
+        setInteractionCount(prev => prev + 1);
+    }
+  }, [isUserSubscribed, setInteractionCount]);
+
 
   const addToHistory = useCallback((item: Omit<InteractionHistoryItem, 'id' | 'timestamp'>) => {
-    setHistory(prevHistory => [{ ...item, id: Date.now().toString(), timestamp: new Date().toISOString() }, ...prevHistory].slice(0, 50)); // Keep last 50 items
+    setHistory(prevHistory => [{ ...item, id: Date.now().toString(), timestamp: new Date().toISOString() }, ...prevHistory].slice(0, 50));
   }, [setHistory]);
 
   const updateLastHistoryItem = useCallback((updates: Partial<InteractionHistoryItem>) => {
@@ -57,14 +78,17 @@ export default function ExamPrepPage() {
 
 
   const handleGenerateProblem = async (topic: string, type: ProblemType) => {
+    if (checkUsageLimit()) return;
+
     setIsLoadingProblem(true);
     setCurrentTopic(topic);
     setCurrentProblemType(type);
     setCurrentProblem(null);
     setEvaluationResult(null);
-    setTopicDetails(null); // Reset topic details for new problem
+    setTopicDetails(null);
 
     try {
+      incrementInteraction();
       const result = await generatePracticeProblem({ topic, problemType: type });
       setCurrentProblem(result);
       addToHistory({
@@ -83,15 +107,13 @@ export default function ExamPrepPage() {
 
   const handleEvaluateAnswer = async (answer: string) => {
     if (!currentProblem || !currentTopic) return;
+    // Evaluating an answer does not count towards interaction limit for now
     setIsLoadingEvaluation(true);
     setEvaluationResult(null);
 
     try {
       let evalOutput: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string };
       if (currentProblemType === 'theory') {
-        // For theory, topicDetails to evaluateTheoryAnswer could be the problem statement or fetched topic details
-        // For simplicity, let's use the problem statement as part of context.
-        // A more advanced version might fetch topic details specifically for evaluation.
         const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific details available for this topic.";
         
         evalOutput = await evaluateTheoryAnswer({
@@ -100,12 +122,8 @@ export default function ExamPrepPage() {
           topicDetails: fetchedDetailsForEval,
         });
         updateLastHistoryItem({ userAnswer: answer, evaluation: evalOutput });
-      } else { // Practical (MCQ)
-        // The 'answerFormat' from AI for practical problems should indicate the correct answer.
-        // For example: "The correct option is 'Option A' because..." or just "Option A".
-        // We need to parse this or rely on a consistent format.
-        // Let's assume currentProblem.answerFormat *is* the correct option text.
-        const isCorrect = currentProblem.answerFormat.includes(answer) || answer === currentProblem.answerFormat; // Simplified check
+      } else { 
+        const isCorrect = currentProblem.answerFormat.includes(answer) || answer === currentProblem.answerFormat;
         evalOutput = {
           isCorrect,
           feedback: isCorrect
@@ -125,13 +143,17 @@ export default function ExamPrepPage() {
   };
 
   const handleFetchTopicDetails = async (topicToFetch: string) => {
+    if (checkUsageLimit()) return;
+    
     setIsLoadingDetails(true);
     try {
+      incrementInteraction();
       const result = await fetchTopicDetails({ topic: topicToFetch });
       setTopicDetails(result.details);
       updateLastHistoryItem({ isTopicRevised: true, topicDetails: result.details });
       toast({ title: "Topic Details Fetched", description: `Details for "${topicToFetch}" are now available.` });
-    } catch (error) {
+    } catch (error)
+    {
       console.error("Error fetching topic details:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to fetch topic details." });
       setTopicDetails("Failed to load details. Please try again.");
@@ -142,6 +164,7 @@ export default function ExamPrepPage() {
 
   const handleNewProblemSameTopic = () => {
     if (currentTopic) {
+      // checkUsageLimit is called within handleGenerateProblem
       handleGenerateProblem(currentTopic, currentProblemType);
     } else {
       toast({ title: "No Topic", description: "Please generate a problem first to use this option.", variant: "default" });
@@ -149,15 +172,28 @@ export default function ExamPrepPage() {
   };
 
   const handleStartNew = () => {
+    // Does not need usage check as it just resets state, ProblemGenerator will trigger check on new generation
     setCurrentTopic('');
     setCurrentProblem(null);
     setEvaluationResult(null);
     setTopicDetails(null);
-    // The ProblemGenerator component maintains its own topic input, so it will be ready for new input.
     toast({ title: "Ready for New Topic", description: "Enter a new topic and problem type." });
   };
   
-  // Load initial state from history if available
+  const handleSubscribe = (planId: string) => {
+    console.log("Subscribed to plan:", planId); // Placeholder
+    setIsUserSubscribed(true);
+    setShowPaywall(false);
+    setInteractionCount(0); // Reset interaction count upon subscription
+    toast({ title: "Subscription Activated!", description: "You now have unlimited access." });
+  };
+
+  const handleLoginRegister = () => {
+    // Placeholder for actual authentication logic
+    console.log("Login/Register clicked");
+    toast({ title: "Coming Soon", description: "User authentication will be available soon." });
+  };
+
   useEffect(() => {
     if (history.length > 0) {
       const lastItem = history[0];
@@ -168,17 +204,22 @@ export default function ExamPrepPage() {
       if (lastItem.isTopicRevised && lastItem.topicDetails) setTopicDetails(lastItem.topicDetails);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only on mount
+  }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 md:p-6 lg:p-8">
+      <PaywallModal
+        isOpen={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        onSubscribe={handleSubscribe}
+        onLoginRegister={handleLoginRegister}
+      />
       <header className="mb-8 text-center">
         <h1 className="text-4xl font-bold text-primary">Exam Prep AI</h1>
         <p className="text-lg text-muted-foreground">Your Personal AI Tutor for Competitive Exams</p>
       </header>
 
       <div className="flex flex-col lg:flex-row gap-6 xl:gap-8">
-        {/* Left Column: Problem Interaction */}
         <div className="lg:w-2/5 flex flex-col gap-6">
           <ProblemGenerator
             onGenerate={handleGenerateProblem}
@@ -208,7 +249,6 @@ export default function ExamPrepPage() {
           {evaluationResult && <EvaluationResult evaluation={evaluationResult} />}
         </div>
 
-        {/* Middle Column: Topic Revision */}
         <div className="lg:w-1/5 flex flex-col gap-6">
           <TopicRevision
             topic={currentProblem ? currentTopic : null}
@@ -218,13 +258,13 @@ export default function ExamPrepPage() {
           />
         </div>
 
-        {/* Right Column: History */}
         <div className="lg:w-2/5 flex flex-col">
           <HistoryView history={history} />
         </div>
       </div>
       <footer className="text-center mt-12 py-6 border-t">
         <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} Exam Prep AI. Powered by GenAI.</p>
+        {!isUserSubscribed && <p className="text-xs text-muted-foreground">Free interactions remaining: {Math.max(0, FREE_INTERACTION_LIMIT - interactionCount)}</p>}
       </footer>
     </div>
   );
