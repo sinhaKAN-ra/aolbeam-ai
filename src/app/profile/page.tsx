@@ -8,32 +8,156 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ArrowLeft, BarChart3, History, Lightbulb, UserCircle, Settings, Star } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Badge } from '@/components/ui/badge';
+import MathRenderer from '@/components/MathRenderer';
+import type { ProblemType } from '@/types';
+
+import { ArrowLeft, BarChart3, History, Lightbulb, UserCircle, Settings, Star, MessageSquareText, ListChecks, CheckCircle, XCircle } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Your Profile - AOLBEAM',
   description: 'Review your learning progress, track statistics, and manage your account on AOLBEAM.',
 };
 
+interface FetchedInteraction {
+  id: string;
+  created_at: string;
+  topic: string;
+  problem_type: ProblemType;
+  problem_statement: string;
+  answer_format: string;
+  multiple_choice_options?: string[] | null;
+  correct_answer: string;
+  user_answer?: string | null;
+  selected_option?: string | null;
+  evaluation_is_correct?: boolean | null;
+  evaluation_feedback?: string | null;
+  is_topic_revised?: boolean | null;
+  topic_details_content?: string | null;
+}
+
+interface DisplayHistoryItem {
+  id: string;
+  timestamp: string;
+  topic: string;
+  problemType: ProblemType;
+  problem: {
+    problemStatement: string;
+    answerFormat: string;
+    multipleChoiceOptions?: string[];
+    correctAnswer: string;
+  };
+  userAnswer?: string;
+  selectedOption?: string;
+  evaluation?: {
+    isCorrect: boolean;
+    feedback: string;
+  };
+  isTopicRevised?: boolean;
+  topicDetails?: string | null;
+}
+
+
 export default async function ProfilePage() {
   const supabase = createServerComponentClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    // Redirect to home page which handles login prompts if user is not authenticated
     redirect('/'); 
   }
 
-  // Placeholder data - in a real app, this would come from Supabase based on user activity
+  let userHistory: DisplayHistoryItem[] = [];
+  try {
+    const { data: interactions, error } = await supabase
+      .from('user_interactions')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Error fetching user history:", error);
+      // Potentially show an error message to the user on the page
+    }
+
+    if (interactions) {
+      userHistory = interactions.map((item: FetchedInteraction): DisplayHistoryItem => ({
+        id: item.id,
+        timestamp: item.created_at,
+        topic: item.topic,
+        problemType: item.problem_type,
+        problem: {
+          problemStatement: item.problem_statement,
+          answerFormat: item.answer_format,
+          multipleChoiceOptions: item.multiple_choice_options || undefined,
+          correctAnswer: item.correct_answer,
+        },
+        userAnswer: item.user_answer || undefined,
+        selectedOption: item.selected_option || undefined,
+        evaluation: (item.evaluation_is_correct !== null && item.evaluation_is_correct !== undefined && item.evaluation_feedback)
+          ? { isCorrect: item.evaluation_is_correct, feedback: item.evaluation_feedback }
+          : undefined,
+        isTopicRevised: item.is_topic_revised || false,
+        topicDetails: item.topic_details_content || null,
+      }));
+    }
+  } catch (e) {
+    console.error("Exception fetching user history:", e);
+  }
+
+  // Placeholder data for stats - will be replaced by dynamic data from userHistory in future steps
   const topicsPracticed = [
     { name: 'Quantum Physics', accuracy: 0.75, lastPracticed: '2 days ago', questionsAttempted: 20 },
     { name: 'Organic Chemistry', accuracy: 0.90, lastPracticed: '5 days ago', questionsAttempted: 15 },
     { name: 'Calculus II', accuracy: 0.60, lastPracticed: '1 day ago', questionsAttempted: 25 },
     { name: 'Data Structures', accuracy: 0.85, lastPracticed: '3 days ago', questionsAttempted: 30 },
   ];
-  const overallAccuracy = topicsPracticed.length > 0 ? topicsPracticed.reduce((acc, t) => acc + t.accuracy, 0) / topicsPracticed.length : 0;
-  const totalQuestionsAttempted = topicsPracticed.reduce((acc, t) => acc + t.questionsAttempted, 0);
-  const averageQuestionsPerTopic = topicsPracticed.length > 0 ? Math.round(totalQuestionsAttempted / topicsPracticed.length) : 0;
+  const overallAccuracy = userHistory.length > 0 
+    ? userHistory.filter(item => item.evaluation).reduce((acc, item) => acc + (item.evaluation?.isCorrect ? 1 : 0), 0) / userHistory.filter(item => item.evaluation).length
+    : 0;
+  const totalQuestionsAttempted = userHistory.length;
+  
+  // Calculate number of unique topics practiced
+  const uniqueTopicsPracticedCount = new Set(userHistory.map(item => item.topic)).size;
+
+  // Simple calculation for average questions per topic (if topics were grouped)
+  // For now, this is just total questions / unique topics
+  const averageQuestionsPerTopic = uniqueTopicsPracticedCount > 0 ? Math.round(totalQuestionsAttempted / uniqueTopicsPracticedCount) : 0;
+  
+
+  // Sample logic for Strengths (topics with high accuracy)
+  const strengths = userHistory
+    .filter(item => item.evaluation?.isCorrect)
+    .reduce((acc, item) => {
+      if (!acc.find(t => t.name === item.topic)) {
+        const topicItems = userHistory.filter(h => h.topic === item.topic && h.evaluation);
+        const correctCount = topicItems.filter(t => t.evaluation?.isCorrect).length;
+        const accuracy = topicItems.length > 0 ? correctCount / topicItems.length : 0;
+        if (accuracy >= 0.85) { // Example threshold for strength
+          acc.push({ name: item.topic, accuracy });
+        }
+      }
+      return acc;
+    }, [] as { name: string; accuracy: number }[])
+    .slice(0, 2); // Show top 2 strengths
+
+
+  // Sample logic for Focus Areas (topics with lower accuracy)
+  const focusAreas = userHistory
+    .filter(item => item.evaluation && !item.evaluation.isCorrect)
+    .reduce((acc, item) => {
+      if (!acc.find(t => t.name === item.topic)) {
+        const topicItems = userHistory.filter(h => h.topic === item.topic && h.evaluation);
+        const correctCount = topicItems.filter(t => t.evaluation?.isCorrect).length;
+        const accuracy = topicItems.length > 0 ? correctCount / topicItems.length : 0;
+         const lastPracticed = new Date(topicItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0].timestamp).toLocaleDateString();
+        if (accuracy < 0.70) { // Example threshold for focus area
+          acc.push({ name: item.topic, accuracy, lastPracticed });
+        }
+      }
+      return acc;
+    }, [] as { name: string; accuracy: number, lastPracticed: string }[]);
+
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -50,11 +174,9 @@ export default async function ProfilePage() {
 
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="max-w-4xl mx-auto">
-          {/* User Info Card */}
           <Card className="mb-8 shadow-xl overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-primary/10 via-card to-card p-6 flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
               <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-2 border-primary shadow-md">
-                {/* Placeholder for user avatar image - you can integrate this later */}
                 <AvatarImage src={user.user_metadata?.avatar_url} alt={user.email || 'User Avatar'} />
                 <AvatarFallback className="text-2xl bg-primary/20 text-primary">
                   {user.email ? user.email.charAt(0).toUpperCase() : <UserCircle size={48} />}
@@ -75,7 +197,6 @@ export default async function ProfilePage() {
             </CardHeader>
           </Card>
 
-          {/* Stats Overview Grid */}
           <div className="grid md:grid-cols-3 gap-6 mb-8">
             <Card className="shadow-lg">
               <CardHeader>
@@ -84,13 +205,13 @@ export default async function ProfilePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-center">
-                {topicsPracticed.length > 0 ? (
+                {totalQuestionsAttempted > 0 && userHistory.filter(item => item.evaluation).length > 0 ? (
                   <>
                     <p className="text-5xl font-bold text-primary mb-1">
                       {Math.round(overallAccuracy * 100)}%
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Based on {topicsPracticed.length} topics
+                      Based on {uniqueTopicsPracticedCount} topic(s)
                     </p>
                   </>
                 ) : (
@@ -118,13 +239,13 @@ export default async function ProfilePage() {
             <Card className="shadow-lg">
               <CardHeader>
                 <CardTitle className="flex items-center text-lg gap-2">
-                  <Star className="text-yellow-500" /> Strengths (Sample)
+                  <Star className="text-yellow-500" /> Strengths
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                 {topicsPracticed.filter(t => t.accuracy >= 0.85).length > 0 ? (
+                 {strengths.length > 0 ? (
                   <ul className="space-y-1 text-sm">
-                    {topicsPracticed.filter(t => t.accuracy >= 0.85).slice(0,2).map(topic => (
+                    {strengths.map(topic => (
                       <li key={topic.name} className="text-muted-foreground flex items-center">
                          <Star size={14} className="text-yellow-500 mr-2"/> {topic.name} ({Math.round(topic.accuracy*100)}%)
                       </li>
@@ -137,18 +258,17 @@ export default async function ProfilePage() {
             </Card>
           </div>
           
-          {/* Improvement Areas Card */}
            <Card className="mb-8 shadow-lg">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Lightbulb className="text-orange-500" /> Focus Areas (Sample)
+                  <Lightbulb className="text-orange-500" /> Focus Areas
                 </CardTitle>
                 <CardDescription>Topics where you might want to spend a bit more time.</CardDescription>
               </CardHeader>
               <CardContent>
-                {topicsPracticed.length > 0 && topicsPracticed.filter(t => t.accuracy < 0.7).length > 0 ? (
+                {focusAreas.length > 0 ? (
                   <ul className="space-y-2">
-                    {topicsPracticed.filter(t => t.accuracy < 0.7).map(topic => (
+                    {focusAreas.map(topic => (
                       <li key={topic.name} className="p-3 bg-muted/30 rounded-md">
                         <span className="font-semibold text-foreground">{topic.name}</span>
                         <p className="text-xs text-muted-foreground">Current Accuracy: {Math.round(topic.accuracy*100)}% - Last practiced: {topic.lastPracticed}</p>
@@ -159,45 +279,85 @@ export default async function ProfilePage() {
                     ))}
                   </ul>
                 ) : (
-                   <p className="text-muted-foreground">No specific focus areas identified from sample data, or you're doing great! Practice more topics to get detailed insights.</p>
+                   <p className="text-muted-foreground">No specific focus areas identified, or you're doing great! Practice more topics to get detailed insights.</p>
                 )}
               </CardContent>
             </Card>
 
-          {/* Practice History Card */}
           <Card className="shadow-lg">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <History className="text-primary" /> Recent Practice History (Sample)
+                <History className="text-primary" /> Recent Practice History
               </CardTitle>
               <CardDescription>
-                A glimpse of topics you've recently practiced. Full history will be available.
+                Review your past practice sessions.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {topicsPracticed.length > 0 ? (
-                <ul className="space-y-3">
-                  {topicsPracticed.slice(0, 5).map((topic, index) => ( // Show top 5 recent
-                    <li key={index} className="p-4 bg-card border rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex justify-between items-center">
-                        <p className="font-semibold text-lg text-primary">{topic.name}</p>
-                        <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${topic.accuracy >= 0.7 ? 'bg-green-100 text-green-700 dark:bg-green-700 dark:text-green-100' : 'bg-red-100 text-red-700 dark:bg-red-700 dark:text-red-100'}`}>
-                          {Math.round(topic.accuracy*100)}% Acc.
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Attempted: {topic.questionsAttempted} questions - Last practiced: {topic.lastPracticed}
-                      </p>
-                       <Button variant="outline" size="sm" className="mt-2 text-xs" asChild>
-                            <Link href={`/?topic=${encodeURIComponent(topic.name)}&type=theory`}>Revisit Topic</Link>
-                        </Button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
+              {userHistory.length === 0 ? (
                 <p className="text-muted-foreground text-center py-6">Your practice history will appear here once you start solving problems.</p>
+              ) : (
+                <Accordion type="single" collapsible className="w-full space-y-2">
+                  {userHistory.map((item) => (
+                    <AccordionItem value={item.id} key={item.id} className="bg-card border rounded-md shadow-sm">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                        <div className="flex justify-between items-center w-full">
+                          <div className="flex items-center gap-2 text-left">
+                            {item.problemType === 'theory' ? <MessageSquareText className="w-5 h-5 text-primary flex-shrink-0" /> : <ListChecks className="w-5 h-5 text-primary flex-shrink-0" />}
+                            <span className="font-medium truncate max-w-[150px] sm:max-w-[250px] md:max-w-xs">{item.topic}</span>
+                          </div>
+                          {item.evaluation && (
+                             <Badge variant={item.evaluation.isCorrect ? "default" : "destructive"} className={`${item.evaluation.isCorrect ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'} text-primary-foreground ml-2`}>
+                              {item.evaluation.isCorrect ? <CheckCircle size={14}/> : <XCircle size={14}/>}
+                              <span className="ml-1">{item.evaluation.isCorrect ? 'Correct' : 'Incorrect'}</span>
+                            </Badge>
+                          )}
+                          <span className="text-xs text-muted-foreground hidden sm:inline ml-auto pl-2 flex-shrink-0">
+                            {new Date(item.timestamp).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-3 pt-1 text-sm">
+                        <div className="space-y-3 prose prose-sm dark:prose-invert max-w-none">
+                          <div>
+                            <strong className="block text-muted-foreground mb-1">Problem:</strong>
+                            <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.problemStatement} /></div>
+                          </div>
+                          {item.problemType === 'theory' && item.userAnswer && (
+                            <div>
+                              <strong className="block text-muted-foreground mb-1">Your Answer:</strong>
+                              <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.userAnswer} /></div>
+                            </div>
+                          )}
+                          {item.problemType === 'practical' && item.selectedOption && (
+                            <div>
+                              <strong className="block text-muted-foreground mb-1">Your Choice:</strong>
+                               <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.selectedOption} /></div>
+                              <strong className="block text-muted-foreground mt-2 mb-1">Correct Answer:</strong>
+                               <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
+                            </div>
+                          )}
+                          {item.evaluation?.feedback && (
+                            <div>
+                              <strong className="block text-muted-foreground mb-1">Feedback:</strong>
+                              <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.evaluation.feedback} /></div>
+                            </div>
+                          )}
+                          {item.isTopicRevised && item.topicDetails && (
+                            <div>
+                              <strong className="block text-muted-foreground mb-1">Revised Details:</strong>
+                              <div className="p-2 rounded bg-muted/30 max-h-32 overflow-y-auto"><MathRenderer content={item.topicDetails} /></div>
+                            </div>
+                          )}
+                           {!item.evaluation && (
+                             <p className="text-muted-foreground italic">This problem was generated but not answered.</p>
+                           )}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
               )}
-               <Button variant="link" className="mt-4 px-0">View Full History (Coming Soon)</Button>
             </CardContent>
           </Card>
 
@@ -212,5 +372,7 @@ export default async function ProfilePage() {
     </div>
   );
 }
+
+    
 
     
