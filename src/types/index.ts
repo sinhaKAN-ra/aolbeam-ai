@@ -5,7 +5,8 @@ import type { EvaluateTheoryAnswerOutput } from '@/ai/flows/evaluate-theory-answ
 export type ProblemType = 'theory' | 'practical';
 
 export interface InteractionHistoryItem {
-  id: string;
+  id: string; // Local/localStorage React key
+  supabase_id?: string; // ID from the Supabase database table
   timestamp: string;
   topic: string;
   problemType: ProblemType;
@@ -25,3 +26,4 @@ export interface SubscriptionPlan {
   features: string[];
   highlight?: boolean;
 }
+

@@ -94,6 +94,8 @@ export default function AOLBEAMPage() {
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
       setCurrentUser(session?.user ?? null);
+      // If user logs out, we might want to clear or reset local state tied to a specific user.
+      // If user logs in, we might want to fetch their history from Supabase (future step).
     });
 
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -122,36 +124,105 @@ export default function AOLBEAMPage() {
   }, [isUserSubscribed, setInteractionCount, currentUser]);
 
 
-  const addToHistory = useCallback((item: Omit<InteractionHistoryItem, 'id' | 'timestamp'>) => {
-    const newHistoryItem: InteractionHistoryItem = {
+ const addToHistory = useCallback(async (item: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id'>) => {
+    let newHistoryItem: InteractionHistoryItem = {
         ...item,
-        id: Date.now().toString(),
+        id: Date.now().toString(), // Local/React key
         timestamp: new Date().toISOString(),
         isTopicRevised: item.isTopicRevised || false,
-        topicDetails: item.topicDetails || null,   
+        topicDetails: item.topicDetails || null,
         userAnswer: item.userAnswer,
         selectedOption: item.selectedOption,
         evaluation: item.evaluation,
     };
-    setHistory(prevHistory => [newHistoryItem, ...prevHistory].slice(0, 50));
-  }, [setHistory]);
 
-  const updateLastHistoryItem = useCallback((updates: Partial<InteractionHistoryItem>) => {
+    if (supabase && currentUser) {
+        const dbRecord = {
+            user_id: currentUser.id,
+            topic: item.topic,
+            problem_type: item.problemType,
+            problem_statement: item.problem.problemStatement,
+            answer_format: item.problem.answerFormat,
+            multiple_choice_options: item.problem.multipleChoiceOptions,
+            correct_answer: item.problem.correctAnswer,
+            // user_answer, selected_option, evaluation fields will be updated by updateLastHistoryItem
+        };
+        try {
+            const { data, error } = await supabase
+                .from('user_interactions')
+                .insert(dbRecord)
+                .select()
+                .single();
+
+            if (error) {
+                throw error;
+            }
+            if (data) {
+                newHistoryItem.supabase_id = data.id; // Store Supabase ID
+                toast({ title: "Progress Saved", description: "Your new problem has been saved to your account." });
+            }
+        } catch (error: any) {
+            console.error("Error saving history to Supabase:", error);
+            toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account. " + error.message });
+        }
+    }
+
+    setHistory(prevHistory => [newHistoryItem, ...prevHistory].slice(0, 50));
+  }, [setHistory, supabase, currentUser, toast]);
+
+  const updateLastHistoryItem = useCallback(async (updates: Partial<InteractionHistoryItem>) => {
     setHistory(prevHistory => {
       if (prevHistory.length === 0) return prevHistory;
-      const newHistory = [...prevHistory];
-      if (updates.problem) {
-        newHistory[0] = {
-          ...newHistory[0],
-          ...updates,
-          problem: { ...newHistory[0].problem!, ...updates.problem }
-        };
-      } else {
-        newHistory[0] = { ...newHistory[0], ...updates };
+      
+      const updatedItem: InteractionHistoryItem = {
+        ...prevHistory[0],
+        ...updates,
+        problem: updates.problem ? { ...prevHistory[0].problem!, ...updates.problem } : prevHistory[0].problem,
+      };
+      
+      const newHistory = [updatedItem, ...prevHistory.slice(1)];
+
+      if (supabase && currentUser && updatedItem.supabase_id) {
+        const dbUpdatePayload: any = {};
+        if (updates.userAnswer !== undefined) dbUpdatePayload.user_answer = updates.userAnswer;
+        if (updates.selectedOption !== undefined) dbUpdatePayload.selected_option = updates.selectedOption;
+        if (updates.evaluation !== undefined) {
+          dbUpdatePayload.evaluation_is_correct = updates.evaluation.isCorrect;
+          dbUpdatePayload.evaluation_feedback = updates.evaluation.feedback;
+        }
+        if (updates.isTopicRevised !== undefined) dbUpdatePayload.is_topic_revised = updates.isTopicRevised;
+        if (updates.topicDetails !== undefined) dbUpdatePayload.topic_details_content = updates.topicDetails;
+         // If problem details were part of updates (e.g. if a problem itself could be edited, though not current use case)
+        if (updates.problem) {
+            if(updates.problem.problemStatement) dbUpdatePayload.problem_statement = updates.problem.problemStatement;
+            if(updates.problem.answerFormat) dbUpdatePayload.answer_format = updates.problem.answerFormat;
+            if(updates.problem.multipleChoiceOptions) dbUpdatePayload.multiple_choice_options = updates.problem.multipleChoiceOptions;
+            if(updates.problem.correctAnswer) dbUpdatePayload.correct_answer = updates.problem.correctAnswer;
+        }
+
+
+        if (Object.keys(dbUpdatePayload).length > 0) {
+          (async () => {
+            try {
+              const { error } = await supabase
+                .from('user_interactions')
+                .update(dbUpdatePayload)
+                .eq('id', updatedItem.supabase_id!)
+                .eq('user_id', currentUser.id); // Ensure user owns record
+              if (error) {
+                throw error;
+              }
+              toast({ title: "Progress Updated", description: "Your latest interaction has been saved." });
+            } catch (error: any) {
+              console.error("Error updating history in Supabase:", error);
+              toast({ variant: "destructive", title: "Update Error", description: "Could not save updates to your account. " + error.message });
+            }
+          })();
+        }
       }
       return newHistory;
     });
-  }, [setHistory]);
+  }, [setHistory, supabase, currentUser, toast]);
 
 
   const handleGenerateProblem = async (topic: string, type: ProblemType) => {
@@ -168,12 +239,12 @@ export default function AOLBEAMPage() {
       incrementInteraction();
       const result = await generatePracticeProblem({ topic, problemType: type });
       setCurrentProblem(result);
-      addToHistory({
+      await addToHistory({ // Await addToHistory as it's now async
         topic,
         problemType: type,
         problem: result,
         isTopicRevised: false, 
-        topicDetails: null,   
+        topicDetails: null,
       });
       toast({ title: "Problem Generated!", description: `A new ${type} problem for "${topic}" is ready.` });
     } catch (error) {
@@ -198,19 +269,19 @@ export default function AOLBEAMPage() {
         evalOutput = await evaluateTheoryAnswer({
           question: currentProblem.problemStatement,
           studentAnswer: answer,
-          answerFormat: currentProblem.answerFormat, // Pass the expected answer format
+          answerFormat: currentProblem.answerFormat, 
           topicDetails: fetchedDetailsForEval,
         });
-        updateLastHistoryItem({ userAnswer: answer, evaluation: evalOutput });
+        await updateLastHistoryItem({ userAnswer: answer, evaluation: evalOutput });
       } else { // Practical
         const isCorrect = answer === currentProblem.correctAnswer;
         evalOutput = {
           isCorrect,
           feedback: isCorrect
-            ? `Correct! ${currentProblem.answerFormat}` // answerFormat is now the explanation
+            ? `Correct! ${currentProblem.answerFormat}` 
             : `Incorrect. ${currentProblem.answerFormat} The correct option was: ${currentProblem.correctAnswer}`,
         };
-        updateLastHistoryItem({ selectedOption: answer, evaluation: evalOutput });
+        await updateLastHistoryItem({ selectedOption: answer, evaluation: evalOutput });
       }
       setEvaluationResult(evalOutput);
       toast({ title: "Answer Evaluated", description: evalOutput.isCorrect ? "Your answer is correct!" : "Your answer needs improvement." });
@@ -230,7 +301,7 @@ export default function AOLBEAMPage() {
       incrementInteraction();
       const result = await fetchTopicDetails({ topic: topicToFetch });
       setTopicDetails(result.details);
-      updateLastHistoryItem({ isTopicRevised: true, topicDetails: result.details });
+      await updateLastHistoryItem({ isTopicRevised: true, topicDetails: result.details });
       toast({ title: "Topic Details Fetched", description: `Details for "${topicToFetch}" are now available.` });
     } catch (error)
     {
@@ -271,7 +342,7 @@ export default function AOLBEAMPage() {
     console.log("Subscribed to plan:", planId, "by user:", currentUser.email);
     setIsUserSubscribed(true);
     setShowPaywall(false);
-    setInteractionCount(0);
+    setInteractionCount(0); // Reset free interaction count after subscription
     toast({ title: "Subscription Activated!", description: "You now have unlimited access." });
   };
 
@@ -308,7 +379,9 @@ export default function AOLBEAMPage() {
 
 
   useEffect(() => {
-    if (history.length > 0 && !currentUser) {
+    // This effect restores state from localStorage if user is logged out
+    // It does NOT fetch from Supabase; that's for the profile page or specific user actions
+    if (history.length > 0 && !currentUser && !currentProblem && !isLoadingProblem) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
       setCurrentProblemType(lastItem.problemType);
@@ -321,7 +394,7 @@ export default function AOLBEAMPage() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, supabase]); 
+  }, [currentUser, supabase, history]); // Removed currentProblem and isLoadingProblem from deps to avoid loops
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -457,3 +530,4 @@ export default function AOLBEAMPage() {
     </div>
   );
 }
+
