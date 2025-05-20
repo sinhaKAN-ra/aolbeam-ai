@@ -18,8 +18,8 @@ import type { SubscriptionPlan } from '@/types';
 interface PaywallModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubscribe: (planId: string) => void; // Placeholder for subscription logic
-  onLoginRegister: () => void; // Placeholder for auth
+  onSubscribe: (planId: string) => void;
+  onLoginRegister: () => void; 
 }
 
 const plans: SubscriptionPlan[] = [
@@ -58,7 +58,7 @@ export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister }: 
             <Zap className="text-primary w-8 h-8" /> Unlock Full Access
           </DialogTitle>
           <DialogDescription className="text-base">
-            You've reached your free interaction limit. Choose a plan to continue learning without limits!
+            You've reached your free interaction limit. Login or choose a plan to continue learning without limits!
           </DialogDescription>
         </DialogHeader>
 
@@ -104,8 +104,8 @@ export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister }: 
                     <p className="text-sm text-muted-foreground mb-3">
                         We offer custom test series and tailored packages for educational institutions.
                     </p>
-                    <Button variant="outline" onClick={() => window.location.href = 'mailto:support@exampleprep.ai?subject=Institute Inquiry'}>
-                        Contact Us
+                    <Button variant="outline" onClick={() => window.location.href = 'mailto:institutes@aolbeam.com?subject=Institute Inquiry'}>
+                        Contact Us For Institutes
                     </Button>
                 </CardContent>
             </Card>
@@ -113,10 +113,10 @@ export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister }: 
         
         <DialogFooter className="p-6 pt-4 border-t flex flex-col sm:flex-row sm:justify-between items-center">
           <p className="text-sm text-muted-foreground mb-2 sm:mb-0">
-            Already have an account or want to create one?
+            Already have an account or need to create one?
           </p>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onLoginRegister}>Login / Register</Button>
+            <Button variant="outline" onClick={onLoginRegister}>Login / Register with Google</Button>
             <Button variant="ghost" onClick={onClose}>Maybe Later</Button>
           </div>
         </DialogFooter>
