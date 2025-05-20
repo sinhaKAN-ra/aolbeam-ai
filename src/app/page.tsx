@@ -17,7 +17,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle } from 'lucide-react'; // Added UserCircle
+import { RefreshCcw, FilePlus2, UserCircle } from 'lucide-react';
 
 import type { InteractionHistoryItem, ProblemType } from '@/types';
 import { ProblemGenerator } from '@/components/ProblemGenerator';
@@ -64,14 +64,34 @@ export default function ExamPrepPage() {
 
 
   const addToHistory = useCallback((item: Omit<InteractionHistoryItem, 'id' | 'timestamp'>) => {
-    setHistory(prevHistory => [{ ...item, id: Date.now().toString(), timestamp: new Date().toISOString() }, ...prevHistory].slice(0, 50));
+    const newHistoryItem: InteractionHistoryItem = {
+        ...item,
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        isTopicRevised: item.isTopicRevised || false, // Explicitly initialize
+        topicDetails: item.topicDetails || null,    // Explicitly initialize
+        // Ensure other optional fields are handled if not provided in 'item'
+        userAnswer: item.userAnswer,
+        selectedOption: item.selectedOption,
+        evaluation: item.evaluation,
+    };
+    setHistory(prevHistory => [newHistoryItem, ...prevHistory].slice(0, 50));
   }, [setHistory]);
 
   const updateLastHistoryItem = useCallback((updates: Partial<InteractionHistoryItem>) => {
     setHistory(prevHistory => {
       if (prevHistory.length === 0) return prevHistory;
       const newHistory = [...prevHistory];
-      newHistory[0] = { ...newHistory[0], ...updates };
+      // Ensure problem object within history is also spread if updated
+      if (updates.problem) {
+        newHistory[0] = { 
+          ...newHistory[0], 
+          ...updates, 
+          problem: { ...newHistory[0].problem, ...updates.problem } 
+        };
+      } else {
+        newHistory[0] = { ...newHistory[0], ...updates };
+      }
       return newHistory;
     });
   }, [setHistory]);
@@ -85,16 +105,17 @@ export default function ExamPrepPage() {
     setCurrentProblemType(type);
     setCurrentProblem(null);
     setEvaluationResult(null);
-    setTopicDetails(null);
+    setTopicDetails(null); // Clear previous topic details from UI
 
     try {
       incrementInteraction();
       const result = await generatePracticeProblem({ topic, problemType: type });
       setCurrentProblem(result);
-      addToHistory({
+      addToHistory({ // This will use the enhanced addToHistory with explicit defaults
         topic,
         problemType: type,
         problem: result,
+        // isTopicRevised and topicDetails will be defaulted by addToHistory
       });
       toast({ title: "Problem Generated!", description: `A new ${type} problem for "${topic}" is ready.` });
     } catch (error) {
@@ -107,28 +128,33 @@ export default function ExamPrepPage() {
 
   const handleEvaluateAnswer = async (answer: string) => {
     if (!currentProblem || !currentTopic) return;
-    // Evaluating an answer does not count towards interaction limit for now
+    // Evaluating an answer does not count towards interaction limit for now (this might change based on product decision)
+    // However, fetching topic details *during* evaluation (if not already loaded) *will* count.
+
     setIsLoadingEvaluation(true);
     setEvaluationResult(null);
 
     try {
       let evalOutput: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string };
       if (currentProblemType === 'theory') {
-        const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific details available for this topic.";
+        // Fetch details if not already available in state (e.g., user didn't click "Revise Topic")
+        // This fetch *will* increment interaction count if it occurs.
+        const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific topic details available for this evaluation.";
         
         evalOutput = await evaluateTheoryAnswer({
           question: currentProblem.problemStatement,
           studentAnswer: answer,
+          answerFormat: currentProblem.answerFormat, // Pass the expected answer format
           topicDetails: fetchedDetailsForEval,
         });
         updateLastHistoryItem({ userAnswer: answer, evaluation: evalOutput });
-      } else { 
-        const isCorrect = currentProblem.answerFormat.includes(answer) || answer === currentProblem.answerFormat;
+      } else { // Practical MCQ
+        const isCorrect = answer === currentProblem.correctAnswer;
         evalOutput = {
           isCorrect,
           feedback: isCorrect
-            ? `Correct! ${currentProblem.answerFormat}`
-            : `Incorrect. The correct answer is: ${currentProblem.answerFormat}`,
+            ? `Correct! ${currentProblem.answerFormat}` // answerFormat is the explanation
+            : `Incorrect. ${currentProblem.answerFormat} The correct option was: ${currentProblem.correctAnswer}`,
         };
         updateLastHistoryItem({ selectedOption: answer, evaluation: evalOutput });
       }
@@ -149,7 +175,8 @@ export default function ExamPrepPage() {
     try {
       incrementInteraction();
       const result = await fetchTopicDetails({ topic: topicToFetch });
-      setTopicDetails(result.details);
+      setTopicDetails(result.details); // Update UI state for TopicRevision component
+      // Update the current history item with these details
       updateLastHistoryItem({ isTopicRevised: true, topicDetails: result.details });
       toast({ title: "Topic Details Fetched", description: `Details for "${topicToFetch}" are now available.` });
     } catch (error)
@@ -164,7 +191,6 @@ export default function ExamPrepPage() {
 
   const handleNewProblemSameTopic = () => {
     if (currentTopic) {
-      // checkUsageLimit is called within handleGenerateProblem
       handleGenerateProblem(currentTopic, currentProblemType);
     } else {
       toast({ title: "No Topic", description: "Please generate a problem first to use this option.", variant: "default" });
@@ -172,7 +198,6 @@ export default function ExamPrepPage() {
   };
 
   const handleStartNew = () => {
-    // Does not need usage check as it just resets state, ProblemGenerator will trigger check on new generation
     setCurrentTopic('');
     setCurrentProblem(null);
     setEvaluationResult(null);
@@ -181,33 +206,38 @@ export default function ExamPrepPage() {
   };
   
   const handleSubscribe = (planId: string) => {
-    console.log("Subscribed to plan:", planId); // Placeholder
+    console.log("Subscribed to plan:", planId); 
     setIsUserSubscribed(true);
     setShowPaywall(false);
-    setInteractionCount(0); // Reset interaction count upon subscription
+    setInteractionCount(0); 
     toast({ title: "Subscription Activated!", description: "You now have unlimited access." });
   };
 
   const handleLoginRegister = () => {
-    // Placeholder for actual authentication logic
     console.log("Login/Register clicked");
     toast({ title: "Coming Soon", description: "User authentication will be available soon." });
   };
 
   useEffect(() => {
+    // Restore state from the most recent history item on initial load
     if (history.length > 0) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
       setCurrentProblemType(lastItem.problemType);
-      setCurrentProblem(lastItem.problem);
+      setCurrentProblem(lastItem.problem); // This will include the new 'correctAnswer'
       if (lastItem.evaluation) setEvaluationResult(lastItem.evaluation);
-      if (lastItem.isTopicRevised && lastItem.topicDetails) setTopicDetails(lastItem.topicDetails);
+      // Only set topicDetails from history if it was explicitly revised for that item
+      if (lastItem.isTopicRevised && lastItem.topicDetails) {
+        setTopicDetails(lastItem.topicDetails);
+      } else {
+        setTopicDetails(null); // Ensure it's cleared if not revised for the last item
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // Only on mount, history itself is a dependency of useLocalStorage
 
   return (
-    <div className="min-h-screen bg-background text-foreground"> {/* Removed overall p-4 md:p-6 lg:p-8, will be handled by container or sections */}
+    <div className="min-h-screen bg-background text-foreground">
       <PaywallModal
         isOpen={showPaywall}
         onClose={() => setShowPaywall(false)}
@@ -263,8 +293,8 @@ export default function ExamPrepPage() {
 
           <div className="lg:w-1/5 flex flex-col gap-6">
             <TopicRevision
-              topic={currentProblem ? currentTopic : null}
-              details={topicDetails}
+              topic={currentProblem ? currentTopic : null} // Only show topic if a problem is active
+              details={topicDetails} // This state is managed and cleared appropriately
               onFetchDetails={handleFetchTopicDetails}
               isLoading={isLoadingDetails}
             />

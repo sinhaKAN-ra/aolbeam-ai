@@ -25,9 +25,10 @@ const GeneratePracticeProblemOutputSchema = z.object({
   answerFormat: z
     .string()
     .describe(
-      'The format of the answer expected from the user. For theory questions, this will describe the expected content. For practical questions, this will describe the multiple choice options. Should use LaTeX for math, Markdown for code, and describe/use Mermaid for diagrams.'
+      'For theory questions, this describes the expected content and structure (e.g., "Explain in 2-3 sentences..."). For practical questions, this provides an explanation for why the correct answer is correct or general guidance.'
     ),
   multipleChoiceOptions: z.array(z.string().describe('Multiple choice option. Should use LaTeX for math, Markdown for code, and describe/use Mermaid for diagrams if applicable.')).optional().describe('Multiple choice options for practical problems.'),
+  correctAnswer: z.string().describe('The correct answer. For practical problems, this is the exact string of the correct multiple-choice option. For theory problems, this is the ideal model answer or key points. Should use LaTeX for math, Markdown for code, and describe/use Mermaid for diagrams if applicable.'),
 });
 export type GeneratePracticeProblemOutput = z.infer<typeof GeneratePracticeProblemOutputSchema>;
 
@@ -46,7 +47,7 @@ Content Formatting Rules:
 2.  **Code Snippets**: Use Markdown fenced code blocks with language identifiers (e.g., \`\`\`python\\nprint("Hello World")\\n\`\`\` or \`\`\`javascript\\nconsole.log("Hi");\\n\`\`\`).
 3.  **Diagrams**: If a diagram is needed, first try to represent it using Mermaid.js syntax within a Markdown code block (e.g., \`\`\`mermaid\\ngraph TD;\\nA[Start] --> B(Process);\\nB --> C{Decision};\\nC --> D[End];\\n\`\`\`). If Mermaid.js is not suitable, provide a clear textual description of the diagram.
 
-Ensure all generated content ('problemStatement', 'answerFormat', 'multipleChoiceOptions') adheres to these formatting rules for math, code, and diagrams. The LaTeX, Markdown, and Mermaid syntax must be syntactically correct and properly escaped within the JSON string.
+Ensure all generated content ('problemStatement', 'answerFormat', 'multipleChoiceOptions', 'correctAnswer') adheres to these formatting rules for math, code, and diagrams. The LaTeX, Markdown, and Mermaid syntax must be syntactically correct and properly escaped within the JSON string.
 
 Topic: {{{topic}}}
 Problem Type: {{{problemType}}}
@@ -54,11 +55,21 @@ Problem Type: {{{problemType}}}
 {
   "problemStatement": "",
   "answerFormat": "",
-  "multipleChoiceOptions": [ ]
+  "multipleChoiceOptions": [],
+  "correctAnswer": ""
 }
 
-If the problem type is "theory", generate a problem that requires a written answer. The answerFormat field should describe the expected content of the answer. Do not include multipleChoiceOptions.
-If the problem type is "practical", generate a multiple-choice problem. Populate the multipleChoiceOptions array with the choices. The answerFormat should describe which choice is correct.
+If the problem type is "theory":
+- Generate a problem that requires a written answer.
+- The 'answerFormat' field should describe the expected content and structure of the answer (e.g., "Explain in 2-3 sentences including a key formula.").
+- The 'correctAnswer' field should contain a model or ideal answer.
+- Do not include 'multipleChoiceOptions' or ensure it's an empty array if the schema requires it.
+
+If the problem type is "practical":
+- Generate a multiple-choice problem.
+- Populate the 'multipleChoiceOptions' array with the choices.
+- The 'correctAnswer' field MUST be the exact string of one of the 'multipleChoiceOptions'.
+- The 'answerFormat' field should provide a brief explanation for *why* the 'correctAnswer' is correct, or general guidance on solving this type of practical problem.
 
 Remember to apply the content formatting rules (LaTeX, Markdown for code, Mermaid/descriptions for diagrams) to all relevant fields.
 

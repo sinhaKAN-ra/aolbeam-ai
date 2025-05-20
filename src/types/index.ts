@@ -1,4 +1,5 @@
-import type { GeneratePracticeProblemOutput } from '@/ai/flows/generate-practice-problem';
+
+import type { GeneratePracticeProblemOutput } from '@/ai/flows/generate-practice-problem'; // This will now include correctAnswer
 import type { EvaluateTheoryAnswerOutput } from '@/ai/flows/evaluate-theory-answer';
 
 export type ProblemType = 'theory' | 'practical';
@@ -8,7 +9,7 @@ export interface InteractionHistoryItem {
   timestamp: string;
   topic: string;
   problemType: ProblemType;
-  problem: GeneratePracticeProblemOutput;
+  problem: GeneratePracticeProblemOutput; // This type now includes 'correctAnswer'
   userAnswer?: string; // For theory
   selectedOption?: string; // For practical
   evaluation?: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string };

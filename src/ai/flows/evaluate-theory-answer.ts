@@ -16,12 +16,13 @@ import {z} from 'genkit';
 const EvaluateTheoryAnswerInputSchema = z.object({
   question: z.string().describe('The theory question asked to the student.'),
   studentAnswer: z.string().describe('The student response to the theory question.'),
+  answerFormat: z.string().describe('The guidelines or expected format/content of the correct answer, as generated with the problem. This could describe length, key points to include, etc.'),
   topicDetails: z.string().describe('Relevant topic details for context. This might include LaTeX for math, Markdown for code, or Mermaid/descriptions for diagrams.'),
 });
 export type EvaluateTheoryAnswerInput = z.infer<typeof EvaluateTheoryAnswerInputSchema>;
 
 const EvaluateTheoryAnswerOutputSchema = z.object({
-  isCorrect: z.boolean().describe('Whether the student answer is correct.'),
+  isCorrect: z.boolean().describe('Whether the student answer is correct based on the question, expected answer format, and topic details.'),
   feedback: z.string().describe('Detailed feedback on the answer, including areas for improvement. Should use LaTeX for math (e.g., $E=mc^2$ or $$x^2$$), Markdown for code (e.g., ```python\\nprint("Hello")\\n```), and describe diagrams or use Mermaid syntax (e.g., ```mermaid\\ngraph TD; A-->B;\\n```).'),
 });
 export type EvaluateTheoryAnswerOutput = z.infer<typeof EvaluateTheoryAnswerOutputSchema>;
@@ -43,11 +44,20 @@ Content Formatting Rules for your 'feedback' output:
 
 Ensure the LaTeX, Markdown, and Mermaid syntax is syntactically correct and properly escaped within the JSON string for the 'feedback' field.
 
-Evaluate the student's answer to the following question, using the provided topic details for context. Determine if the answer is correct, and provide detailed feedback adhering to the formatting rules above. Set the isCorrect output field appropriately.
+Evaluate the student's answer to the following question. Use the provided 'Expected Answer Guidelines/Format' and 'Topic Details' to form your evaluation.
+Determine if the answer is correct, and provide detailed feedback adhering to the formatting rules above. Set the isCorrect output field appropriately.
 
-Question: {{{question}}}
-Student's Answer: {{{studentAnswer}}}
-Topic Details (for context, may contain formatted content): {{{topicDetails}}}
+Question:
+{{{question}}}
+
+Student's Answer:
+{{{studentAnswer}}}
+
+Expected Answer Guidelines/Format:
+{{{answerFormat}}}
+
+Topic Details (for context, may contain formatted content):
+{{{topicDetails}}}
   `,
 });
 
@@ -62,3 +72,4 @@ const evaluateTheoryAnswerFlow = ai.defineFlow(
     return output!;
   }
 );
+
