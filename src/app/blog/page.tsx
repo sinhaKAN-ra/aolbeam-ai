@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge'; // Added import
 import { ArrowLeft, BookOpen, CalendarDays, Tag } from 'lucide-react';
 import Image from 'next/image';
 
