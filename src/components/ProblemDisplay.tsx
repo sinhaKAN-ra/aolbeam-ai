@@ -19,8 +19,8 @@ type FeedbackRating = "" | "good" | "unclear" | "incorrect_ans" | "irrelevant";
 interface ProblemDisplayProps {
   problem: GeneratePracticeProblemOutput;
   problemType: ProblemType;
-  onSubmitAnswer: (answer: string) => void;
-  onFeedbackSubmit: (rating: FeedbackRating, comment: string) => void; // New prop
+  onSubmitAnswer: (answer: string, timeTakenSeconds?: number) => void; // Updated prop
+  onFeedbackSubmit: (rating: FeedbackRating, comment: string) => void;
   isLoading: boolean;
   currentTopic: string;
 }
@@ -34,6 +34,12 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<boolean>(false);
   const { toast } = useToast();
 
+  // Placeholder for actual timer logic - to be implemented
+  // For example, you might have:
+  // const [startTime, setStartTime] = useState<number | null>(null);
+  // useEffect(() => { setStartTime(Date.now()); return () => setStartTime(null); }, [problem]);
+
+
   useEffect(() => {
     // Reset answer and feedback fields when a new problem is displayed
     setUserAnswer('');
@@ -41,14 +47,19 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
     setFeedbackRating("");
     setFeedbackComment('');
     setFeedbackSubmitted(false);
+    // setStartTime(Date.now()); // Start timer when problem is displayed
   }, [problem]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // const endTime = Date.now();
+    // const timeTaken = startTime ? Math.round((endTime - startTime) / 1000) : undefined;
+    const timeTaken = undefined; // Placeholder: replace with actual calculated time
+
     if (problemType === 'theory' && userAnswer.trim()) {
-      onSubmitAnswer(userAnswer);
+      onSubmitAnswer(userAnswer, timeTaken);
     } else if (problemType === 'practical' && selectedOption) {
-      onSubmitAnswer(selectedOption);
+      onSubmitAnswer(selectedOption, timeTaken);
     }
   };
 

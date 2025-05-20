@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -25,7 +24,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut, Instagram, Twitter, Linkedin, Rss } from 'lucide-react';
+import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut, Instagram, X, Linkedin, Rss } from 'lucide-react';
 // Updated Supabase import for client components
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
@@ -134,6 +133,7 @@ export default function AOLBEAMPage() {
         userAnswer: item.userAnswer,
         selectedOption: item.selectedOption,
         evaluation: item.evaluation,
+        timeTakenSeconds: item.timeTakenSeconds,
     };
 
     if (supabase && currentUser) {
@@ -147,6 +147,7 @@ export default function AOLBEAMPage() {
             correct_answer: item.problem.correctAnswer,
             // user_answer, selected_option, evaluation fields will be updated by updateLastHistoryItem
             // feedback_rating and feedback_comment also updated by updateLastHistoryItem
+            // timeTakenSeconds will be updated by updateLastHistoryItem
         };
         try {
             const { data, error } = await supabase
@@ -195,6 +196,8 @@ export default function AOLBEAMPage() {
         if (updates.topicDetails !== undefined) dbUpdatePayload.topic_details_content = updates.topicDetails;
         if (updates.feedbackRating !== undefined) dbUpdatePayload.feedback_rating = updates.feedbackRating;
         if (updates.feedbackComment !== undefined) dbUpdatePayload.feedback_comment = updates.feedbackComment;
+        if (updates.timeTakenSeconds !== undefined) dbUpdatePayload.time_taken_seconds = updates.timeTakenSeconds;
+
 
          // If problem details were part of updates (e.g. if a problem itself could be edited, though not current use case)
         if (updates.problem) {
@@ -249,7 +252,7 @@ export default function AOLBEAMPage() {
         problem: result,
         isTopicRevised: false, 
         topicDetails: null,
-        // feedback fields will be added later by updateLastHistoryItem
+        // feedback fields and timeTakenSeconds will be added later by updateLastHistoryItem
       });
       toast({ title: "Problem Generated!", description: `A new ${type} problem for "${topic}" is ready.` });
     } catch (error) {
@@ -260,7 +263,7 @@ export default function AOLBEAMPage() {
     }
   };
 
-  const handleEvaluateAnswer = async (answer: string) => {
+  const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) => {
     if (!currentProblem || !currentTopic) return;
 
     setIsLoadingEvaluation(true);
@@ -268,6 +271,8 @@ export default function AOLBEAMPage() {
 
     try {
       let evalOutput: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string };
+      const updatesForHistory: Partial<InteractionHistoryItem> = { timeTakenSeconds };
+
       if (currentProblemType === 'theory') {
         const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific topic details available for this evaluation.";
 
@@ -277,7 +282,8 @@ export default function AOLBEAMPage() {
           answerFormat: currentProblem.answerFormat, 
           topicDetails: fetchedDetailsForEval,
         });
-        await updateLastHistoryItem({ userAnswer: answer, evaluation: evalOutput });
+        updatesForHistory.userAnswer = answer;
+        updatesForHistory.evaluation = evalOutput;
       } else { // Practical
         const isCorrect = answer === currentProblem.correctAnswer;
         evalOutput = {
@@ -286,8 +292,10 @@ export default function AOLBEAMPage() {
             ? `Correct! ${currentProblem.answerFormat}` 
             : `Incorrect. ${currentProblem.answerFormat} The correct option was: ${currentProblem.correctAnswer}`,
         };
-        await updateLastHistoryItem({ selectedOption: answer, evaluation: evalOutput });
+        updatesForHistory.selectedOption = answer;
+        updatesForHistory.evaluation = evalOutput;
       }
+      await updateLastHistoryItem(updatesForHistory);
       setEvaluationResult(evalOutput);
       toast({ title: "Answer Evaluated", description: evalOutput.isCorrect ? "Your answer is correct!" : "Your answer needs improvement." });
     } catch (error) {
@@ -532,7 +540,7 @@ export default function AOLBEAMPage() {
                 <Instagram className="h-6 w-6" />
               </Link>
               <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)" className="text-muted-foreground hover:text-primary">
-                <Twitter className="h-6 w-6" />
+                <X className="h-6 w-6" />
               </Link>
               <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="text-muted-foreground hover:text-primary">
                 <Linkedin className="h-6 w-6" />
@@ -545,4 +553,3 @@ export default function AOLBEAMPage() {
     </div>
   );
 }
-

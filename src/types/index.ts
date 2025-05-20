@@ -18,6 +18,7 @@ export interface InteractionHistoryItem {
   topicDetails?: string | null;
   feedbackRating?: string; // e.g., "good", "unclear", "incorrect_ans", "irrelevant"
   feedbackComment?: string; // Optional user comment
+  timeTakenSeconds?: number; // Time taken to solve the problem in seconds
 }
 
 export interface SubscriptionPlan {
