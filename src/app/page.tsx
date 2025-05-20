@@ -146,6 +146,7 @@ export default function AOLBEAMPage() {
             multiple_choice_options: item.problem.multipleChoiceOptions,
             correct_answer: item.problem.correctAnswer,
             // user_answer, selected_option, evaluation fields will be updated by updateLastHistoryItem
+            // feedback_rating and feedback_comment also updated by updateLastHistoryItem
         };
         try {
             const { data, error } = await supabase
@@ -192,6 +193,9 @@ export default function AOLBEAMPage() {
         }
         if (updates.isTopicRevised !== undefined) dbUpdatePayload.is_topic_revised = updates.isTopicRevised;
         if (updates.topicDetails !== undefined) dbUpdatePayload.topic_details_content = updates.topicDetails;
+        if (updates.feedbackRating !== undefined) dbUpdatePayload.feedback_rating = updates.feedbackRating;
+        if (updates.feedbackComment !== undefined) dbUpdatePayload.feedback_comment = updates.feedbackComment;
+
          // If problem details were part of updates (e.g. if a problem itself could be edited, though not current use case)
         if (updates.problem) {
             if(updates.problem.problemStatement) dbUpdatePayload.problem_statement = updates.problem.problemStatement;
@@ -245,6 +249,7 @@ export default function AOLBEAMPage() {
         problem: result,
         isTopicRevised: false, 
         topicDetails: null,
+        // feedback fields will be added later by updateLastHistoryItem
       });
       toast({ title: "Problem Generated!", description: `A new ${type} problem for "${topic}" is ready.` });
     } catch (error) {
@@ -311,6 +316,15 @@ export default function AOLBEAMPage() {
     } finally {
       setIsLoadingDetails(false);
     }
+  };
+
+  const handleProblemFeedback = async (rating: string, comment: string) => {
+    if (!currentProblem || !currentTopic) return;
+    await updateLastHistoryItem({
+      feedbackRating: rating,
+      feedbackComment: comment,
+    });
+    // Toast is handled in ProblemDisplay component after calling this
   };
 
   const handleNewProblemSameTopic = () => {
@@ -464,6 +478,7 @@ export default function AOLBEAMPage() {
                 problem={currentProblem}
                 problemType={currentProblemType}
                 onSubmitAnswer={handleEvaluateAnswer}
+                onFeedbackSubmit={handleProblemFeedback}
                 isLoading={isLoadingEvaluation}
                 currentTopic={currentTopic}
               />

@@ -16,6 +16,8 @@ export interface InteractionHistoryItem {
   evaluation?: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string };
   isTopicRevised?: boolean;
   topicDetails?: string | null;
+  feedbackRating?: string; // e.g., "good", "unclear", "incorrect_ans", "irrelevant"
+  feedbackComment?: string; // Optional user comment
 }
 
 export interface SubscriptionPlan {
@@ -26,4 +28,3 @@ export interface SubscriptionPlan {
   features: string[];
   highlight?: boolean;
 }
-

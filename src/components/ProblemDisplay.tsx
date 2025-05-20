@@ -12,25 +12,27 @@ import { Send, Loader2, ThumbsUp, MessageCircleQuestion } from 'lucide-react';
 import type { GeneratePracticeProblemOutput } from '@/ai/flows/generate-practice-problem';
 import type { ProblemType } from '@/types';
 import MathRenderer from './MathRenderer';
-import { useToast } from '@/hooks/use-toast'; // Import useToast
+import { useToast } from '@/hooks/use-toast';
+
+type FeedbackRating = "" | "good" | "unclear" | "incorrect_ans" | "irrelevant";
 
 interface ProblemDisplayProps {
   problem: GeneratePracticeProblemOutput;
   problemType: ProblemType;
   onSubmitAnswer: (answer: string) => void;
+  onFeedbackSubmit: (rating: FeedbackRating, comment: string) => void; // New prop
   isLoading: boolean;
   currentTopic: string;
 }
 
-type FeedbackRating = "" | "good" | "unclear" | "incorrect_ans" | "irrelevant";
 
-export function ProblemDisplay({ problem, problemType, onSubmitAnswer, isLoading, currentTopic }: ProblemDisplayProps) {
+export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbackSubmit, isLoading, currentTopic }: ProblemDisplayProps) {
   const [userAnswer, setUserAnswer] = useState<string>('');
   const [selectedOption, setSelectedOption] = useState<string>('');
   const [feedbackRating, setFeedbackRating] = useState<FeedbackRating>("");
   const [feedbackComment, setFeedbackComment] = useState<string>('');
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<boolean>(false);
-  const { toast } = useToast(); // Initialize useToast
+  const { toast } = useToast();
 
   useEffect(() => {
     // Reset answer and feedback fields when a new problem is displayed
@@ -50,17 +52,22 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, isLoading
     }
   };
 
-  const handleFeedbackSubmit = (e: React.FormEvent) => {
+  const handleInternalFeedbackSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, you'd send this feedback to your backend/Supabase
-    console.log("Feedback submitted:", { rating: feedbackRating, comment: feedbackComment });
-    setFeedbackSubmitted(true);
+    if (!feedbackRating) {
+        toast({
+            variant: "destructive",
+            title: "Rating Required",
+            description: "Please select a rating for the problem.",
+        });
+        return;
+    }
+    onFeedbackSubmit(feedbackRating, feedbackComment); // Call the prop function
+    setFeedbackSubmitted(true); // Keep local state to hide form
     toast({
       title: "Feedback Received!",
       description: "Thank you for helping us improve.",
     });
-    // Potentially, you might want to disable the feedback form or clear it
-    // For now, we'll just show the toast and set a submitted flag.
   };
 
   return (
@@ -115,7 +122,7 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, isLoading
             <CardTitle className="text-lg font-semibold mb-3 flex items-center gap-2">
               <MessageCircleQuestion className="text-primary" /> Rate this Problem
             </CardTitle>
-            <form onSubmit={handleFeedbackSubmit} className="space-y-4">
+            <form onSubmit={handleInternalFeedbackSubmit} className="space-y-4">
               <RadioGroup value={feedbackRating} onValueChange={(value) => setFeedbackRating(value as FeedbackRating)} className="space-y-2">
                 {[
                   { value: "good", label: "Looks Good" },
