@@ -11,8 +11,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Check, Info, Zap } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription as PlanCardDescription } from '@/components/ui/card';
+import { Check, Info, Zap, CreditCard } from 'lucide-react';
 import type { SubscriptionPlan } from '@/types';
 
 interface PaywallModalProps {
@@ -20,7 +20,7 @@ interface PaywallModalProps {
   onClose: () => void;
   onSubscribe: (planId: string) => void;
   onLoginRegister: () => void; 
-  isMandatory?: boolean; // New prop
+  isMandatory?: boolean;
 }
 
 const plans: SubscriptionPlan[] = [
@@ -52,7 +52,7 @@ export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister, is
   if (!isOpen) return null;
 
   const dialogTitle = isMandatory ? "Welcome! Choose a Plan to Get Started" : "Unlock Full Access";
-  const dialogDescription = isMandatory 
+  const dialogDescriptionText = isMandatory 
     ? "To begin your learning journey with AOLBEAM, please select a subscription plan."
     : "You've reached your free interaction limit. Choose a plan to continue learning without limits!";
 
@@ -64,7 +64,7 @@ export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister, is
             <Zap className="text-primary w-8 h-8" /> {dialogTitle}
           </DialogTitle>
           <DialogDescription className="text-base">
-            {dialogDescription}
+            {dialogDescriptionText}
           </DialogDescription>
         </DialogHeader>
 
@@ -73,9 +73,9 @@ export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister, is
             <Card key={plan.id} className={`flex flex-col ${plan.highlight ? 'border-primary shadow-lg ring-2 ring-primary' : 'shadow-md'}`}>
               <CardHeader className="pb-4">
                 <CardTitle className="text-xl">{plan.name}</CardTitle>
-                <CardDescription className="text-2xl font-bold text-primary">
+                <PlanCardDescription className="text-2xl font-bold text-primary">
                   {plan.price} <span className="text-sm font-normal text-muted-foreground">{plan.duration}</span>
-                </CardDescription>
+                </PlanCardDescription>
               </CardHeader>
               <CardContent className="flex-grow space-y-2">
                 <ul className="space-y-1.5">
@@ -89,17 +89,26 @@ export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister, is
               </CardContent>
               <DialogFooter className="p-4 pt-2 mt-auto">
                  <Button
-                    onClick={() => onSubscribe(plan.id)}
+                    onClick={() => onSubscribe(plan.id)} // This will simulate subscription for now
                     className={`w-full ${plan.highlight ? '' : 'bg-accent text-accent-foreground hover:bg-accent/90'}`}
                   >
-                    Subscribe to {plan.name}
+                    <CreditCard className="mr-2 h-4 w-4" /> Choose {plan.name}
                   </Button>
               </DialogFooter>
             </Card>
           ))}
         </div>
+
+        <div className="px-6 text-center">
+            <p className="text-xs text-muted-foreground">
+                Secure payments will be processed via Lemon Squeezy, Paddle, Cashfree, or PayPal.
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+                (Payment provider selection coming soon)
+            </p>
+        </div>
         
-        <div className="px-6 py-4 bg-muted/50">
+        <div className="px-6 py-4 bg-muted/50 mt-4">
             <Card className="shadow-none">
                 <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
@@ -133,5 +142,3 @@ export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister, is
     </Dialog>
   );
 }
-
-    
