@@ -24,7 +24,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut, Instagram, X, Linkedin, Rss } from 'lucide-react';
+import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut, Instagram, X, Linkedin, Rss, Brain } from 'lucide-react'; // Added Brain
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -36,7 +36,7 @@ import { EvaluationResult } from '@/components/EvaluationResult';
 import { TopicRevision } from '@/components/TopicRevision';
 import { HistoryView } from '@/components/HistoryView';
 import { PaywallModal } from '@/components/PaywallModal';
-import { ThemeToggle } from '@/components/ThemeToggle'; // Import ThemeToggle
+import { ThemeToggle } from '@/components/ThemeToggle'; 
 
 const FREE_INTERACTION_LIMIT = 5;
 
@@ -90,17 +90,29 @@ export default function AOLBEAMPage() {
     if (!supabase) return; 
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
-      setCurrentUser(session?.user ?? null);
+      const user = session?.user ?? null;
+      setCurrentUser(user);
+      if (event === "SIGNED_IN" && user && !isUserSubscribed) {
+        setShowPaywall(true); // Show paywall immediately if new user or unsubscribed returning user logs in
+      }
+      if (event === "SIGNED_OUT") {
+        setIsUserSubscribed(false); // Reset subscription status on sign out
+        setInteractionCount(0); // Optionally reset interaction count or handle based on your logic
+      }
     });
 
     supabase.auth.getUser().then(({ data: { user } }) => {
       setCurrentUser(user);
+      if (user && !isUserSubscribed) {
+        // This case handles if user is already logged in on page load but not subscribed
+        //setShowPaywall(true); // This might be too aggressive, consider user experience
+      }
     });
 
     return () => {
       authListener?.subscription?.unsubscribe();
     };
-  }, [supabase, isUserSubscribed, setIsUserSubscribed]);
+  }, [supabase, isUserSubscribed, setIsUserSubscribed, setInteractionCount]);
 
 
   const checkUsageLimit = useCallback(() => {
@@ -140,6 +152,16 @@ export default function AOLBEAMPage() {
             answer_format: item.problem.answerFormat,
             multiple_choice_options: item.problem.multipleChoiceOptions,
             correct_answer: item.problem.correctAnswer,
+            // These fields will be null initially for a new problem
+            user_answer: null,
+            selected_option: null,
+            evaluation_is_correct: null,
+            evaluation_feedback: null,
+            is_topic_revised: false,
+            topic_details_content: null,
+            feedback_rating: null,
+            feedback_comment: null,
+            time_taken_seconds: null,
         };
         try {
             const { data, error } = await supabase
@@ -271,7 +293,6 @@ export default function AOLBEAMPage() {
           topicDetails: fetchedDetailsForEval,
         });
         updatesForHistory.userAnswer = answer;
-        updatesForHistory.evaluation = evalOutput;
       } else { 
         const isCorrect = answer === currentProblem.correctAnswer;
         evalOutput = {
@@ -281,8 +302,8 @@ export default function AOLBEAMPage() {
             : `Incorrect. ${currentProblem.answerFormat} The correct option was: ${currentProblem.correctAnswer}`,
         };
         updatesForHistory.selectedOption = answer;
-        updatesForHistory.evaluation = evalOutput;
       }
+      updatesForHistory.evaluation = evalOutput; // Store the complete evaluation object
       await updateLastHistoryItem(updatesForHistory);
       setEvaluationResult(evalOutput);
       toast({ title: "Answer Evaluated", description: evalOutput.isCorrect ? "Your answer is correct!" : "Your answer needs improvement." });
@@ -344,6 +365,7 @@ export default function AOLBEAMPage() {
       return;
     }
     if (!currentUser) {
+        // This case should ideally not be hit if paywall shown after login attempt
         toast({ title: "Please Login", description: "You need to login or register to subscribe." });
         handleSignInWithGoogle();
         return;
@@ -352,7 +374,7 @@ export default function AOLBEAMPage() {
     setIsUserSubscribed(true);
     setShowPaywall(false);
     setInteractionCount(0); 
-    toast({ title: "Subscription Activated!", description: "You now have unlimited access." });
+    toast({ title: "Subscription Activated!", description: "You now have unlimited access and your progress will be saved to your account." });
   };
 
   const handleSignInWithGoogle = async () => {
@@ -381,13 +403,17 @@ export default function AOLBEAMPage() {
       toast({ variant: "destructive", title: "Logout Error", description: error.message });
     } else {
       setCurrentUser(null);
-      setIsUserSubscribed(false); 
+      // setIsUserSubscribed(false); // Keep this if you want to force re-subscription for testing, or manage it via backend
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
     }
   };
 
 
   useEffect(() => {
+    // This effect attempts to load the last interaction from local history if the user is not logged in
+    // AND no problem is currently loaded or being loaded.
+    // This ensures that if a user was working on something and then refreshes or comes back without logging in,
+    // their last problem (from local storage history) is reloaded.
     if (history.length > 0 && !currentUser && !currentProblem && !isLoadingProblem) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
@@ -400,15 +426,23 @@ export default function AOLBEAMPage() {
         setTopicDetails(null);
       }
     }
-  }, [currentUser, supabase, history, isLoadingProblem, currentProblem]);
+  }, [currentUser, history, isLoadingProblem, currentProblem]); // Added currentProblem to dependencies
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <PaywallModal
         isOpen={showPaywall}
-        onClose={() => setShowPaywall(false)}
+        onClose={() => {
+            // Only close paywall if user is subscribed or it's not a mandatory display for new users
+            if (isUserSubscribed || !currentUser) {
+                 setShowPaywall(false);
+            } else {
+                toast({title: "Plan Selection Required", description: "Please select a plan to continue.", variant: "destructive"});
+            }
+        }}
         onSubscribe={handleSubscribe}
         onLoginRegister={handleSignInWithGoogle}
+        isMandatory={!!currentUser && !isUserSubscribed} // Make modal mandatory if user is logged in but not subscribed
       />
       <header className="mb-6 md:mb-8 py-4 bg-card/50 border-b">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -538,3 +572,5 @@ export default function AOLBEAMPage() {
     </div>
   );
 }
+
+    

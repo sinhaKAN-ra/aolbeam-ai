@@ -20,6 +20,7 @@ interface PaywallModalProps {
   onClose: () => void;
   onSubscribe: (planId: string) => void;
   onLoginRegister: () => void; 
+  isMandatory?: boolean; // New prop
 }
 
 const plans: SubscriptionPlan[] = [
@@ -28,14 +29,14 @@ const plans: SubscriptionPlan[] = [
     name: 'Weekly Pass',
     price: '₹249',
     duration: '/ week',
-    features: ['Unlimited Topic Searches', 'Track Your Progress (Coming Soon)', 'Ad-Free Experience'],
+    features: ['Unlimited Topic Searches', 'Track Your Progress', 'Ad-Free Experience'],
   },
   {
     id: 'monthly',
     name: 'Monthly Saver',
     price: '₹699',
     duration: '/ month',
-    features: ['Unlimited Topic Searches', 'Track Your Progress (Coming Soon)', 'Ad-Free Experience', 'Priority Support'],
+    features: ['Unlimited Topic Searches', 'Track Your Progress', 'Ad-Free Experience', 'Priority Support'],
     highlight: true,
   },
   {
@@ -43,22 +44,27 @@ const plans: SubscriptionPlan[] = [
     name: 'Quarterly Pro',
     price: '₹1999',
     duration: '/ 3 months',
-    features: ['Unlimited Topic Searches', 'Track Your Progress (Coming Soon)', 'Ad-Free Experience', 'Priority Support', 'Early Access to New Features'],
+    features: ['Unlimited Topic Searches', 'Track Your Progress', 'Ad-Free Experience', 'Priority Support', 'Early Access to New Features'],
   },
 ];
 
-export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister }: PaywallModalProps) {
+export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister, isMandatory }: PaywallModalProps) {
   if (!isOpen) return null;
 
+  const dialogTitle = isMandatory ? "Welcome! Choose a Plan to Get Started" : "Unlock Full Access";
+  const dialogDescription = isMandatory 
+    ? "To begin your learning journey with AOLBEAM, please select a subscription plan."
+    : "You've reached your free interaction limit. Choose a plan to continue learning without limits!";
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open && !isMandatory) onClose(); }}>
       <DialogContent className="sm:max-w-3xl p-0">
         <DialogHeader className="p-6 pb-4">
           <DialogTitle className="text-3xl font-bold flex items-center gap-2">
-            <Zap className="text-primary w-8 h-8" /> Unlock Full Access
+            <Zap className="text-primary w-8 h-8" /> {dialogTitle}
           </DialogTitle>
           <DialogDescription className="text-base">
-            You've reached your free interaction limit. Login or choose a plan to continue learning without limits!
+            {dialogDescription}
           </DialogDescription>
         </DialogHeader>
 
@@ -93,7 +99,7 @@ export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister }: 
           ))}
         </div>
         
-        <div className="px-6 py-4 bg-muted/50 rounded-b-lg">
+        <div className="px-6 py-4 bg-muted/50">
             <Card className="shadow-none">
                 <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
@@ -112,15 +118,20 @@ export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister }: 
         </div>
         
         <DialogFooter className="p-6 pt-4 border-t flex flex-col sm:flex-row sm:justify-between items-center">
-          <p className="text-sm text-muted-foreground mb-2 sm:mb-0">
-            Already have an account or need to create one?
-          </p>
+          {!isMandatory && (
+            <p className="text-sm text-muted-foreground mb-2 sm:mb-0">
+              Already have an account or need to create one?
+            </p>
+          )}
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onLoginRegister}>Login / Register with Google</Button>
-            <Button variant="ghost" onClick={onClose}>Maybe Later</Button>
+            {!isMandatory && <Button variant="outline" onClick={onLoginRegister}>Login / Register with Google</Button>}
+            {!isMandatory && <Button variant="ghost" onClick={onClose}>Maybe Later</Button>}
+            {isMandatory && <p className="text-xs text-muted-foreground">Account created via Google. Select a plan to activate.</p>}
           </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
+    
