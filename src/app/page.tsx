@@ -24,7 +24,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut, Instagram, X, Linkedin, Rss, Brain, Loader2 as PageLoader } from 'lucide-react'; // Added Brain, PageLoader
+import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut, Instagram, X, Linkedin, Rss, Brain, Loader2 as PageLoader } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -75,7 +75,7 @@ export default function AOLBEAMPage() {
   const [isLoadingDetails, setIsLoadingDetails] = useState<boolean>(false);
 
   const [history, setHistory] = useLocalStorage<InteractionHistoryItem[]>('aolbeamHistory', []); // For local history (guests or fallback)
-  const [guestInteractionCount, setGuestInteractionCount] = useLocalStorage<number>('aolbeamGuestInteractionCount', 0);
+  const [guestInteractionCount, setGuestInteractionCount] = useLocalStorage<number>('aolbeamGuestInteractionCount', 0); // Renamed
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
 
   useEffect(() => {
@@ -99,18 +99,13 @@ export default function AOLBEAMPage() {
           .single();
 
         if (error) {
-          // This case should ideally be handled by the DB trigger creating a profile.
-          // If the trigger `handle_new_user` is working, a profile should always exist.
           console.error('Error fetching user profile:', error);
           toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile. If this persists, please contact support." });
-          // Potentially set a default non-subscribed profile locally to allow app usage, or sign out.
-          // For now, we'll assume the trigger handles profile creation.
-          setUserProfile(null); // Or a default state
+          setUserProfile(null);
         } else if (data) {
           setUserProfile(data as UserProfile);
-          if (!data.is_subscribed) { // if user from DB is not subscribed
-            setShowPaywall(true); // Show paywall immediately
-          }
+          // Removed: setShowPaywall(true) if !data.is_subscribed.
+          // Paywall is now only triggered by checkUsageLimit.
         }
       } catch (e) {
         console.error('Exception fetching user profile:', e);
@@ -126,9 +121,11 @@ export default function AOLBEAMPage() {
       setCurrentUser(user);
       if (user) {
         await fetchAndSetUserProfile(user);
+        // Removed: Immediate paywall trigger for SIGNED_IN event.
+        // Logic for showing paywall is now centralized in checkUsageLimit.
       } else {
-        setUserProfile(null); // Clear profile on sign out
-        setIsLoadingProfile(false); // No profile to load
+        setUserProfile(null); 
+        setIsLoadingProfile(false);
       }
     });
 
@@ -137,7 +134,7 @@ export default function AOLBEAMPage() {
       if (user) {
         await fetchAndSetUserProfile(user);
       } else {
-         setIsLoadingProfile(false); // No user, so no profile loading
+         setIsLoadingProfile(false);
       }
     });
 
@@ -149,25 +146,25 @@ export default function AOLBEAMPage() {
 
   const checkUsageLimit = useCallback((): boolean => {
     if (currentUser && userProfile) {
-      if (userProfile.is_subscribed) return false; // Subscribed users have no limit
+      if (userProfile.is_subscribed) return false; 
       if (userProfile.interaction_count >= FREE_INTERACTION_LIMIT) {
         setShowPaywall(true);
         return true;
       }
-    } else if (!currentUser) { // Guest user
+    } else if (!currentUser) { 
       if (guestInteractionCount >= FREE_INTERACTION_LIMIT) {
         setShowPaywall(true);
         return true;
       }
     }
-    // If profile is loading or other edge cases, default to allowing interaction briefly
     return false;
   }, [currentUser, userProfile, guestInteractionCount]);
 
   const incrementInteraction = useCallback(async () => {
     if (currentUser && userProfile && !userProfile.is_subscribed && supabase) {
         const newCount = userProfile.interaction_count + 1;
-        setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null);
+        // Optimistically update local state for responsiveness
+        setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null); 
         try {
             const { error } = await supabase
                 .from('user_profiles')
@@ -177,7 +174,7 @@ export default function AOLBEAMPage() {
         } catch (error: any) {
             console.error("Error updating interaction count in Supabase:", error);
             toast({ variant: "destructive", title: "Sync Error", description: "Could not save interaction count." });
-            // Optionally revert local state update if DB save fails
+            // Revert local state if DB update fails
             setUserProfile(prev => prev ? { ...prev, interaction_count: newCount -1 } : null);
         }
     } else if (!currentUser) {
@@ -207,15 +204,15 @@ export default function AOLBEAMPage() {
             answer_format: item.problem.answerFormat,
             multiple_choice_options: item.problem.multipleChoiceOptions,
             correct_answer: item.problem.correctAnswer,
-            user_answer: null,
-            selected_option: null,
-            evaluation_is_correct: null,
-            evaluation_feedback: null,
-            is_topic_revised: false,
-            topic_details_content: null,
-            feedback_rating: null,
-            feedback_comment: null,
-            time_taken_seconds: null,
+            user_answer: null, // Will be updated later if applicable
+            selected_option: null, // Will be updated later if applicable
+            evaluation_is_correct: null, // Will be updated later
+            evaluation_feedback: null, // Will be updated later
+            is_topic_revised: false, // Will be updated later if applicable
+            topic_details_content: null, // Will be updated later
+            feedback_rating: null, // Will be updated later
+            feedback_comment: null, // Will be updated later
+            time_taken_seconds: null, // Will be updated later
         };
         try {
             const { data, error } = await supabase
@@ -315,8 +312,11 @@ export default function AOLBEAMPage() {
         topic,
         problemType: type,
         problem: result,
+        // These are intentionally not set initially for a new problem,
+        // they get set by subsequent actions
         isTopicRevised: false, 
         topicDetails: null,
+        // userAnswer, selectedOption, evaluation will be added via updateLastHistoryItem
       });
       toast({ title: "Problem Generated!", description: `A new ${type} problem for "${topic}" is ready.` });
     } catch (error) {
@@ -329,6 +329,7 @@ export default function AOLBEAMPage() {
 
   const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) => {
     if (!currentProblem || !currentTopic || isLoadingProfile) return;
+    // Do not checkUsageLimit here, as evaluation is part of an ongoing interaction
 
     setIsLoadingEvaluation(true);
     setEvaluationResult(null);
@@ -338,6 +339,9 @@ export default function AOLBEAMPage() {
       const updatesForHistory: Partial<InteractionHistoryItem> = { timeTakenSeconds };
 
       if (currentProblemType === 'theory') {
+        // Fetch details only if not already fetched for THIS problem interaction.
+        // If topicDetails state is already populated (from a previous "Revise Topic" click FOR THIS PROBLEM), use it.
+        // Otherwise, fetch it fresh for the evaluation context.
         const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific topic details available for this evaluation.";
 
         evalOutput = await evaluateTheoryAnswer({
@@ -370,11 +374,11 @@ export default function AOLBEAMPage() {
   };
 
   const handleFetchTopicDetails = async (topicToFetch: string) => {
-    if (isLoadingProfile || checkUsageLimit()) return;
+    if (isLoadingProfile || checkUsageLimit()) return; // Check limit before fetching new details
 
     setIsLoadingDetails(true);
     try {
-      await incrementInteraction();
+      await incrementInteraction(); // This is a new interaction if user explicitly clicks "Revise Topic"
       const result = await fetchTopicDetails({ topic: topicToFetch });
       setTopicDetails(result.details);
       await updateLastHistoryItem({ isTopicRevised: true, topicDetails: result.details });
@@ -383,7 +387,7 @@ export default function AOLBEAMPage() {
     {
       console.error("Error fetching topic details:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to fetch topic details." });
-      setTopicDetails("Failed to load details. Please try again.");
+      setTopicDetails("Failed to load details. Please try again."); // Provide error in details view
     } finally {
       setIsLoadingDetails(false);
     }
@@ -391,10 +395,12 @@ export default function AOLBEAMPage() {
 
   const handleProblemFeedback = async (rating: string, comment: string) => {
     if (!currentProblem || !currentTopic || isLoadingProfile) return;
+    // Feedback submission does not count as a new billable interaction
     await updateLastHistoryItem({
       feedbackRating: rating,
       feedbackComment: comment,
     });
+    // Toast for feedback submission is handled within ProblemDisplay
   };
 
   const handleNewProblemSameTopic = () => {
@@ -407,6 +413,7 @@ export default function AOLBEAMPage() {
 
   const handleStartNew = () => {
     setCurrentTopic('');
+    // currentProblemType can retain its last value or be reset
     setCurrentProblem(null);
     setEvaluationResult(null);
     setTopicDetails(null);
@@ -435,7 +442,7 @@ export default function AOLBEAMPage() {
         if (error) throw error;
 
         if (data) {
-            setUserProfile(data as UserProfile);
+            setUserProfile(data as UserProfile); // Update local profile state
             setShowPaywall(false);
             toast({ title: "Subscription Activated!", description: "You now have unlimited access and your progress will be saved to your account." });
         }
@@ -453,7 +460,7 @@ export default function AOLBEAMPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${location.origin}/auth/callback`,
+        redirectTo: `${location.origin}/auth/callback`, // Ensure this matches Supabase config
       },
     });
     if (error) {
@@ -471,12 +478,18 @@ export default function AOLBEAMPage() {
       toast({ variant: "destructive", title: "Logout Error", description: error.message });
     } else {
       setCurrentUser(null); // This will trigger useEffect to clear profile
+      setUserProfile(null); // Explicitly clear profile state
+      setShowPaywall(false); // Hide paywall if it was shown for a guest
+      // Guest interaction count remains, history (localStorage) remains for guest experience
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
     }
   };
 
 
+  // Restore last session from localStorage if user is a guest (not logged in)
+  // and no current problem is active (e.g., after a page reload as guest)
   useEffect(() => {
+    // Only run if no user is logged in, history has items, and no problem is currently loaded/loading
     if (history.length > 0 && !currentUser && !currentProblem && !isLoadingProblem) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
@@ -486,10 +499,10 @@ export default function AOLBEAMPage() {
       if (lastItem.isTopicRevised && lastItem.topicDetails) {
         setTopicDetails(lastItem.topicDetails);
       } else {
-        setTopicDetails(null);
+        setTopicDetails(null); // Ensure topicDetails is reset if not in last history item
       }
     }
-  }, [currentUser, history, isLoadingProblem, currentProblem]); 
+  }, [currentUser, history, isLoadingProblem, currentProblem]); // Added currentProblem to dependency array
 
   const interactionsLeft = currentUser && userProfile && !userProfile.is_subscribed 
     ? Math.max(0, FREE_INTERACTION_LIMIT - userProfile.interaction_count)
@@ -500,15 +513,16 @@ export default function AOLBEAMPage() {
       <PaywallModal
         isOpen={showPaywall}
         onClose={() => {
-            if (currentUser && userProfile && !userProfile.is_subscribed) {
-                 toast({title: "Plan Selection Required", description: "Please select a plan to continue.", variant: "destructive"});
-            } else {
+            // Only allow closing if it's not a mandatory paywall for a logged-in, non-subscribed user who hit the limit
+            if (!(showPaywall && currentUser && userProfile && !userProfile.is_subscribed)) {
                 setShowPaywall(false);
+            } else {
+                 toast({title: "Plan Selection Required", description: "Please select a plan to continue using AOLBEAM.", variant: "destructive"});
             }
         }}
         onSubscribe={handleSubscribe}
         onLoginRegister={handleSignInWithGoogle}
-        isMandatory={!!currentUser && !!userProfile && !userProfile.is_subscribed}
+        isMandatory={showPaywall && !!currentUser && !!userProfile && !userProfile.is_subscribed} // Paywall is mandatory if shown for a logged-in, non-subscribed user
       />
       <header className="mb-6 md:mb-8 py-4 bg-card/50 border-b">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -519,7 +533,7 @@ export default function AOLBEAMPage() {
             </div>
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              {isLoadingProfile && !currentUser && <Button variant="outline" className="w-full sm:w-auto" disabled><PageLoader className="mr-2 h-5 w-5 animate-spin" />Loading...</Button>}
+              {isLoadingProfile && currentUser && <Button variant="outline" className="w-full sm:w-auto" disabled><PageLoader className="mr-2 h-5 w-5 animate-spin" />Loading...</Button>}
               {!isLoadingProfile && currentUser && userProfile ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -558,22 +572,23 @@ export default function AOLBEAMPage() {
                 <p className="ml-4 text-lg text-muted-foreground">Loading your profile...</p>
             </div>
         )}
-        {(!isLoadingProfile || !currentUser) && (
+        {(!isLoadingProfile || !currentUser) && ( // Show content if profile is loaded OR if there's no current user (guest mode)
             <div className="flex flex-col lg:flex-row gap-6 xl:gap-8">
+            {/* Main content columns */}
             <div className="lg:w-2/5 flex flex-col gap-6">
                 <ProblemGenerator
                 onGenerate={handleGenerateProblem}
-                isLoading={isLoadingProblem || (currentUser && isLoadingProfile)}
+                isLoading={!!(isLoadingProblem || (currentUser && isLoadingProfile))}
                 defaultTopic={currentTopic}
                 defaultProblemType={currentProblemType}
                 />
                 {currentProblem && (
                 <>
-                <div className="flex gap-2 mt-0">
-                    <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1" disabled={isLoadingProblem || (currentUser && isLoadingProfile)}>
+                <div className="flex gap-2 mt-0"> {/* Removed mt-4 to keep buttons closer to generator card */}
+                    <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (currentUser && isLoadingProfile))}>
                         <RefreshCcw className="mr-2 h-4 w-4" /> Another (Same Topic)
                     </Button>
-                    <Button onClick={handleStartNew} variant="outline" className="flex-1" disabled={isLoadingProblem || (currentUser && isLoadingProfile)}>
+                    <Button onClick={handleStartNew} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (currentUser && isLoadingProfile))}>
                         <FilePlus2 className="mr-2 h-4 w-4" /> Start New Topic
                     </Button>
                 </div>
@@ -581,8 +596,8 @@ export default function AOLBEAMPage() {
                     problem={currentProblem}
                     problemType={currentProblemType}
                     onSubmitAnswer={handleEvaluateAnswer}
-                    onFeedbackSubmit={handleProblemFeedback}
-                    isLoading={isLoadingEvaluation || (currentUser && isLoadingProfile)}
+                    onFeedbackSubmit={handleProblemFeedback} // Pass the handler
+                    isLoading={!!(isLoadingEvaluation || (currentUser && isLoadingProfile))}
                     currentTopic={currentTopic}
                 />
                 </>
@@ -590,16 +605,16 @@ export default function AOLBEAMPage() {
                 {evaluationResult && <EvaluationResult evaluation={evaluationResult} />}
             </div>
 
-            <div className="lg:w-1/5 flex flex-col gap-6">
+            <div className="lg:w-1/5 flex flex-col gap-6"> {/* Adjusted width for TopicRevision */}
                 <TopicRevision
-                topic={currentProblem ? currentTopic : null}
+                topic={currentProblem ? currentTopic : null} // Pass currentTopic only if a problem exists
                 details={topicDetails}
                 onFetchDetails={handleFetchTopicDetails}
-                isLoading={isLoadingDetails || (currentUser && isLoadingProfile)}
+                isLoading={!!(isLoadingDetails || (currentUser && isLoadingProfile))}
                 />
             </div>
 
-            <div className="lg:w-2/5 flex flex-col">
+            <div className="lg:w-2/5 flex flex-col"> {/* Adjusted width for HistoryView */}
                 <HistoryView history={history} />
             </div>
             </div>
@@ -657,3 +672,6 @@ export default function AOLBEAMPage() {
     </div>
   );
 }
+
+
+    

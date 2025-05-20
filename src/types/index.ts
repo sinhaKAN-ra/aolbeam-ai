@@ -2,7 +2,7 @@
 import type { GeneratePracticeProblemOutput } from '@/ai/flows/generate-practice-problem'; // This will now include correctAnswer
 import type { EvaluateTheoryAnswerOutput } from '@/ai/flows/evaluate-theory-answer';
 
-export type ProblemType = 'theory' | 'practical';
+export type ProblemType = 'theory' | 'practical' | 'theoretical' | 'conceptual' | 'numerical' | 'diagram' | 'mcq';
 
 export interface InteractionHistoryItem {
   id: string; // Local/localStorage React key

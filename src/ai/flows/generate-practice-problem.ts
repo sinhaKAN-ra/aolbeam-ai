@@ -16,7 +16,7 @@ import {z} from 'genkit';
 
 const GeneratePracticeProblemInputSchema = z.object({
   topic: z.string().describe('The topic for which to generate a practice problem.'),
-  problemType: z.enum(['theory', 'practical']).describe('The type of problem to generate (theory or practical).'),
+  problemType: z.enum(['theory', 'practical', 'theoretical', 'conceptual', 'numerical', 'diagram', 'mcq']).describe('The type of problem to generate (theory or practical).'),
 });
 export type GeneratePracticeProblemInput = z.infer<typeof GeneratePracticeProblemInputSchema>;
 
