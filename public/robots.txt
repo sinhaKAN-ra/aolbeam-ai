@@ -1,0 +1,13 @@
+
+# robots.txt for AOLBEAM
+
+User-agent: *
+Allow: /
+
+# Allow all major search engines to crawl the entire site.
+# You can add specific disallow rules here if needed, for example:
+# Disallow: /admin/
+# Disallow: /private-content/
+
+# Sitemap (uncomment and update if you generate a sitemap.xml)
+# Sitemap: https://www.aolbeam.com/sitemap.xml

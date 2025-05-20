@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -24,7 +25,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut, Instagram, Twitter, Linkedin } from 'lucide-react';
+import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut, Instagram, Twitter, Linkedin, Rss } from 'lucide-react';
 // Updated Supabase import for client components
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
@@ -197,16 +198,16 @@ export default function AOLBEAMPage() {
         evalOutput = await evaluateTheoryAnswer({
           question: currentProblem.problemStatement,
           studentAnswer: answer,
-          answerFormat: currentProblem.answerFormat,
+          answerFormat: currentProblem.answerFormat, // Pass the expected answer format
           topicDetails: fetchedDetailsForEval,
         });
         updateLastHistoryItem({ userAnswer: answer, evaluation: evalOutput });
-      } else {
+      } else { // Practical
         const isCorrect = answer === currentProblem.correctAnswer;
         evalOutput = {
           isCorrect,
           feedback: isCorrect
-            ? `Correct! ${currentProblem.answerFormat}`
+            ? `Correct! ${currentProblem.answerFormat}` // answerFormat is now the explanation
             : `Incorrect. ${currentProblem.answerFormat} The correct option was: ${currentProblem.correctAnswer}`,
         };
         updateLastHistoryItem({ selectedOption: answer, evaluation: evalOutput });
@@ -418,15 +419,18 @@ export default function AOLBEAMPage() {
                 <BookOpen className="h-6 w-6 text-primary"/>
                 <p className="text-lg font-semibold text-primary">AOLBEAM</p>
             </div>
-            <div className="flex justify-center gap-4 sm:gap-6 mb-4 text-sm">
+            <div className="flex justify-center gap-4 sm:gap-6 mb-4 text-sm flex-wrap">
               <Link href="/terms-of-service" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                <FileText size={16} /> Terms of Service
+                <FileText size={16} /> Terms
               </Link>
               <Link href="/privacy-policy" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                <ShieldCheck size={16} /> Privacy Policy
+                <ShieldCheck size={16} /> Privacy
               </Link>
               <Link href="/contact-us" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                <Mail size={16} /> Contact Us
+                <Mail size={16} /> Contact
+              </Link>
+              <Link href="/blog" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                <Rss size={16} /> Blog
               </Link>
             </div>
             <div className="flex justify-center gap-x-6 gap-y-2 mt-6 mb-4 flex-wrap">
@@ -453,7 +457,3 @@ export default function AOLBEAMPage() {
     </div>
   );
 }
-
-    
-
-    
