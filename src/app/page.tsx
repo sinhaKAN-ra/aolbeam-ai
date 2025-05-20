@@ -25,7 +25,8 @@ import {
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
 import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut } from 'lucide-react';
-import { createBrowserClient } from '@supabase/auth-helpers-nextjs';
+// Updated Supabase import for client components
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 
@@ -62,11 +63,11 @@ export default function AOLBEAMPage() {
 
   useEffect(() => {
     // Initialize Supabase client on the client-side after mount
-    const client = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-    setSupabaseClient(client);
+    // createClientComponentClient reads ENV VARS automatically
+    if (typeof window !== 'undefined') {
+        const client = createClientComponentClient();
+        setSupabaseClient(client);
+    }
   }, []);
 
 
@@ -153,8 +154,8 @@ export default function AOLBEAMPage() {
         topic,
         problemType: type,
         problem: result,
-        isTopicRevised: false, // Explicitly set for new problem
-        topicDetails: null,   // Explicitly set for new problem
+        isTopicRevised: false, 
+        topicDetails: null,   
       });
       toast({ title: "Problem Generated!", description: `A new ${type} problem for "${topic}" is ready.` });
     } catch (error) {
@@ -282,7 +283,7 @@ export default function AOLBEAMPage() {
       toast({ variant: "destructive", title: "Logout Error", description: error.message });
     } else {
       setCurrentUser(null);
-      setIsUserSubscribed(false);
+      setIsUserSubscribed(false); // Reset subscription status on logout for demo purposes
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
     }
   };
@@ -302,7 +303,7 @@ export default function AOLBEAMPage() {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, supabase]); // Added supabase here, though primary driver is currentUser. History comes from localStorage.
+  }, [currentUser, supabase]); 
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -418,3 +419,5 @@ export default function AOLBEAMPage() {
     </div>
   );
 }
+
+    
