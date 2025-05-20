@@ -1,8 +1,9 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -24,7 +25,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut, Instagram, X, Linkedin as LinkedinIcon, Rss, Brain, Loader2 as PageLoader, Home, Newspaper, Settings, Menu } from 'lucide-react'; // Added Home, Newspaper, Settings, Menu
+import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut, Instagram, X, Linkedin as LinkedinIcon, Rss, Brain, Loader2 as PageLoader, Home, Newspaper, Settings, Menu, ArrowRight } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -36,18 +37,6 @@ import { TopicRevision } from '@/components/TopicRevision';
 import { HistoryView } from '@/components/HistoryView';
 import { PaywallModal } from '@/components/PaywallModal';
 import { ThemeToggle } from '@/components/ThemeToggle'; 
-import {
-  SidebarProvider,
-  Sidebar,
-  SidebarHeader,
-  SidebarContent,
-  SidebarFooter,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarInset,
-  SidebarTrigger
-} from '@/components/ui/sidebar';
 
 
 const FREE_INTERACTION_LIMIT = 5;
@@ -86,9 +75,15 @@ export default function AOLBEAMPage() {
   const [isLoadingEvaluation, setIsLoadingEvaluation] = useState<boolean>(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState<boolean>(false);
 
-  const [history, setHistory] = useLocalStorage<InteractionHistoryItem[]>('aolbeamHistory', []); 
+  const [history, setHistory] = useLocalStorage<InteractionHistoryItem[]>('aolbeamHistory_guest', []); 
   const [guestInteractionCount, setGuestInteractionCount] = useLocalStorage<number>('aolbeamGuestInteractionCount', 0);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
+
+  const problemGeneratorRef = useRef<HTMLDivElement>(null);
+
+  const scrollToProblemGenerator = () => {
+    problemGeneratorRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -112,8 +107,26 @@ export default function AOLBEAMPage() {
 
         if (error) {
           console.error('Error fetching user profile:', error);
-          toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile. If this persists, please contact support." });
-          setUserProfile(null);
+           if (error.code === 'PGRST116') { // Resource not found, likely new user, trigger should handle it
+             // Attempt to refetch after a short delay in case trigger is slow
+             setTimeout(async () => {
+                const { data: refetchData, error: refetchError } = await supabase
+                  .from('user_profiles')
+                  .select('*')
+                  .eq('id', user.id)
+                  .single();
+                if (refetchError) {
+                  console.error('Error refetching user profile:', refetchError);
+                  toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile. If this persists, please contact support." });
+                  setUserProfile(null);
+                } else if (refetchData) {
+                  setUserProfile(refetchData as UserProfile);
+                }
+             }, 2000);
+           } else {
+            toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile. If this persists, please contact support." });
+            setUserProfile(null);
+           }
         } else if (data) {
           setUserProfile(data as UserProfile);
         }
@@ -232,72 +245,69 @@ export default function AOLBEAMPage() {
             }
             if (data) {
                 newHistoryItem.supabase_id = data.id; 
-                toast({ title: "Progress Saved", description: "Your new problem has been saved to your account." });
+                // Toast for new problem saved (already handled in UI by showing the problem)
             }
         } catch (error: any) {
             console.error("Error saving history to Supabase:", error);
             toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account. " + error.message });
         }
+    } else {
+       setHistory(prevHistory => [newHistoryItem, ...prevHistory].slice(0, 50));
     }
-
-    setHistory(prevHistory => [newHistoryItem, ...prevHistory].slice(0, 50));
   }, [setHistory, supabase, currentUser, toast]);
 
   const updateLastHistoryItem = useCallback(async (updates: Partial<InteractionHistoryItem>) => {
-    setHistory(prevHistory => {
-      if (prevHistory.length === 0) return prevHistory;
+    if (supabase && currentUser && history.length > 0 && history[0].supabase_id) {
+      const lastSupabaseItem = history[0]; // This should be the item from Supabase history if fetched
       
+      const dbUpdatePayload: any = {};
+      if (updates.userAnswer !== undefined) dbUpdatePayload.user_answer = updates.userAnswer;
+      if (updates.selectedOption !== undefined) dbUpdatePayload.selected_option = updates.selectedOption;
+      if (updates.evaluation !== undefined) {
+        dbUpdatePayload.evaluation_is_correct = updates.evaluation.isCorrect;
+        dbUpdatePayload.evaluation_feedback = updates.evaluation.feedback;
+      }
+      if (updates.isTopicRevised !== undefined) dbUpdatePayload.is_topic_revised = updates.isTopicRevised;
+      if (updates.topicDetails !== undefined) dbUpdatePayload.topic_details_content = updates.topicDetails;
+      if (updates.feedbackRating !== undefined) dbUpdatePayload.feedback_rating = updates.feedbackRating;
+      if (updates.feedbackComment !== undefined) dbUpdatePayload.feedback_comment = updates.feedbackComment;
+      if (updates.timeTakenSeconds !== undefined) dbUpdatePayload.time_taken_seconds = updates.timeTakenSeconds;
+
+      if (updates.problem) {
+          if(updates.problem.problemStatement) dbUpdatePayload.problem_statement = updates.problem.problemStatement;
+          if(updates.problem.answerFormat) dbUpdatePayload.answer_format = updates.problem.answerFormat;
+          if(updates.problem.multipleChoiceOptions) dbUpdatePayload.multiple_choice_options = updates.problem.multipleChoiceOptions;
+          if(updates.problem.correctAnswer) dbUpdatePayload.correct_answer = updates.problem.correctAnswer;
+      }
+
+      if (Object.keys(dbUpdatePayload).length > 0) {
+        try {
+          const { error } = await supabase
+            .from('user_interactions')
+            .update(dbUpdatePayload)
+            .eq('id', lastSupabaseItem.supabase_id!)
+            .eq('user_id', currentUser.id); 
+          if (error) {
+            throw error;
+          }
+          // Toast for update (already handled by evaluation/revision toasts)
+        } catch (error: any) {
+          console.error("Error updating history in Supabase:", error);
+          toast({ variant: "destructive", title: "Update Error", description: "Could not save updates to your account. " + error.message });
+        }
+      }
+    }
+    // Always update local state for guest users or if Supabase update fails for logged-in users (for UI responsiveness)
+     setHistory(prevHistory => {
+      if (prevHistory.length === 0) return prevHistory;
       const updatedItem: InteractionHistoryItem = {
         ...prevHistory[0],
         ...updates,
         problem: updates.problem ? { ...prevHistory[0].problem!, ...updates.problem } : prevHistory[0].problem,
       };
-      
-      const newHistory = [updatedItem, ...prevHistory.slice(1)];
-
-      if (supabase && currentUser && updatedItem.supabase_id) {
-        const dbUpdatePayload: any = {};
-        if (updates.userAnswer !== undefined) dbUpdatePayload.user_answer = updates.userAnswer;
-        if (updates.selectedOption !== undefined) dbUpdatePayload.selected_option = updates.selectedOption;
-        if (updates.evaluation !== undefined) {
-          dbUpdatePayload.evaluation_is_correct = updates.evaluation.isCorrect;
-          dbUpdatePayload.evaluation_feedback = updates.evaluation.feedback;
-        }
-        if (updates.isTopicRevised !== undefined) dbUpdatePayload.is_topic_revised = updates.isTopicRevised;
-        if (updates.topicDetails !== undefined) dbUpdatePayload.topic_details_content = updates.topicDetails;
-        if (updates.feedbackRating !== undefined) dbUpdatePayload.feedback_rating = updates.feedbackRating;
-        if (updates.feedbackComment !== undefined) dbUpdatePayload.feedback_comment = updates.feedbackComment;
-        if (updates.timeTakenSeconds !== undefined) dbUpdatePayload.time_taken_seconds = updates.timeTakenSeconds;
-
-        if (updates.problem) {
-            if(updates.problem.problemStatement) dbUpdatePayload.problem_statement = updates.problem.problemStatement;
-            if(updates.problem.answerFormat) dbUpdatePayload.answer_format = updates.problem.answerFormat;
-            if(updates.problem.multipleChoiceOptions) dbUpdatePayload.multiple_choice_options = updates.problem.multipleChoiceOptions;
-            if(updates.problem.correctAnswer) dbUpdatePayload.correct_answer = updates.problem.correctAnswer;
-        }
-
-        if (Object.keys(dbUpdatePayload).length > 0) {
-          (async () => {
-            try {
-              const { error } = await supabase
-                .from('user_interactions')
-                .update(dbUpdatePayload)
-                .eq('id', updatedItem.supabase_id!)
-                .eq('user_id', currentUser.id); 
-              if (error) {
-                throw error;
-              }
-              toast({ title: "Progress Updated", description: "Your latest interaction has been saved." });
-            } catch (error: any) {
-              console.error("Error updating history in Supabase:", error);
-              toast({ variant: "destructive", title: "Update Error", description: "Could not save updates to your account. " + error.message });
-            }
-          })();
-        }
-      }
-      return newHistory;
+      return [updatedItem, ...prevHistory.slice(1)];
     });
-  }, [setHistory, supabase, currentUser, toast]);
+  }, [setHistory, supabase, currentUser, toast, history]);
 
 
   const handleGenerateProblem = async (topic: string, type: ProblemType) => {
@@ -318,8 +328,6 @@ export default function AOLBEAMPage() {
         topic,
         problemType: type,
         problem: result,
-        isTopicRevised: false, 
-        topicDetails: null,
       });
       toast({ title: "Problem Generated!", description: `A new ${type} problem for "${topic}" is ready.` });
     } catch (error) {
@@ -413,6 +421,8 @@ export default function AOLBEAMPage() {
     setCurrentProblem(null);
     setEvaluationResult(null);
     setTopicDetails(null);
+    // If guest user, maybe clear the first history item, or just let it be overwritten.
+    // For logged-in, it will just generate a new problem and save it.
     toast({ title: "Ready for New Topic", description: "Enter a new topic and problem type." });
   };
 
@@ -428,7 +438,7 @@ export default function AOLBEAMPage() {
             .update({ 
                 is_subscribed: true, 
                 subscription_plan_id: planId, 
-                interaction_count: 0, 
+                interaction_count: 0, // Reset interaction count
                 subscription_started_at: new Date().toISOString() 
             })
             .eq('id', currentUser.id)
@@ -476,13 +486,36 @@ export default function AOLBEAMPage() {
       setCurrentUser(null); 
       setUserProfile(null); 
       setShowPaywall(false); 
+      // Reload guest history from localStorage if any
+      const guestHistory = localStorage.getItem('aolbeamHistory_guest');
+      if (guestHistory) {
+        try {
+          const parsedGuestHistory = JSON.parse(guestHistory);
+          setHistory(parsedGuestHistory);
+           if (parsedGuestHistory.length > 0) {
+            const lastItem = parsedGuestHistory[0];
+            setCurrentTopic(lastItem.topic);
+            setCurrentProblemType(lastItem.problemType);
+            setCurrentProblem(lastItem.problem);
+            if (lastItem.evaluation) setEvaluationResult(lastItem.evaluation);
+            if (lastItem.isTopicRevised && lastItem.topicDetails) {
+              setTopicDetails(lastItem.topicDetails);
+            } else {
+              setTopicDetails(null);
+            }
+          }
+        } catch (e) { console.error("Error parsing guest history on logout:", e); }
+      } else {
+        handleStartNew(); // Clear problem state
+      }
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
     }
   };
 
 
   useEffect(() => {
-    if (history.length > 0 && !currentUser && !currentProblem && !isLoadingProblem) {
+    // This effect is for guest users to load their last problem from localStorage
+    if (!currentUser && history.length > 0 && !currentProblem && !isLoadingProblem) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
       setCurrentProblemType(lastItem.problemType);
@@ -500,6 +533,9 @@ export default function AOLBEAMPage() {
     ? Math.max(0, FREE_INTERACTION_LIMIT - userProfile.interaction_count)
     : (!currentUser ? Math.max(0, FREE_INTERACTION_LIMIT - guestInteractionCount) : 'Unlimited');
 
+  // Navigation state for mobile
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <PaywallModal
@@ -515,54 +551,34 @@ export default function AOLBEAMPage() {
         onLoginRegister={handleSignInWithGoogle}
         isMandatory={showPaywall && !!currentUser && !!userProfile && !userProfile.is_subscribed}
       />
-      <SidebarProvider defaultOpen={false}>
-        <Sidebar side="left" collapsible="icon" variant="sidebar" className="border-r">
-          <SidebarHeader className="p-4">
+      
+      <header className="sticky top-0 z-30 w-full border-b bg-background/90 backdrop-blur-sm">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between">
             <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-primary">
               <Brain /> AOLBEAM
             </Link>
-          </SidebarHeader>
-          <SidebarContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={true} tooltip="Home">
-                  <Link href="/"><Home />Home</Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Profile">
-                  <Link href="/profile"><UserCircle />Profile</Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Blog">
-                  <Link href="/blog"><Newspaper />Blog</Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-               <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Contact Us">
-                  <Link href="/contact-us"><Mail />Contact Us</Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Admin">
-                  <Link href="/admin/blog"><Settings />Admin</Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarContent>
-          <SidebarFooter className="p-2">
-            <ThemeToggle />
-             {isLoadingProfile && currentUser && <Button variant="outline" className="w-full" disabled><PageLoader className="mr-2 h-5 w-5 animate-spin" />Loading...</Button>}
+            <nav className="hidden md:flex items-center space-x-6">
+              <Link href="/profile" className="text-sm font-medium text-muted-foreground hover:text-primary">Profile</Link>
+              <Link href="/blog" className="text-sm font-medium text-muted-foreground hover:text-primary">Blog</Link>
+              <Link href="/contact-us" className="text-sm font-medium text-muted-foreground hover:text-primary">Contact Us</Link>
+              <Link href="/admin/blog" className="text-sm font-medium text-muted-foreground hover:text-primary">Admin</Link>
+            </nav>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              {isLoadingProfile && currentUser && <Button variant="outline" size="sm" disabled><PageLoader className="mr-2 h-4 w-4 animate-spin" />Loading...</Button>}
               {!isLoadingProfile && currentUser && userProfile ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left">
-                      <UserCircle className="mr-2 h-5 w-5 flex-shrink-0" />
-                      <span className="truncate">{currentUser.email}</span>
+                    <Button variant="ghost" size="icon">
+                      <UserCircle className="h-6 w-6" />
+                       <span className="sr-only">User Menu</span>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[var(--sidebar-width)] mb-2">
+                  <DropdownMenuContent align="end" className="w-56">
+                     <DropdownMenuItem disabled className="text-xs text-muted-foreground">
+                        {currentUser.email}
+                      </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href="/profile">
                         <UserCircle className="mr-2 h-4 w-4" /> Profile
@@ -575,145 +591,164 @@ export default function AOLBEAMPage() {
                 </DropdownMenu>
               ) : (
                  !isLoadingProfile && !currentUser && (
-                    <Button variant="outline" onClick={handleSignInWithGoogle} className="w-full justify-start text-left" disabled={!supabase}>
-                    <UserCircle className="mr-2 h-5 w-5 flex-shrink-0" /> <span className="truncate">{ !supabase ? "Initializing..." : "Login / Sign Up" }</span>
+                    <Button variant="outline" size="sm" onClick={handleSignInWithGoogle} disabled={!supabase}>
+                     <UserCircle className="mr-2 h-4 w-4" /> Login / Sign Up
                     </Button>
                  )
               )}
-          </SidebarFooter>
-        </Sidebar>
-        <SidebarInset className="flex flex-col flex-1">
-          <header className="sticky top-0 z-10 mb-6 md:mb-8 py-4 bg-card/80 backdrop-blur-sm border-b">
-            <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex justify-between items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <SidebarTrigger className="md:hidden">
-                     <Menu />
-                  </SidebarTrigger>
-                  <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold text-primary hidden md:block">AOLBEAM</h1>
-                    <p className="text-sm sm:text-md text-muted-foreground mt-1 hidden md:block">Access of Learning, beam into the world of knowledge.</p>
-                  </div>
+              <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileNavOpen(!mobileNavOpen)}>
+                <Menu />
+                <span className="sr-only">Toggle Menu</span>
+              </Button>
+            </div>
+          </div>
+          {/* Mobile Navigation Menu */}
+          {mobileNavOpen && (
+            <div className="md:hidden border-t py-2">
+              <nav className="flex flex-col space-y-2">
+                <Link href="/profile" className="py-2 px-3 rounded-md text-sm font-medium text-muted-foreground hover:text-primary hover:bg-accent" onClick={()=>setMobileNavOpen(false)}>Profile</Link>
+                <Link href="/blog" className="py-2 px-3 rounded-md text-sm font-medium text-muted-foreground hover:text-primary hover:bg-accent" onClick={()=>setMobileNavOpen(false)}>Blog</Link>
+                <Link href="/contact-us" className="py-2 px-3 rounded-md text-sm font-medium text-muted-foreground hover:text-primary hover:bg-accent" onClick={()=>setMobileNavOpen(false)}>Contact Us</Link>
+                <Link href="/admin/blog" className="py-2 px-3 rounded-md text-sm font-medium text-muted-foreground hover:text-primary hover:bg-accent" onClick={()=>setMobileNavOpen(false)}>Admin</Link>
+              </nav>
+            </div>
+          )}
+        </div>
+      </header>
+      
+      {/* Hero Section */}
+      <section className="py-16 md:py-24 bg-gradient-to-b from-background to-secondary/30 text-center">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-3xl mx-auto">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight">
+              Unlock Your Exam Potential with <span className="text-primary">AOLBEAM</span>
+            </h1>
+            <p className="mt-6 text-lg sm:text-xl text-muted-foreground">
+              AI-powered practice problems designed to help you master concepts and ace your competitive exams. Beam into the world of knowledge!
+            </p>
+            <div className="mt-10">
+              <Button size="lg" onClick={scrollToProblemGenerator} className="text-lg px-8 py-6">
+                Generate Your First Problem <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+            </div>
+          </div>
+          <div className="mt-12 max-w-4xl mx-auto">
+            <Image 
+              src="https://placehold.co/1200x600.png"
+              alt="Abstract representation of learning and AI"
+              width={1200}
+              height={600}
+              className="rounded-lg shadow-xl"
+              data-ai-hint="technology learning"
+              priority
+            />
+          </div>
+        </div>
+      </section>
+
+      <main ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16 flex-grow">
+        {isLoadingProfile && currentUser && (
+            <div className="flex justify-center items-center h-64">
+                <PageLoader className="h-12 w-12 animate-spin text-primary" />
+                <p className="ml-4 text-lg text-muted-foreground">Loading your profile...</p>
+            </div>
+        )}
+        {(!isLoadingProfile || !currentUser) && (
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8">
+              <div className="lg:col-span-3 flex flex-col gap-6"> {/* Main interaction column */}
+                <ProblemGenerator
+                  onGenerate={handleGenerateProblem}
+                  isLoading={isLoadingProblem || (currentUser && isLoadingProfile)}
+                  defaultTopic={currentTopic}
+                  defaultProblemType={currentProblemType}
+                />
+                {currentProblem && (
+                <>
+                <div className="flex gap-2 mt-0">
+                    <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1" disabled={isLoadingProblem || (currentUser && isLoadingProfile)}>
+                        <RefreshCcw className="mr-2 h-4 w-4" /> Another (Same Topic)
+                    </Button>
+                    <Button onClick={handleStartNew} variant="outline" className="flex-1" disabled={isLoadingProblem || (currentUser && isLoadingProfile)}>
+                        <FilePlus2 className="mr-2 h-4 w-4" /> Start New Topic
+                    </Button>
                 </div>
-                <div className="flex items-center gap-2 md:hidden"> {/* Mobile user actions */}
-                  <ThemeToggle />
-                  {/* Simplified user menu for mobile header, full one in sidebar footer */}
-                  {!isLoadingProfile && currentUser && userProfile ? (
-                     <Button variant="ghost" size="icon" asChild><Link href="/profile"><UserCircle/></Link></Button>
-                  ) : (
-                     !isLoadingProfile && !currentUser && (
-                        <Button variant="ghost" size="icon" onClick={handleSignInWithGoogle} disabled={!supabase}><UserCircle /></Button>
-                     )
-                  )}
-                </div>
+                <ProblemDisplay
+                    problem={currentProblem}
+                    problemType={currentProblemType}
+                    onSubmitAnswer={handleEvaluateAnswer}
+                    onFeedbackSubmit={handleProblemFeedback}
+                    isLoading={isLoadingEvaluation || (currentUser && isLoadingProfile)}
+                    currentTopic={currentTopic}
+                />
+                </>
+                )}
+                {evaluationResult && <EvaluationResult evaluation={evaluationResult} />}
+              </div>
+
+              <div className="lg:col-span-2 flex flex-col gap-6"> {/* Secondary column for revision and history */}
+                <TopicRevision
+                  topic={currentProblem ? currentTopic : null}
+                  details={topicDetails}
+                  onFetchDetails={handleFetchTopicDetails}
+                  isLoading={isLoadingDetails || (currentUser && isLoadingProfile)}
+                />
+                <HistoryView 
+                    history={currentUser && userProfile ? [] : history} // Pass empty if logged in, history will come from profile page for them
+                    // Or ideally, fetch and pass logged-in user's history here too if desired on main page
+                />
               </div>
             </div>
-          </header>
-
-          <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex-grow">
-            {isLoadingProfile && currentUser && (
-                <div className="flex justify-center items-center h-64">
-                    <PageLoader className="h-12 w-12 animate-spin text-primary" />
-                    <p className="ml-4 text-lg text-muted-foreground">Loading your profile...</p>
-                </div>
-            )}
-            {(!isLoadingProfile || !currentUser) && (
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8">
-                  <div className="lg:col-span-3 flex flex-col gap-6"> {/* Main interaction column */}
-                    <ProblemGenerator
-                      onGenerate={handleGenerateProblem}
-                      isLoading={isLoadingProblem || (currentUser && isLoadingProfile)}
-                      defaultTopic={currentTopic}
-                      defaultProblemType={currentProblemType}
-                    />
-                    {currentProblem && (
-                    <>
-                    <div className="flex gap-2 mt-0">
-                        <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1" disabled={isLoadingProblem || (currentUser && isLoadingProfile)}>
-                            <RefreshCcw className="mr-2 h-4 w-4" /> Another (Same Topic)
-                        </Button>
-                        <Button onClick={handleStartNew} variant="outline" className="flex-1" disabled={isLoadingProblem || (currentUser && isLoadingProfile)}>
-                            <FilePlus2 className="mr-2 h-4 w-4" /> Start New Topic
-                        </Button>
-                    </div>
-                    <ProblemDisplay
-                        problem={currentProblem}
-                        problemType={currentProblemType}
-                        onSubmitAnswer={handleEvaluateAnswer}
-                        onFeedbackSubmit={handleProblemFeedback}
-                        isLoading={isLoadingEvaluation || (currentUser && isLoadingProfile)}
-                        currentTopic={currentTopic}
-                    />
-                    </>
-                    )}
-                    {evaluationResult && <EvaluationResult evaluation={evaluationResult} />}
-                  </div>
-
-                  <div className="lg:col-span-2 flex flex-col gap-6"> {/* Secondary column for revision and history */}
-                    <TopicRevision
-                      topic={currentProblem ? currentTopic : null}
-                      details={topicDetails}
-                      onFetchDetails={handleFetchTopicDetails}
-                      isLoading={isLoadingDetails || (currentUser && isLoadingProfile)}
-                    />
-                    <HistoryView history={history} />
-                  </div>
-                </div>
-            )}
-          </main>
-          <footer className="mt-12 py-8 border-t bg-card/50">
-            <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-                <div className="mb-4 flex justify-center items-center gap-2">
-                    <BookOpen className="h-6 w-6 text-primary"/>
-                    <p className="text-lg font-semibold text-primary">AOLBEAM</p>
-                </div>
-                <div className="flex justify-center gap-4 sm:gap-6 mb-4 text-sm flex-wrap">
-                  <Link href="/terms-of-service" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                    <FileText size={16} /> Terms
-                  </Link>
-                  <Link href="/privacy-policy" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                    <ShieldCheck size={16} /> Privacy
-                  </Link>
-                  <Link href="/contact-us" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                    <Mail size={16} /> Contact
-                  </Link>
-                  <Link href="/blog" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                    <Rss size={16} /> Blog
-                  </Link>
-                   <Link href="/admin/blog" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                    <UserCircle size={16} /> Admin
-                  </Link>
-                </div>
-                <div className="flex justify-center gap-x-6 gap-y-2 mt-6 mb-4 flex-wrap">
-                  <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="Discord" className="text-muted-foreground hover:text-primary">
-                    <DiscordIconFooter className="h-6 w-6" />
-                  </Link>
-                  <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="Telegram" className="text-muted-foreground hover:text-primary">
-                    <TelegramIconFooter className="h-6 w-6" />
-                  </Link>
-                  <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="text-muted-foreground hover:text-primary">
-                    <Instagram className="h-6 w-6" />
-                  </Link>
-                  <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)" className="text-muted-foreground hover:text-primary">
-                    <X className="h-6 w-6" />
-                  </Link>
-                  <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="text-muted-foreground hover:text-primary">
-                    <LinkedinIcon className="h-6 w-6" />
-                  </Link>
-                </div>
-                <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} AOLBEAM. All rights reserved. Powered by GenAI.</p>
-                 <p className="text-xs text-muted-foreground mt-1">
-                    {isLoadingProfile && currentUser ? "Loading interactions count..." : 
-                        (currentUser && userProfile?.is_subscribed) ? "You have unlimited interactions!" :
-                        `Free interactions remaining: ${interactionsLeft}`
-                    }
-                </p>
+        )}
+      </main>
+      <footer className="mt-12 py-8 border-t bg-card/50">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <div className="mb-4 flex justify-center items-center gap-2">
+                <BookOpen className="h-6 w-6 text-primary"/>
+                <p className="text-lg font-semibold text-primary">AOLBEAM</p>
             </div>
-          </footer>
-        </SidebarInset>
-      </SidebarProvider>
+            <div className="flex justify-center gap-4 sm:gap-6 mb-4 text-sm flex-wrap">
+              <Link href="/terms-of-service" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                <FileText size={16} /> Terms
+              </Link>
+              <Link href="/privacy-policy" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                <ShieldCheck size={16} /> Privacy
+              </Link>
+              <Link href="/contact-us" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                <Mail size={16} /> Contact
+              </Link>
+              <Link href="/blog" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                <Rss size={16} /> Blog
+              </Link>
+               <Link href="/admin/blog" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                <UserCircle size={16} /> Admin
+              </Link>
+            </div>
+            <div className="flex justify-center gap-x-6 gap-y-2 mt-6 mb-4 flex-wrap">
+              <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="Discord" className="text-muted-foreground hover:text-primary">
+                <DiscordIconFooter className="h-6 w-6" />
+              </Link>
+              <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="Telegram" className="text-muted-foreground hover:text-primary">
+                <TelegramIconFooter className="h-6 w-6" />
+              </Link>
+              <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="text-muted-foreground hover:text-primary">
+                <Instagram className="h-6 w-6" />
+              </Link>
+              <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)" className="text-muted-foreground hover:text-primary">
+                <X className="h-6 w-6" />
+              </Link>
+              <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="text-muted-foreground hover:text-primary">
+                <LinkedinIcon className="h-6 w-6" />
+              </Link>
+            </div>
+            <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} AOLBEAM. All rights reserved. Powered by GenAI.</p>
+             <p className="text-xs text-muted-foreground mt-1">
+                {isLoadingProfile && currentUser ? "Loading interactions count..." : 
+                    (currentUser && userProfile?.is_subscribed) ? "You have unlimited interactions!" :
+                    `Free interactions remaining: ${interactionsLeft}`
+                }
+            </p>
+        </div>
+      </footer>
     </div>
   );
 }
-
-    
