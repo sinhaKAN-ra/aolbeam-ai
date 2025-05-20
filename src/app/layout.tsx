@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Exam Prep AI',
-  description: 'AI-powered practice problems for competitive exams',
+  title: 'AOLBEAM: Access of Learning',
+  description: 'AI-powered practice problems. Beam into the world of knowledge.',
 };
 
 export default function RootLayout({

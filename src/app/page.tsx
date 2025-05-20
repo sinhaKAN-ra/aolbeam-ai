@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -17,7 +18,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle } from 'lucide-react';
+import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText } from 'lucide-react';
 
 import type { InteractionHistoryItem, ProblemType } from '@/types';
 import { ProblemGenerator } from '@/components/ProblemGenerator';
@@ -29,7 +30,7 @@ import { PaywallModal } from '@/components/PaywallModal';
 
 const FREE_INTERACTION_LIMIT = 5;
 
-export default function ExamPrepPage() {
+export default function AOLBEAMPage() {
   const { toast } = useToast();
 
   const [currentTopic, setCurrentTopic] = useState<string>('');
@@ -42,9 +43,9 @@ export default function ExamPrepPage() {
   const [isLoadingEvaluation, setIsLoadingEvaluation] = useState<boolean>(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState<boolean>(false);
 
-  const [history, setHistory] = useLocalStorage<InteractionHistoryItem[]>('examPrepHistory', []);
-  const [interactionCount, setInteractionCount] = useLocalStorage<number>('examPrepInteractionCount', 0);
-  const [isUserSubscribed, setIsUserSubscribed] = useLocalStorage<boolean>('examPrepIsUserSubscribed', false);
+  const [history, setHistory] = useLocalStorage<InteractionHistoryItem[]>('aolbeamHistory', []);
+  const [interactionCount, setInteractionCount] = useLocalStorage<number>('aolbeamInteractionCount', 0);
+  const [isUserSubscribed, setIsUserSubscribed] = useLocalStorage<boolean>('aolbeamIsUserSubscribed', false);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
 
 
@@ -68,9 +69,8 @@ export default function ExamPrepPage() {
         ...item,
         id: Date.now().toString(),
         timestamp: new Date().toISOString(),
-        isTopicRevised: item.isTopicRevised || false, // Explicitly initialize
-        topicDetails: item.topicDetails || null,    // Explicitly initialize
-        // Ensure other optional fields are handled if not provided in 'item'
+        isTopicRevised: item.isTopicRevised || false, 
+        topicDetails: item.topicDetails || null,    
         userAnswer: item.userAnswer,
         selectedOption: item.selectedOption,
         evaluation: item.evaluation,
@@ -82,12 +82,11 @@ export default function ExamPrepPage() {
     setHistory(prevHistory => {
       if (prevHistory.length === 0) return prevHistory;
       const newHistory = [...prevHistory];
-      // Ensure problem object within history is also spread if updated
       if (updates.problem) {
         newHistory[0] = { 
           ...newHistory[0], 
           ...updates, 
-          problem: { ...newHistory[0].problem, ...updates.problem } 
+          problem: { ...newHistory[0].problem!, ...updates.problem } 
         };
       } else {
         newHistory[0] = { ...newHistory[0], ...updates };
@@ -105,17 +104,18 @@ export default function ExamPrepPage() {
     setCurrentProblemType(type);
     setCurrentProblem(null);
     setEvaluationResult(null);
-    setTopicDetails(null); // Clear previous topic details from UI
+    setTopicDetails(null); 
 
     try {
       incrementInteraction();
       const result = await generatePracticeProblem({ topic, problemType: type });
       setCurrentProblem(result);
-      addToHistory({ // This will use the enhanced addToHistory with explicit defaults
+      addToHistory({ 
         topic,
         problemType: type,
         problem: result,
-        // isTopicRevised and topicDetails will be defaulted by addToHistory
+        isTopicRevised: false, // Explicitly set for new problem
+        topicDetails: null,    // Explicitly set for new problem
       });
       toast({ title: "Problem Generated!", description: `A new ${type} problem for "${topic}" is ready.` });
     } catch (error) {
@@ -128,32 +128,28 @@ export default function ExamPrepPage() {
 
   const handleEvaluateAnswer = async (answer: string) => {
     if (!currentProblem || !currentTopic) return;
-    // Evaluating an answer does not count towards interaction limit for now (this might change based on product decision)
-    // However, fetching topic details *during* evaluation (if not already loaded) *will* count.
-
+    
     setIsLoadingEvaluation(true);
     setEvaluationResult(null);
 
     try {
       let evalOutput: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string };
       if (currentProblemType === 'theory') {
-        // Fetch details if not already available in state (e.g., user didn't click "Revise Topic")
-        // This fetch *will* increment interaction count if it occurs.
         const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific topic details available for this evaluation.";
         
         evalOutput = await evaluateTheoryAnswer({
           question: currentProblem.problemStatement,
           studentAnswer: answer,
-          answerFormat: currentProblem.answerFormat, // Pass the expected answer format
+          answerFormat: currentProblem.answerFormat, 
           topicDetails: fetchedDetailsForEval,
         });
         updateLastHistoryItem({ userAnswer: answer, evaluation: evalOutput });
-      } else { // Practical MCQ
+      } else { 
         const isCorrect = answer === currentProblem.correctAnswer;
         evalOutput = {
           isCorrect,
           feedback: isCorrect
-            ? `Correct! ${currentProblem.answerFormat}` // answerFormat is the explanation
+            ? `Correct! ${currentProblem.answerFormat}` 
             : `Incorrect. ${currentProblem.answerFormat} The correct option was: ${currentProblem.correctAnswer}`,
         };
         updateLastHistoryItem({ selectedOption: answer, evaluation: evalOutput });
@@ -175,8 +171,7 @@ export default function ExamPrepPage() {
     try {
       incrementInteraction();
       const result = await fetchTopicDetails({ topic: topicToFetch });
-      setTopicDetails(result.details); // Update UI state for TopicRevision component
-      // Update the current history item with these details
+      setTopicDetails(result.details); 
       updateLastHistoryItem({ isTopicRevised: true, topicDetails: result.details });
       toast({ title: "Topic Details Fetched", description: `Details for "${topicToFetch}" are now available.` });
     } catch (error)
@@ -219,22 +214,20 @@ export default function ExamPrepPage() {
   };
 
   useEffect(() => {
-    // Restore state from the most recent history item on initial load
     if (history.length > 0) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
       setCurrentProblemType(lastItem.problemType);
-      setCurrentProblem(lastItem.problem); // This will include the new 'correctAnswer'
+      setCurrentProblem(lastItem.problem);
       if (lastItem.evaluation) setEvaluationResult(lastItem.evaluation);
-      // Only set topicDetails from history if it was explicitly revised for that item
       if (lastItem.isTopicRevised && lastItem.topicDetails) {
         setTopicDetails(lastItem.topicDetails);
       } else {
-        setTopicDetails(null); // Ensure it's cleared if not revised for the last item
+        setTopicDetails(null); 
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only on mount, history itself is a dependency of useLocalStorage
+  }, []); 
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -248,8 +241,8 @@ export default function ExamPrepPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div>
-              <h1 className="text-3xl sm:text-4xl font-bold text-primary">Exam Prep AI</h1>
-              <p className="text-md sm:text-lg text-muted-foreground mt-1">Your Personal AI Tutor</p>
+              <h1 className="text-3xl sm:text-4xl font-bold text-primary">AOLBEAM</h1>
+              <p className="text-md sm:text-lg text-muted-foreground mt-1">Access of Learning, beam into the world of knowledge.</p>
             </div>
             <div>
               <Button variant="outline" onClick={handleLoginRegister} className="w-full sm:w-auto">
@@ -293,8 +286,8 @@ export default function ExamPrepPage() {
 
           <div className="lg:w-1/5 flex flex-col gap-6">
             <TopicRevision
-              topic={currentProblem ? currentTopic : null} // Only show topic if a problem is active
-              details={topicDetails} // This state is managed and cleared appropriately
+              topic={currentProblem ? currentTopic : null} 
+              details={topicDetails} 
               onFetchDetails={handleFetchTopicDetails}
               isLoading={isLoadingDetails}
             />
@@ -305,9 +298,24 @@ export default function ExamPrepPage() {
           </div>
         </div>
       </main>
-      <footer className="text-center mt-12 py-6 border-t bg-card/50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} Exam Prep AI. Powered by GenAI.</p>
+      <footer className="mt-12 py-8 border-t bg-card/50">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <div className="mb-4 flex justify-center items-center gap-2">
+                <BookOpen className="h-6 w-6 text-primary"/>
+                <p className="text-lg font-semibold text-primary">AOLBEAM</p>
+            </div>
+            <div className="flex justify-center gap-4 sm:gap-6 mb-4 text-sm">
+              <Link href="/terms-of-service" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                <FileText size={16} /> Terms of Service
+              </Link>
+              <Link href="/privacy-policy" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                <ShieldCheck size={16} /> Privacy Policy
+              </Link>
+              <Link href="/contact-us" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                <Mail size={16} /> Contact Us
+              </Link>
+            </div>
+            <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} AOLBEAM. All rights reserved. Powered by GenAI.</p>
             {!isUserSubscribed && <p className="text-xs text-muted-foreground mt-1">Free interactions remaining: {Math.max(0, FREE_INTERACTION_LIMIT - interactionCount)}</p>}
         </div>
       </footer>
