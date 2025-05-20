@@ -25,8 +25,8 @@ import {
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
 import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut } from 'lucide-react';
-import type { User } from '@supabase/supabase-js';
 import { createBrowserClient } from '@supabase/auth-helpers-nextjs';
+import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 
 import type { InteractionHistoryItem, ProblemType } from '@/types';
@@ -41,7 +41,7 @@ const FREE_INTERACTION_LIMIT = 5;
 
 export default function AOLBEAMPage() {
   const { toast } = useToast();
-  const supabase = createBrowserClient();
+  const [supabase, setSupabaseClient] = useState<SupabaseClient | null>(null);
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -57,43 +57,43 @@ export default function AOLBEAMPage() {
 
   const [history, setHistory] = useLocalStorage<InteractionHistoryItem[]>('aolbeamHistory', []);
   const [interactionCount, setInteractionCount] = useLocalStorage<number>('aolbeamInteractionCount', 0);
-  // For now, isUserSubscribed is still local storage. True subscription check would use Supabase user data.
-  const [isUserSubscribed, setIsUserSubscribed] = useLocalStorage<boolean>('aolbeamIsUserSubscribed', false); 
+  const [isUserSubscribed, setIsUserSubscribed] = useLocalStorage<boolean>('aolbeamIsUserSubscribed', false);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
+
+  useEffect(() => {
+    // Initialize Supabase client on the client-side after mount
+    const client = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    setSupabaseClient(client);
+  }, []);
 
 
   useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+    if (!supabase) return; // Only run if supabase client is initialized
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
       setCurrentUser(session?.user ?? null);
-      // If user logs in and was previously considered unsubscribed by localStorage,
-      // but now has a valid session, you might want to reset local subscription state
-      // or check their actual subscription status from your backend.
-      // For now, we'll keep it simple: logging in doesn't automatically mean subscribed.
-      // if (session?.user && !isUserSubscribed) {
-      //    // Check actual subscription status here if you have it in Supabase user_metadata or another table
-      // }
     });
 
-    // Initial check
     supabase.auth.getUser().then(({ data: { user } }) => {
       setCurrentUser(user);
     });
 
     return () => {
-      authListener.subscription.unsubscribe();
+      authListener?.subscription?.unsubscribe();
     };
-  }, [supabase.auth, isUserSubscribed, setIsUserSubscribed]);
+  }, [supabase, isUserSubscribed, setIsUserSubscribed]);
 
 
   const checkUsageLimit = useCallback(() => {
-    // If there's a logged-in user, we might bypass the free limit based on their subscription status.
-    // For now, if `isUserSubscribed` (from localStorage, or later from Supabase) is true, bypass.
     if (currentUser && isUserSubscribed) return false;
     if (!isUserSubscribed && interactionCount >= FREE_INTERACTION_LIMIT) {
       setShowPaywall(true);
-      return true; // Limit reached
+      return true;
     }
-    return false; // Limit not reached
+    return false;
   }, [interactionCount, isUserSubscribed, currentUser]);
 
   const incrementInteraction = useCallback(() => {
@@ -104,37 +104,35 @@ export default function AOLBEAMPage() {
 
 
   const addToHistory = useCallback((item: Omit<InteractionHistoryItem, 'id' | 'timestamp'>) => {
-    // TODO: If currentUser, save to Supabase instead of/as well as localStorage
     const newHistoryItem: InteractionHistoryItem = {
         ...item,
         id: Date.now().toString(),
         timestamp: new Date().toISOString(),
-        isTopicRevised: item.isTopicRevised || false, 
-        topicDetails: item.topicDetails || null,    
+        isTopicRevised: item.isTopicRevised || false,
+        topicDetails: item.topicDetails || null,
         userAnswer: item.userAnswer,
         selectedOption: item.selectedOption,
         evaluation: item.evaluation,
     };
     setHistory(prevHistory => [newHistoryItem, ...prevHistory].slice(0, 50));
-  }, [setHistory, /*currentUser*/]); // Add currentUser when Supabase save is implemented
+  }, [setHistory]);
 
   const updateLastHistoryItem = useCallback((updates: Partial<InteractionHistoryItem>) => {
-    // TODO: If currentUser, update in Supabase
     setHistory(prevHistory => {
       if (prevHistory.length === 0) return prevHistory;
       const newHistory = [...prevHistory];
       if (updates.problem) {
-        newHistory[0] = { 
-          ...newHistory[0], 
-          ...updates, 
-          problem: { ...newHistory[0].problem!, ...updates.problem } 
+        newHistory[0] = {
+          ...newHistory[0],
+          ...updates,
+          problem: { ...newHistory[0].problem!, ...updates.problem }
         };
       } else {
         newHistory[0] = { ...newHistory[0], ...updates };
       }
       return newHistory;
     });
-  }, [setHistory, /*currentUser*/]); // Add currentUser when Supabase update is implemented
+  }, [setHistory]);
 
 
   const handleGenerateProblem = async (topic: string, type: ProblemType) => {
@@ -145,18 +143,18 @@ export default function AOLBEAMPage() {
     setCurrentProblemType(type);
     setCurrentProblem(null);
     setEvaluationResult(null);
-    setTopicDetails(null); 
+    setTopicDetails(null);
 
     try {
       incrementInteraction();
       const result = await generatePracticeProblem({ topic, problemType: type });
       setCurrentProblem(result);
-      addToHistory({ 
+      addToHistory({
         topic,
         problemType: type,
         problem: result,
-        isTopicRevised: false,
-        topicDetails: null,
+        isTopicRevised: false, // Explicitly set for new problem
+        topicDetails: null,   // Explicitly set for new problem
       });
       toast({ title: "Problem Generated!", description: `A new ${type} problem for "${topic}" is ready.` });
     } catch (error) {
@@ -169,7 +167,7 @@ export default function AOLBEAMPage() {
 
   const handleEvaluateAnswer = async (answer: string) => {
     if (!currentProblem || !currentTopic) return;
-    
+
     setIsLoadingEvaluation(true);
     setEvaluationResult(null);
 
@@ -177,20 +175,20 @@ export default function AOLBEAMPage() {
       let evalOutput: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string };
       if (currentProblemType === 'theory') {
         const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific topic details available for this evaluation.";
-        
+
         evalOutput = await evaluateTheoryAnswer({
           question: currentProblem.problemStatement,
           studentAnswer: answer,
-          answerFormat: currentProblem.answerFormat, 
+          answerFormat: currentProblem.answerFormat,
           topicDetails: fetchedDetailsForEval,
         });
         updateLastHistoryItem({ userAnswer: answer, evaluation: evalOutput });
-      } else { 
+      } else {
         const isCorrect = answer === currentProblem.correctAnswer;
         evalOutput = {
           isCorrect,
           feedback: isCorrect
-            ? `Correct! ${currentProblem.answerFormat}` 
+            ? `Correct! ${currentProblem.answerFormat}`
             : `Incorrect. ${currentProblem.answerFormat} The correct option was: ${currentProblem.correctAnswer}`,
         };
         updateLastHistoryItem({ selectedOption: answer, evaluation: evalOutput });
@@ -207,12 +205,12 @@ export default function AOLBEAMPage() {
 
   const handleFetchTopicDetails = async (topicToFetch: string) => {
     if (checkUsageLimit()) return;
-    
+
     setIsLoadingDetails(true);
     try {
       incrementInteraction();
       const result = await fetchTopicDetails({ topic: topicToFetch });
-      setTopicDetails(result.details); 
+      setTopicDetails(result.details);
       updateLastHistoryItem({ isTopicRevised: true, topicDetails: result.details });
       toast({ title: "Topic Details Fetched", description: `Details for "${topicToFetch}" are now available.` });
     } catch (error)
@@ -240,22 +238,29 @@ export default function AOLBEAMPage() {
     setTopicDetails(null);
     toast({ title: "Ready for New Topic", description: "Enter a new topic and problem type." });
   };
-  
+
   const handleSubscribe = (planId: string) => {
+    if (!supabase) {
+      toast({ variant: "destructive", title: "Error", description: "Authentication service not ready."});
+      return;
+    }
     if (!currentUser) {
         toast({ title: "Please Login", description: "You need to login or register to subscribe." });
         handleSignInWithGoogle();
         return;
     }
-    console.log("Subscribed to plan:", planId, "by user:", currentUser.email); 
-    // TODO: Actual subscription logic with Supabase/Stripe
-    setIsUserSubscribed(true); // Simulate subscription
+    console.log("Subscribed to plan:", planId, "by user:", currentUser.email);
+    setIsUserSubscribed(true);
     setShowPaywall(false);
-    setInteractionCount(0); 
+    setInteractionCount(0);
     toast({ title: "Subscription Activated!", description: "You now have unlimited access." });
   };
 
   const handleSignInWithGoogle = async () => {
+    if (!supabase) {
+        toast({ variant: "destructive", title: "Authentication Error", description: "Authentication service not ready. Please try again shortly." });
+        return;
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -268,21 +273,23 @@ export default function AOLBEAMPage() {
   };
 
   const handleSignOut = async () => {
+    if (!supabase) {
+        toast({ variant: "destructive", title: "Authentication Error", description: "Authentication service not ready." });
+        return;
+    }
     const { error } = await supabase.auth.signOut();
     if (error) {
       toast({ variant: "destructive", title: "Logout Error", description: error.message });
     } else {
       setCurrentUser(null);
-      setIsUserSubscribed(false); // Reset local subscription status on logout
+      setIsUserSubscribed(false);
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
     }
   };
 
 
   useEffect(() => {
-    // Only load from localStorage if no user is logged in, or handle merging later.
-    // For now, this simple load remains, but will be superseded by Supabase history for logged-in users.
-    if (history.length > 0 && !currentUser) { // Check for currentUser to avoid overwriting potentially fetched history
+    if (history.length > 0 && !currentUser) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
       setCurrentProblemType(lastItem.problemType);
@@ -291,11 +298,11 @@ export default function AOLBEAMPage() {
       if (lastItem.isTopicRevised && lastItem.topicDetails) {
         setTopicDetails(lastItem.topicDetails);
       } else {
-        setTopicDetails(null); 
+        setTopicDetails(null);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser]); // Rerun if currentUser changes, to potentially clear/load data
+  }, [currentUser, supabase]); // Added supabase here, though primary driver is currentUser. History comes from localStorage.
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -333,8 +340,8 @@ export default function AOLBEAMPage() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
-                <Button variant="outline" onClick={handleSignInWithGoogle} className="w-full sm:w-auto">
-                  <UserCircle className="mr-2 h-5 w-5" /> Login / Sign Up with Google
+                <Button variant="outline" onClick={handleSignInWithGoogle} className="w-full sm:w-auto" disabled={!supabase}>
+                  <UserCircle className="mr-2 h-5 w-5" /> { !supabase ? "Initializing..." : "Login / Sign Up with Google" }
                 </Button>
               )}
             </div>
@@ -375,15 +382,15 @@ export default function AOLBEAMPage() {
 
           <div className="lg:w-1/5 flex flex-col gap-6">
             <TopicRevision
-              topic={currentProblem ? currentTopic : null} 
-              details={topicDetails} 
+              topic={currentProblem ? currentTopic : null}
+              details={topicDetails}
               onFetchDetails={handleFetchTopicDetails}
               isLoading={isLoadingDetails}
             />
           </div>
 
           <div className="lg:w-2/5 flex flex-col">
-            <HistoryView history={history} /> {/* This will show localStorage history for now */}
+            <HistoryView history={history} />
           </div>
         </div>
       </main>
