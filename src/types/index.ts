@@ -29,3 +29,14 @@ export interface SubscriptionPlan {
   features: string[];
   highlight?: boolean;
 }
+
+export interface UserProfile {
+  id: string; // Corresponds to auth.users.id
+  is_subscribed: boolean;
+  subscription_plan_id?: string | null;
+  subscription_started_at?: string | null; // ISO date string
+  subscription_ends_at?: string | null; // ISO date string
+  interaction_count: number;
+  updated_at?: string;
+  created_at?: string;
+}

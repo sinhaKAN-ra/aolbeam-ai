@@ -24,12 +24,12 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut, Instagram, X, Linkedin, Rss, Brain } from 'lucide-react'; // Added Brain
+import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut, Instagram, X, Linkedin, Rss, Brain, Loader2 as PageLoader } from 'lucide-react'; // Added Brain, PageLoader
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 
-import type { InteractionHistoryItem, ProblemType } from '@/types';
+import type { InteractionHistoryItem, ProblemType, UserProfile } from '@/types';
 import { ProblemGenerator } from '@/components/ProblemGenerator';
 import { ProblemDisplay } from '@/components/ProblemDisplay';
 import { EvaluationResult } from '@/components/EvaluationResult';
@@ -60,8 +60,9 @@ const TelegramIconFooter = ({ className }: { className?: string }) => (
 export default function AOLBEAMPage() {
   const { toast } = useToast();
   const [supabase, setSupabaseClient] = useState<SupabaseClient | null>(null);
-
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(true);
 
   const [currentTopic, setCurrentTopic] = useState<string>('');
   const [currentProblemType, setCurrentProblemType] = useState<ProblemType>('theory');
@@ -73,9 +74,8 @@ export default function AOLBEAMPage() {
   const [isLoadingEvaluation, setIsLoadingEvaluation] = useState<boolean>(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState<boolean>(false);
 
-  const [history, setHistory] = useLocalStorage<InteractionHistoryItem[]>('aolbeamHistory', []);
-  const [interactionCount, setInteractionCount] = useLocalStorage<number>('aolbeamInteractionCount', 0);
-  const [isUserSubscribed, setIsUserSubscribed] = useLocalStorage<boolean>('aolbeamIsUserSubscribed', false);
+  const [history, setHistory] = useLocalStorage<InteractionHistoryItem[]>('aolbeamHistory', []); // For local history (guests or fallback)
+  const [guestInteractionCount, setGuestInteractionCount] = useLocalStorage<number>('aolbeamGuestInteractionCount', 0);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
 
   useEffect(() => {
@@ -87,48 +87,103 @@ export default function AOLBEAMPage() {
 
 
   useEffect(() => {
-    if (!supabase) return; 
+    if (!supabase) return;
+
+    const fetchAndSetUserProfile = async (user: User) => {
+      setIsLoadingProfile(true);
+      try {
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          // This case should ideally be handled by the DB trigger creating a profile.
+          // If the trigger `handle_new_user` is working, a profile should always exist.
+          console.error('Error fetching user profile:', error);
+          toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile. If this persists, please contact support." });
+          // Potentially set a default non-subscribed profile locally to allow app usage, or sign out.
+          // For now, we'll assume the trigger handles profile creation.
+          setUserProfile(null); // Or a default state
+        } else if (data) {
+          setUserProfile(data as UserProfile);
+          if (!data.is_subscribed) { // if user from DB is not subscribed
+            setShowPaywall(true); // Show paywall immediately
+          }
+        }
+      } catch (e) {
+        console.error('Exception fetching user profile:', e);
+        toast({ variant: "destructive", title: "Profile Error", description: "An unexpected error occurred while loading your profile." });
+        setUserProfile(null);
+      } finally {
+        setIsLoadingProfile(false);
+      }
+    };
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
       const user = session?.user ?? null;
       setCurrentUser(user);
-      if (event === "SIGNED_IN" && user && !isUserSubscribed) {
-        setShowPaywall(true); // Show paywall immediately if new user or unsubscribed returning user logs in
-      }
-      if (event === "SIGNED_OUT") {
-        setIsUserSubscribed(false); // Reset subscription status on sign out
-        setInteractionCount(0); // Optionally reset interaction count or handle based on your logic
+      if (user) {
+        await fetchAndSetUserProfile(user);
+      } else {
+        setUserProfile(null); // Clear profile on sign out
+        setIsLoadingProfile(false); // No profile to load
       }
     });
 
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       setCurrentUser(user);
-      if (user && !isUserSubscribed) {
-        // This case handles if user is already logged in on page load but not subscribed
-        //setShowPaywall(true); // This might be too aggressive, consider user experience
+      if (user) {
+        await fetchAndSetUserProfile(user);
+      } else {
+         setIsLoadingProfile(false); // No user, so no profile loading
       }
     });
 
     return () => {
       authListener?.subscription?.unsubscribe();
     };
-  }, [supabase, isUserSubscribed, setIsUserSubscribed, setInteractionCount]);
+  }, [supabase, toast]);
 
 
-  const checkUsageLimit = useCallback(() => {
-    if (currentUser && isUserSubscribed) return false;
-    if (!isUserSubscribed && interactionCount >= FREE_INTERACTION_LIMIT) {
-      setShowPaywall(true);
-      return true;
+  const checkUsageLimit = useCallback((): boolean => {
+    if (currentUser && userProfile) {
+      if (userProfile.is_subscribed) return false; // Subscribed users have no limit
+      if (userProfile.interaction_count >= FREE_INTERACTION_LIMIT) {
+        setShowPaywall(true);
+        return true;
+      }
+    } else if (!currentUser) { // Guest user
+      if (guestInteractionCount >= FREE_INTERACTION_LIMIT) {
+        setShowPaywall(true);
+        return true;
+      }
     }
+    // If profile is loading or other edge cases, default to allowing interaction briefly
     return false;
-  }, [interactionCount, isUserSubscribed, currentUser]);
+  }, [currentUser, userProfile, guestInteractionCount]);
 
-  const incrementInteraction = useCallback(() => {
-    if (!(currentUser && isUserSubscribed)) {
-        setInteractionCount(prev => prev + 1);
+  const incrementInteraction = useCallback(async () => {
+    if (currentUser && userProfile && !userProfile.is_subscribed && supabase) {
+        const newCount = userProfile.interaction_count + 1;
+        setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null);
+        try {
+            const { error } = await supabase
+                .from('user_profiles')
+                .update({ interaction_count: newCount })
+                .eq('id', currentUser.id);
+            if (error) throw error;
+        } catch (error: any) {
+            console.error("Error updating interaction count in Supabase:", error);
+            toast({ variant: "destructive", title: "Sync Error", description: "Could not save interaction count." });
+            // Optionally revert local state update if DB save fails
+            setUserProfile(prev => prev ? { ...prev, interaction_count: newCount -1 } : null);
+        }
+    } else if (!currentUser) {
+        setGuestInteractionCount(prev => prev + 1);
     }
-  }, [isUserSubscribed, setInteractionCount, currentUser]);
+  }, [currentUser, userProfile, supabase, setGuestInteractionCount, toast]);
 
 
  const addToHistory = useCallback(async (item: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'>) => {
@@ -136,7 +191,7 @@ export default function AOLBEAMPage() {
         ...item,
         id: Date.now().toString(), 
         timestamp: new Date().toISOString(),
-        isTopicRevised: item.isTopicRevised || false,
+        isTopicRevised: item.isTopicRevised || false, 
         topicDetails: item.topicDetails || null,
         userAnswer: item.userAnswer,
         selectedOption: item.selectedOption,
@@ -152,7 +207,6 @@ export default function AOLBEAMPage() {
             answer_format: item.problem.answerFormat,
             multiple_choice_options: item.problem.multipleChoiceOptions,
             correct_answer: item.problem.correctAnswer,
-            // These fields will be null initially for a new problem
             user_answer: null,
             selected_option: null,
             evaluation_is_correct: null,
@@ -244,7 +298,7 @@ export default function AOLBEAMPage() {
 
 
   const handleGenerateProblem = async (topic: string, type: ProblemType) => {
-    if (checkUsageLimit()) return;
+    if (isLoadingProfile || checkUsageLimit()) return;
 
     setIsLoadingProblem(true);
     setCurrentTopic(topic);
@@ -254,7 +308,7 @@ export default function AOLBEAMPage() {
     setTopicDetails(null);
 
     try {
-      incrementInteraction();
+      await incrementInteraction();
       const result = await generatePracticeProblem({ topic, problemType: type });
       setCurrentProblem(result);
       await addToHistory({ 
@@ -274,7 +328,7 @@ export default function AOLBEAMPage() {
   };
 
   const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) => {
-    if (!currentProblem || !currentTopic) return;
+    if (!currentProblem || !currentTopic || isLoadingProfile) return;
 
     setIsLoadingEvaluation(true);
     setEvaluationResult(null);
@@ -303,7 +357,7 @@ export default function AOLBEAMPage() {
         };
         updatesForHistory.selectedOption = answer;
       }
-      updatesForHistory.evaluation = evalOutput; // Store the complete evaluation object
+      updatesForHistory.evaluation = evalOutput;
       await updateLastHistoryItem(updatesForHistory);
       setEvaluationResult(evalOutput);
       toast({ title: "Answer Evaluated", description: evalOutput.isCorrect ? "Your answer is correct!" : "Your answer needs improvement." });
@@ -316,11 +370,11 @@ export default function AOLBEAMPage() {
   };
 
   const handleFetchTopicDetails = async (topicToFetch: string) => {
-    if (checkUsageLimit()) return;
+    if (isLoadingProfile || checkUsageLimit()) return;
 
     setIsLoadingDetails(true);
     try {
-      incrementInteraction();
+      await incrementInteraction();
       const result = await fetchTopicDetails({ topic: topicToFetch });
       setTopicDetails(result.details);
       await updateLastHistoryItem({ isTopicRevised: true, topicDetails: result.details });
@@ -336,7 +390,7 @@ export default function AOLBEAMPage() {
   };
 
   const handleProblemFeedback = async (rating: string, comment: string) => {
-    if (!currentProblem || !currentTopic) return;
+    if (!currentProblem || !currentTopic || isLoadingProfile) return;
     await updateLastHistoryItem({
       feedbackRating: rating,
       feedbackComment: comment,
@@ -359,22 +413,36 @@ export default function AOLBEAMPage() {
     toast({ title: "Ready for New Topic", description: "Enter a new topic and problem type." });
   };
 
-  const handleSubscribe = (planId: string) => {
-    if (!supabase) {
-      toast({ variant: "destructive", title: "Error", description: "Authentication service not ready."});
+  const handleSubscribe = async (planId: string) => {
+    if (!supabase || !currentUser) {
+      toast({ variant: "destructive", title: "Error", description: "Authentication service not ready or user not logged in."});
       return;
     }
-    if (!currentUser) {
-        // This case should ideally not be hit if paywall shown after login attempt
-        toast({ title: "Please Login", description: "You need to login or register to subscribe." });
-        handleSignInWithGoogle();
-        return;
+    
+    try {
+        const { data, error } = await supabase
+            .from('user_profiles')
+            .update({ 
+                is_subscribed: true, 
+                subscription_plan_id: planId, 
+                interaction_count: 0, // Reset interaction count
+                subscription_started_at: new Date().toISOString() 
+            })
+            .eq('id', currentUser.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        if (data) {
+            setUserProfile(data as UserProfile);
+            setShowPaywall(false);
+            toast({ title: "Subscription Activated!", description: "You now have unlimited access and your progress will be saved to your account." });
+        }
+    } catch (error: any) {
+        console.error("Error subscribing user:", error);
+        toast({ variant: "destructive", title: "Subscription Failed", description: "Could not activate your subscription. " + error.message });
     }
-    console.log("Subscribed to plan:", planId, "by user:", currentUser.email);
-    setIsUserSubscribed(true);
-    setShowPaywall(false);
-    setInteractionCount(0); 
-    toast({ title: "Subscription Activated!", description: "You now have unlimited access and your progress will be saved to your account." });
   };
 
   const handleSignInWithGoogle = async () => {
@@ -402,18 +470,13 @@ export default function AOLBEAMPage() {
     if (error) {
       toast({ variant: "destructive", title: "Logout Error", description: error.message });
     } else {
-      setCurrentUser(null);
-      // setIsUserSubscribed(false); // Keep this if you want to force re-subscription for testing, or manage it via backend
+      setCurrentUser(null); // This will trigger useEffect to clear profile
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
     }
   };
 
 
   useEffect(() => {
-    // This effect attempts to load the last interaction from local history if the user is not logged in
-    // AND no problem is currently loaded or being loaded.
-    // This ensures that if a user was working on something and then refreshes or comes back without logging in,
-    // their last problem (from local storage history) is reloaded.
     if (history.length > 0 && !currentUser && !currentProblem && !isLoadingProblem) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
@@ -426,23 +489,26 @@ export default function AOLBEAMPage() {
         setTopicDetails(null);
       }
     }
-  }, [currentUser, history, isLoadingProblem, currentProblem]); // Added currentProblem to dependencies
+  }, [currentUser, history, isLoadingProblem, currentProblem]); 
+
+  const interactionsLeft = currentUser && userProfile && !userProfile.is_subscribed 
+    ? Math.max(0, FREE_INTERACTION_LIMIT - userProfile.interaction_count)
+    : (!currentUser ? Math.max(0, FREE_INTERACTION_LIMIT - guestInteractionCount) : 'Unlimited');
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <PaywallModal
         isOpen={showPaywall}
         onClose={() => {
-            // Only close paywall if user is subscribed or it's not a mandatory display for new users
-            if (isUserSubscribed || !currentUser) {
-                 setShowPaywall(false);
+            if (currentUser && userProfile && !userProfile.is_subscribed) {
+                 toast({title: "Plan Selection Required", description: "Please select a plan to continue.", variant: "destructive"});
             } else {
-                toast({title: "Plan Selection Required", description: "Please select a plan to continue.", variant: "destructive"});
+                setShowPaywall(false);
             }
         }}
         onSubscribe={handleSubscribe}
         onLoginRegister={handleSignInWithGoogle}
-        isMandatory={!!currentUser && !isUserSubscribed} // Make modal mandatory if user is logged in but not subscribed
+        isMandatory={!!currentUser && !!userProfile && !userProfile.is_subscribed}
       />
       <header className="mb-6 md:mb-8 py-4 bg-card/50 border-b">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -453,7 +519,8 @@ export default function AOLBEAMPage() {
             </div>
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              {currentUser ? (
+              {isLoadingProfile && !currentUser && <Button variant="outline" className="w-full sm:w-auto" disabled><PageLoader className="mr-2 h-5 w-5 animate-spin" />Loading...</Button>}
+              {!isLoadingProfile && currentUser && userProfile ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="w-full sm:w-auto">
@@ -473,9 +540,11 @@ export default function AOLBEAMPage() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
-                <Button variant="outline" onClick={handleSignInWithGoogle} className="w-full sm:w-auto" disabled={!supabase}>
-                  <UserCircle className="mr-2 h-5 w-5" /> { !supabase ? "Initializing..." : "Login / Sign Up with Google" }
-                </Button>
+                 !isLoadingProfile && !currentUser && (
+                    <Button variant="outline" onClick={handleSignInWithGoogle} className="w-full sm:w-auto" disabled={!supabase}>
+                    <UserCircle className="mr-2 h-5 w-5" /> { !supabase ? "Initializing..." : "Login / Sign Up with Google" }
+                    </Button>
+                 )
               )}
             </div>
           </div>
@@ -483,50 +552,58 @@ export default function AOLBEAMPage() {
       </header>
 
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
-        <div className="flex flex-col lg:flex-row gap-6 xl:gap-8">
-          <div className="lg:w-2/5 flex flex-col gap-6">
-            <ProblemGenerator
-              onGenerate={handleGenerateProblem}
-              isLoading={isLoadingProblem}
-              defaultTopic={currentTopic}
-              defaultProblemType={currentProblemType}
-            />
-            {currentProblem && (
-              <>
-              <div className="flex gap-2 mt-0">
-                  <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1">
-                      <RefreshCcw className="mr-2 h-4 w-4" /> Another (Same Topic)
-                  </Button>
-                  <Button onClick={handleStartNew} variant="outline" className="flex-1">
-                      <FilePlus2 className="mr-2 h-4 w-4" /> Start New Topic
-                  </Button>
-              </div>
-              <ProblemDisplay
-                problem={currentProblem}
-                problemType={currentProblemType}
-                onSubmitAnswer={handleEvaluateAnswer}
-                onFeedbackSubmit={handleProblemFeedback}
-                isLoading={isLoadingEvaluation}
-                currentTopic={currentTopic}
-              />
-              </>
-            )}
-            {evaluationResult && <EvaluationResult evaluation={evaluationResult} />}
-          </div>
+        {isLoadingProfile && currentUser && (
+            <div className="flex justify-center items-center h-64">
+                <PageLoader className="h-12 w-12 animate-spin text-primary" />
+                <p className="ml-4 text-lg text-muted-foreground">Loading your profile...</p>
+            </div>
+        )}
+        {(!isLoadingProfile || !currentUser) && (
+            <div className="flex flex-col lg:flex-row gap-6 xl:gap-8">
+            <div className="lg:w-2/5 flex flex-col gap-6">
+                <ProblemGenerator
+                onGenerate={handleGenerateProblem}
+                isLoading={isLoadingProblem || (currentUser && isLoadingProfile)}
+                defaultTopic={currentTopic}
+                defaultProblemType={currentProblemType}
+                />
+                {currentProblem && (
+                <>
+                <div className="flex gap-2 mt-0">
+                    <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1" disabled={isLoadingProblem || (currentUser && isLoadingProfile)}>
+                        <RefreshCcw className="mr-2 h-4 w-4" /> Another (Same Topic)
+                    </Button>
+                    <Button onClick={handleStartNew} variant="outline" className="flex-1" disabled={isLoadingProblem || (currentUser && isLoadingProfile)}>
+                        <FilePlus2 className="mr-2 h-4 w-4" /> Start New Topic
+                    </Button>
+                </div>
+                <ProblemDisplay
+                    problem={currentProblem}
+                    problemType={currentProblemType}
+                    onSubmitAnswer={handleEvaluateAnswer}
+                    onFeedbackSubmit={handleProblemFeedback}
+                    isLoading={isLoadingEvaluation || (currentUser && isLoadingProfile)}
+                    currentTopic={currentTopic}
+                />
+                </>
+                )}
+                {evaluationResult && <EvaluationResult evaluation={evaluationResult} />}
+            </div>
 
-          <div className="lg:w-1/5 flex flex-col gap-6">
-            <TopicRevision
-              topic={currentProblem ? currentTopic : null}
-              details={topicDetails}
-              onFetchDetails={handleFetchTopicDetails}
-              isLoading={isLoadingDetails}
-            />
-          </div>
+            <div className="lg:w-1/5 flex flex-col gap-6">
+                <TopicRevision
+                topic={currentProblem ? currentTopic : null}
+                details={topicDetails}
+                onFetchDetails={handleFetchTopicDetails}
+                isLoading={isLoadingDetails || (currentUser && isLoadingProfile)}
+                />
+            </div>
 
-          <div className="lg:w-2/5 flex flex-col">
-            <HistoryView history={history} />
-          </div>
-        </div>
+            <div className="lg:w-2/5 flex flex-col">
+                <HistoryView history={history} />
+            </div>
+            </div>
+        )}
       </main>
       <footer className="mt-12 py-8 border-t bg-card/50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -547,6 +624,9 @@ export default function AOLBEAMPage() {
               <Link href="/blog" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
                 <Rss size={16} /> Blog
               </Link>
+               <Link href="/admin/blog" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                <UserCircle size={16} /> Admin
+              </Link>
             </div>
             <div className="flex justify-center gap-x-6 gap-y-2 mt-6 mb-4 flex-wrap">
               <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="Discord" className="text-muted-foreground hover:text-primary">
@@ -566,11 +646,14 @@ export default function AOLBEAMPage() {
               </Link>
             </div>
             <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} AOLBEAM. All rights reserved. Powered by GenAI.</p>
-            {!(currentUser && isUserSubscribed) && <p className="text-xs text-muted-foreground mt-1">Free interactions remaining: {Math.max(0, FREE_INTERACTION_LIMIT - interactionCount)}</p>}
+             <p className="text-xs text-muted-foreground mt-1">
+                {isLoadingProfile && currentUser ? "Loading interactions count..." : 
+                    (currentUser && userProfile?.is_subscribed) ? "You have unlimited interactions!" :
+                    `Free interactions remaining: ${interactionsLeft}`
+                }
+            </p>
         </div>
       </footer>
     </div>
   );
 }
-
-    
