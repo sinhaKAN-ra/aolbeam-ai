@@ -5,7 +5,7 @@ import type * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Info, Loader2, BookOpen } from 'lucide-react';
+import { Info, Loader2, BookOpen, Brain } from 'lucide-react';
 import MathRenderer from './MathRenderer';
 
 interface TopicRevisionProps {
@@ -16,6 +16,8 @@ interface TopicRevisionProps {
 }
 
 export function TopicRevision({ topic, details, onFetchDetails, isLoading }: TopicRevisionProps) {
+  const explanatoryMessage = "Mastering exams is about quickly recalling relevant patterns and concepts. This section helps you build that skill. Use it to connect the current problem with its underlying principles, strengthening your ability to recognize these patterns and become more efficient – a key trait of top performers.";
+
   if (!topic) {
     return (
       <Card className="shadow-lg">
@@ -23,9 +25,14 @@ export function TopicRevision({ topic, details, onFetchDetails, isLoading }: Top
           <CardTitle className="flex items-center gap-2 text-xl font-semibold">
             <BookOpen className="text-primary" /> Topic Revision
           </CardTitle>
+          <CardDescription className="text-sm mt-1">
+            {explanatoryMessage}
+            <br /><br />
+            Generate a problem first to revise its topic.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">Generate a problem first to revise its topic.</p>
+          {/* Placeholder or additional info if needed when no topic is selected */}
         </CardContent>
       </Card>
     );
@@ -35,9 +42,11 @@ export function TopicRevision({ topic, details, onFetchDetails, isLoading }: Top
     <Card className="shadow-lg">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xl font-semibold">
-          <BookOpen className="text-primary" /> Topic Revision: <span className="font-normal">{topic}</span>
+          <Brain className="text-primary" /> Topic Revision: <span className="font-normal">{topic}</span>
         </CardTitle>
-        <CardDescription>Need a refresher? Get key details about the current topic.</CardDescription>
+        <CardDescription className="text-sm mt-1">
+         {explanatoryMessage}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {!details && (
