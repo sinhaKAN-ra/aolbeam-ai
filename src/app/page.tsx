@@ -25,7 +25,6 @@ import {
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
 import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut, Instagram, X, Linkedin, Rss } from 'lucide-react';
-// Updated Supabase import for client components
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -37,6 +36,7 @@ import { EvaluationResult } from '@/components/EvaluationResult';
 import { TopicRevision } from '@/components/TopicRevision';
 import { HistoryView } from '@/components/HistoryView';
 import { PaywallModal } from '@/components/PaywallModal';
+import { ThemeToggle } from '@/components/ThemeToggle'; // Import ThemeToggle
 
 const FREE_INTERACTION_LIMIT = 5;
 
@@ -79,8 +79,6 @@ export default function AOLBEAMPage() {
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
 
   useEffect(() => {
-    // Initialize Supabase client on the client-side after mount
-    // createClientComponentClient reads ENV VARS automatically
     if (typeof window !== 'undefined') {
         const client = createClientComponentClient();
         setSupabaseClient(client);
@@ -89,12 +87,10 @@ export default function AOLBEAMPage() {
 
 
   useEffect(() => {
-    if (!supabase) return; // Only run if supabase client is initialized
+    if (!supabase) return; 
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
       setCurrentUser(session?.user ?? null);
-      // If user logs out, we might want to clear or reset local state tied to a specific user.
-      // If user logs in, we might want to fetch their history from Supabase (future step).
     });
 
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -123,17 +119,16 @@ export default function AOLBEAMPage() {
   }, [isUserSubscribed, setInteractionCount, currentUser]);
 
 
- const addToHistory = useCallback(async (item: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id'>) => {
+ const addToHistory = useCallback(async (item: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'>) => {
     let newHistoryItem: InteractionHistoryItem = {
         ...item,
-        id: Date.now().toString(), // Local/React key
+        id: Date.now().toString(), 
         timestamp: new Date().toISOString(),
         isTopicRevised: item.isTopicRevised || false,
         topicDetails: item.topicDetails || null,
         userAnswer: item.userAnswer,
         selectedOption: item.selectedOption,
         evaluation: item.evaluation,
-        timeTakenSeconds: item.timeTakenSeconds,
     };
 
     if (supabase && currentUser) {
@@ -145,9 +140,6 @@ export default function AOLBEAMPage() {
             answer_format: item.problem.answerFormat,
             multiple_choice_options: item.problem.multipleChoiceOptions,
             correct_answer: item.problem.correctAnswer,
-            // user_answer, selected_option, evaluation fields will be updated by updateLastHistoryItem
-            // feedback_rating and feedback_comment also updated by updateLastHistoryItem
-            // timeTakenSeconds will be updated by updateLastHistoryItem
         };
         try {
             const { data, error } = await supabase
@@ -160,7 +152,7 @@ export default function AOLBEAMPage() {
                 throw error;
             }
             if (data) {
-                newHistoryItem.supabase_id = data.id; // Store Supabase ID
+                newHistoryItem.supabase_id = data.id; 
                 toast({ title: "Progress Saved", description: "Your new problem has been saved to your account." });
             }
         } catch (error: any) {
@@ -198,15 +190,12 @@ export default function AOLBEAMPage() {
         if (updates.feedbackComment !== undefined) dbUpdatePayload.feedback_comment = updates.feedbackComment;
         if (updates.timeTakenSeconds !== undefined) dbUpdatePayload.time_taken_seconds = updates.timeTakenSeconds;
 
-
-         // If problem details were part of updates (e.g. if a problem itself could be edited, though not current use case)
         if (updates.problem) {
             if(updates.problem.problemStatement) dbUpdatePayload.problem_statement = updates.problem.problemStatement;
             if(updates.problem.answerFormat) dbUpdatePayload.answer_format = updates.problem.answerFormat;
             if(updates.problem.multipleChoiceOptions) dbUpdatePayload.multiple_choice_options = updates.problem.multipleChoiceOptions;
             if(updates.problem.correctAnswer) dbUpdatePayload.correct_answer = updates.problem.correctAnswer;
         }
-
 
         if (Object.keys(dbUpdatePayload).length > 0) {
           (async () => {
@@ -215,7 +204,7 @@ export default function AOLBEAMPage() {
                 .from('user_interactions')
                 .update(dbUpdatePayload)
                 .eq('id', updatedItem.supabase_id!)
-                .eq('user_id', currentUser.id); // Ensure user owns record
+                .eq('user_id', currentUser.id); 
               if (error) {
                 throw error;
               }
@@ -246,13 +235,12 @@ export default function AOLBEAMPage() {
       incrementInteraction();
       const result = await generatePracticeProblem({ topic, problemType: type });
       setCurrentProblem(result);
-      await addToHistory({ // Await addToHistory as it's now async
+      await addToHistory({ 
         topic,
         problemType: type,
         problem: result,
         isTopicRevised: false, 
         topicDetails: null,
-        // feedback fields and timeTakenSeconds will be added later by updateLastHistoryItem
       });
       toast({ title: "Problem Generated!", description: `A new ${type} problem for "${topic}" is ready.` });
     } catch (error) {
@@ -284,7 +272,7 @@ export default function AOLBEAMPage() {
         });
         updatesForHistory.userAnswer = answer;
         updatesForHistory.evaluation = evalOutput;
-      } else { // Practical
+      } else { 
         const isCorrect = answer === currentProblem.correctAnswer;
         evalOutput = {
           isCorrect,
@@ -332,7 +320,6 @@ export default function AOLBEAMPage() {
       feedbackRating: rating,
       feedbackComment: comment,
     });
-    // Toast is handled in ProblemDisplay component after calling this
   };
 
   const handleNewProblemSameTopic = () => {
@@ -364,7 +351,7 @@ export default function AOLBEAMPage() {
     console.log("Subscribed to plan:", planId, "by user:", currentUser.email);
     setIsUserSubscribed(true);
     setShowPaywall(false);
-    setInteractionCount(0); // Reset free interaction count after subscription
+    setInteractionCount(0); 
     toast({ title: "Subscription Activated!", description: "You now have unlimited access." });
   };
 
@@ -394,15 +381,13 @@ export default function AOLBEAMPage() {
       toast({ variant: "destructive", title: "Logout Error", description: error.message });
     } else {
       setCurrentUser(null);
-      setIsUserSubscribed(false); // Reset subscription status on logout for demo purposes
+      setIsUserSubscribed(false); 
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
     }
   };
 
 
   useEffect(() => {
-    // This effect restores state from localStorage if user is logged out
-    // It does NOT fetch from Supabase; that's for the profile page or specific user actions
     if (history.length > 0 && !currentUser && !currentProblem && !isLoadingProblem) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
@@ -415,8 +400,7 @@ export default function AOLBEAMPage() {
         setTopicDetails(null);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, supabase, history]); // Removed currentProblem and isLoadingProblem from deps to avoid loops
+  }, [currentUser, supabase, history, isLoadingProblem, currentProblem]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -433,7 +417,8 @@ export default function AOLBEAMPage() {
               <h1 className="text-3xl sm:text-4xl font-bold text-primary">AOLBEAM</h1>
               <p className="text-md sm:text-lg text-muted-foreground mt-1">Access of Learning, beam into the world of knowledge.</p>
             </div>
-            <div>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
               {currentUser ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
