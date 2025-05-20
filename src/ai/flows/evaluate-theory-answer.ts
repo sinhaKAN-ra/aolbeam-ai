@@ -16,13 +16,13 @@ import {z} from 'genkit';
 const EvaluateTheoryAnswerInputSchema = z.object({
   question: z.string().describe('The theory question asked to the student.'),
   studentAnswer: z.string().describe('The student response to the theory question.'),
-  topicDetails: z.string().describe('Relevant topic details for context.'),
+  topicDetails: z.string().describe('Relevant topic details for context. This might include LaTeX for math, Markdown for code, or Mermaid/descriptions for diagrams.'),
 });
 export type EvaluateTheoryAnswerInput = z.infer<typeof EvaluateTheoryAnswerInputSchema>;
 
 const EvaluateTheoryAnswerOutputSchema = z.object({
   isCorrect: z.boolean().describe('Whether the student answer is correct.'),
-  feedback: z.string().describe('Detailed feedback on the answer, including areas for improvement. Should use LaTeX for math, e.g., $E=mc^2$ or $$x^2$$'),
+  feedback: z.string().describe('Detailed feedback on the answer, including areas for improvement. Should use LaTeX for math (e.g., $E=mc^2$ or $$x^2$$), Markdown for code (e.g., ```python\\nprint("Hello")\\n```), and describe diagrams or use Mermaid syntax (e.g., ```mermaid\\ngraph TD; A-->B;\\n```).'),
 });
 export type EvaluateTheoryAnswerOutput = z.infer<typeof EvaluateTheoryAnswerOutputSchema>;
 
@@ -35,16 +35,19 @@ const prompt = ai.definePrompt({
   input: {schema: EvaluateTheoryAnswerInputSchema},
   output: {schema: EvaluateTheoryAnswerOutputSchema},
   prompt: `You are an expert educator providing feedback on student answers to theory questions.
-When providing 'feedback' that includes mathematical formulas or expressions, you MUST use LaTeX notation.
-For inline math, use single dollar signs (e.g., $E=mc^2$).
-For display/block math (equations on their own line), use double dollar signs (e.g., $$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$).
-Ensure the LaTeX is syntactically correct and properly escaped within the JSON string.
 
-Evaluate the student's answer to the following question, using the provided topic details for context. Determine if the answer is correct, and provide detailed feedback, including areas for improvement, and set the isCorrect output field appropriately.
+Content Formatting Rules for your 'feedback' output:
+1.  **Mathematical Formulas**: Use LaTeX notation. For inline math, use single dollar signs (e.g., $E=mc^2$). For display/block math, use double dollar signs (e.g., $$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$).
+2.  **Code Snippets**: Use Markdown fenced code blocks with language identifiers (e.g., \`\`\`python\\nprint("Hello World")\\n\`\`\` or \`\`\`javascript\\nconsole.log("Hi");\\n\`\`\`).
+3.  **Diagrams**: If a diagram is relevant to the feedback, first try to represent it using Mermaid.js syntax within a Markdown code block (e.g., \`\`\`mermaid\\ngraph TD;\\nA[Start] --> B(Process);\\nB --> C{Decision};\\nC --> D[End];\\n\`\`\`). If Mermaid.js is not suitable, provide a clear textual description of the diagram.
+
+Ensure the LaTeX, Markdown, and Mermaid syntax is syntactically correct and properly escaped within the JSON string for the 'feedback' field.
+
+Evaluate the student's answer to the following question, using the provided topic details for context. Determine if the answer is correct, and provide detailed feedback adhering to the formatting rules above. Set the isCorrect output field appropriately.
 
 Question: {{{question}}}
 Student's Answer: {{{studentAnswer}}}
-Topic Details: {{{topicDetails}}}
+Topic Details (for context, may contain formatted content): {{{topicDetails}}}
   `,
 });
 
