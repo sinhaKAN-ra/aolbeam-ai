@@ -1,8 +1,10 @@
+
 // src/app/terms-of-service/page.tsx
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
+import Footer from '@/components/Footer';
 
 export const metadata: Metadata = {
   title: 'Terms of Service - AOLBEAM',
@@ -11,10 +13,10 @@ export const metadata: Metadata = {
 
 export default function TermsOfServicePage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       <header className="py-4 bg-card/50 border-b mb-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-primary">AOLBEAM</h1>
+          <Link href="/" className="text-3xl font-bold text-primary">AOLBEAM</Link>
            <Button asChild variant="outline">
             <Link href="/">
               <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
@@ -22,7 +24,7 @@ export default function TermsOfServicePage() {
           </Button>
         </div>
       </header>
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
         <div className="max-w-3xl mx-auto bg-card p-6 sm:p-8 rounded-lg shadow-lg">
           <h2 className="text-2xl font-semibold mb-6 text-center">Terms of Service</h2>
           
@@ -64,11 +66,7 @@ export default function TermsOfServicePage() {
           </div>
         </div>
       </main>
-      <footer className="mt-12 py-8 border-t bg-card/50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} AOLBEAM. All rights reserved.</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

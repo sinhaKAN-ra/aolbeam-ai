@@ -1,3 +1,4 @@
+
 // src/app/pricing/page.tsx
 "use client";
 
@@ -6,10 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription as PlanCardDescription } from '@/components/ui/card';
 import { ArrowLeft, Check, Info, Zap, CreditCard } from 'lucide-react';
 import type { SubscriptionPlan } from '@/types';
-
-// Removed metadata export as it's not allowed in Client Components.
-// If specific metadata is needed for this page, it should be handled
-// in a parent Server Component (e.g., a layout.tsx for this route).
+import Footer from '@/components/Footer';
 
 const plans: SubscriptionPlan[] = [
   {
@@ -38,7 +36,7 @@ const plans: SubscriptionPlan[] = [
 
 export default function PricingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       <header className="py-4 bg-card/50 border-b mb-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <Link href="/" className="text-3xl font-bold text-primary">AOLBEAM</Link>
@@ -50,7 +48,7 @@ export default function PricingPage() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-3 text-primary flex items-center justify-center gap-2">
             <Zap className="w-10 h-10" /> AOLBEAM Pricing Plans
@@ -82,9 +80,6 @@ export default function PricingPage() {
               <div className="p-6 pt-4 mt-auto">
                  <Button
                     onClick={() => {
-                      // In a real app, this would likely redirect to a checkout page
-                      // or initiate a payment flow, possibly passing the plan.id
-                      // For now, it can link to the main page's paywall or signup
                       alert(`Subscribing to ${plan.name} (Placeholder). Full integration coming soon!`);
                     }}
                     className={`w-full text-lg py-3 ${plan.highlight ? '' : 'bg-accent text-accent-foreground hover:bg-accent/90'}`}
@@ -123,13 +118,7 @@ export default function PricingPage() {
         </div>
 
       </main>
-
-       <footer className="mt-12 py-8 border-t bg-card/50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} AOLBEAM. All rights reserved.</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
-

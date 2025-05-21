@@ -12,6 +12,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Badge } from '@/components/ui/badge';
 import MathRenderer from '@/components/MathRenderer';
 import type { ProblemType } from '@/types';
+import Footer from '@/components/Footer';
 
 import { ArrowLeft, BarChart3, History, Lightbulb, UserCircle, Settings, Star, MessageSquareText, ListChecks, CheckCircle, XCircle } from 'lucide-react';
 
@@ -77,7 +78,6 @@ export default async function ProfilePage() {
 
     if (error) {
       console.error("Error fetching user history:", error);
-      // Potentially show an error message to the user on the page
     }
 
     if (interactions) {
@@ -105,27 +105,16 @@ export default async function ProfilePage() {
     console.error("Exception fetching user history:", e);
   }
 
-  // Placeholder data for stats - will be replaced by dynamic data from userHistory in future steps
-  const topicsPracticed = [
-    { name: 'Quantum Physics', accuracy: 0.75, lastPracticed: '2 days ago', questionsAttempted: 20 },
-    { name: 'Organic Chemistry', accuracy: 0.90, lastPracticed: '5 days ago', questionsAttempted: 15 },
-    { name: 'Calculus II', accuracy: 0.60, lastPracticed: '1 day ago', questionsAttempted: 25 },
-    { name: 'Data Structures', accuracy: 0.85, lastPracticed: '3 days ago', questionsAttempted: 30 },
-  ];
-  const overallAccuracy = userHistory.length > 0 
+  const overallAccuracy = userHistory.length > 0 && userHistory.filter(item => item.evaluation).length > 0
     ? userHistory.filter(item => item.evaluation).reduce((acc, item) => acc + (item.evaluation?.isCorrect ? 1 : 0), 0) / userHistory.filter(item => item.evaluation).length
     : 0;
   const totalQuestionsAttempted = userHistory.length;
   
-  // Calculate number of unique topics practiced
   const uniqueTopicsPracticedCount = new Set(userHistory.map(item => item.topic)).size;
 
-  // Simple calculation for average questions per topic (if topics were grouped)
-  // For now, this is just total questions / unique topics
   const averageQuestionsPerTopic = uniqueTopicsPracticedCount > 0 ? Math.round(totalQuestionsAttempted / uniqueTopicsPracticedCount) : 0;
   
 
-  // Sample logic for Strengths (topics with high accuracy)
   const strengths = userHistory
     .filter(item => item.evaluation?.isCorrect)
     .reduce((acc, item) => {
@@ -133,16 +122,15 @@ export default async function ProfilePage() {
         const topicItems = userHistory.filter(h => h.topic === item.topic && h.evaluation);
         const correctCount = topicItems.filter(t => t.evaluation?.isCorrect).length;
         const accuracy = topicItems.length > 0 ? correctCount / topicItems.length : 0;
-        if (accuracy >= 0.85) { // Example threshold for strength
+        if (accuracy >= 0.85) { 
           acc.push({ name: item.topic, accuracy });
         }
       }
       return acc;
     }, [] as { name: string; accuracy: number }[])
-    .slice(0, 2); // Show top 2 strengths
+    .slice(0, 2); 
 
 
-  // Sample logic for Focus Areas (topics with lower accuracy)
   const focusAreas = userHistory
     .filter(item => item.evaluation && !item.evaluation.isCorrect)
     .reduce((acc, item) => {
@@ -151,7 +139,7 @@ export default async function ProfilePage() {
         const correctCount = topicItems.filter(t => t.evaluation?.isCorrect).length;
         const accuracy = topicItems.length > 0 ? correctCount / topicItems.length : 0;
          const lastPracticed = new Date(topicItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0].timestamp).toLocaleDateString();
-        if (accuracy < 0.70) { // Example threshold for focus area
+        if (accuracy < 0.70) { 
           acc.push({ name: item.topic, accuracy, lastPracticed });
         }
       }
@@ -160,7 +148,7 @@ export default async function ProfilePage() {
 
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       <header className="py-4 bg-card/50 border-b mb-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <Link href="/" className="text-3xl font-bold text-primary">AOLBEAM</Link>
@@ -172,7 +160,7 @@ export default async function ProfilePage() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
         <div className="max-w-4xl mx-auto">
           <Card className="mb-8 shadow-xl overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-primary/10 via-card to-card p-6 flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
@@ -307,7 +295,7 @@ export default async function ProfilePage() {
                             <span className="font-medium truncate max-w-[150px] sm:max-w-[250px] md:max-w-xs">{item.topic}</span>
                           </div>
                           {item.evaluation && (
-                             <Badge variant={item.evaluation.isCorrect ? "default" : "destructive"} className={`${item.evaluation.isCorrect ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'} text-primary-foreground ml-2`}>
+                             <Badge variant={item.evaluation.isCorrect ? "default" : "destructive"} className={`${item.evaluation.isCorrect ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'} text-white /* Ensure text is white for contrast */ ml-2`}>
                               {item.evaluation.isCorrect ? <CheckCircle size={14}/> : <XCircle size={14}/>}
                               <span className="ml-1">{item.evaluation.isCorrect ? 'Correct' : 'Incorrect'}</span>
                             </Badge>
@@ -330,13 +318,23 @@ export default async function ProfilePage() {
                             </div>
                           )}
                           {item.problemType === 'practical' && item.selectedOption && (
-                            <div>
-                              <strong className="block text-muted-foreground mb-1">Your Choice:</strong>
-                               <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.selectedOption} /></div>
-                              <strong className="block text-muted-foreground mt-2 mb-1">Correct Answer:</strong>
+                            <>
+                              <div>
+                                <strong className="block text-muted-foreground mb-1">Your Choice:</strong>
+                                 <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.selectedOption} /></div>
+                              </div>
+                              <div>
+                                <strong className="block text-muted-foreground mt-2 mb-1">Correct Answer:</strong>
+                                 <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
+                              </div>
+                            </>
+                          )}
+                           {item.problemType === 'theory' && item.evaluation && (
+                             <div>
+                              <strong className="block text-muted-foreground mt-2 mb-1">Model Answer / Key Points:</strong>
                                <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
                             </div>
-                          )}
+                           )}
                           {item.evaluation?.feedback && (
                             <div>
                               <strong className="block text-muted-foreground mb-1">Feedback:</strong>
@@ -364,15 +362,7 @@ export default async function ProfilePage() {
         </div>
       </main>
 
-      <footer className="mt-12 py-8 border-t bg-card/50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} AOLBEAM. All rights reserved.</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
-
-    
-
-    

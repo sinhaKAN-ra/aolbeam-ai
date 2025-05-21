@@ -4,16 +4,16 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge'; // Added import
-import { ArrowLeft, BookOpen, CalendarDays, Tag } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, CalendarDays } from 'lucide-react';
 import Image from 'next/image';
+import Footer from '@/components/Footer';
 
 export const metadata: Metadata = {
   title: 'AOLBEAM Blog - Insights & Motivation',
   description: 'Stay motivated and informed with articles on learning strategies, exam preparation, and educational insights from AOLBEAM.',
 };
 
-// Placeholder blog posts - in a real app, this would come from a CMS or database
 const placeholderPosts = [
   {
     slug: 'effective-learning-strategies',
@@ -46,7 +46,7 @@ const placeholderPosts = [
 
 export default function BlogListPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       <header className="py-4 bg-card/50 border-b mb-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <Link href="/" className="text-3xl font-bold text-primary">AOLBEAM</Link>
@@ -58,7 +58,7 @@ export default function BlogListPage() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-3 text-primary">AOLBEAM Blog</h1>
           <p className="text-xl text-muted-foreground">Insights, motivation, and learning strategies to help you succeed.</p>
@@ -103,12 +103,7 @@ export default function BlogListPage() {
           ))}
         </div>
       </main>
-
-      <footer className="mt-12 py-8 border-t bg-card/50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} AOLBEAM. All rights reserved.</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

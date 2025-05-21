@@ -24,7 +24,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle, BookOpen, Mail, ShieldCheck, FileText, LogOut, Instagram, Linkedin as LinkedinIcon, Rss, Brain, Loader2 as PageLoader, Home, Newspaper, Settings, Menu, ArrowRight, Briefcase, DollarSign, Info, MessageSquare, BarChart3, History } from 'lucide-react'; // Added Briefcase, DollarSign
+import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -36,34 +36,10 @@ import { TopicRevision } from '@/components/TopicRevision';
 import { HistoryView } from '@/components/HistoryView';
 import { PaywallModal } from '@/components/PaywallModal';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import Footer from '@/components/Footer';
 
 
 const FREE_INTERACTION_LIMIT = 5;
-
-// SVG Icon for Discord (used in footer)
-const DiscordIconFooter = ({ className }: { className?: string }) => (
-  <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" className={className}>
-    <title>Discord</title>
-    <path d="M20.317 4.369a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.865-.608 1.249a18.04 18.04 0 00-7.443 0 11.5 11.5 0 00-.608-1.25.074.074 0 00-.079-.037A19.718 19.718 0 003.683 4.37a.074.074 0 00-.035.076c.003.134.036.29.076.411.403 1.192.758 2.274 1.049 3.265a15.016 15.016 0 00-2.06 2.127.074.074 0 00.007.099c.16.217.341.41.524.578a.07.07 0 00.081.021c3.487-1.507 6.235-1.744 8.441-1.744s4.955.236 8.442 1.744a.07.07 0 00.081-.021c.183-.168.364-.361.523-.578a.074.074 0 00.007-.1 15.03 15.03 0 00-2.06-2.127c.29-.99.645-2.073 1.049-3.265.04-.121.072-.277.076-.411a.074.074 0 00-.035-.076zM8.02 12.32c-.737 0-1.338-.634-1.338-1.414s.601-1.414 1.338-1.414c.737 0 1.336.634 1.336 1.414.001.78-.599 1.414-1.336 1.414zm7.975 0c-.737 0-1.338-.634-1.338-1.414s.601-1.414 1.338-1.414c.737 0 1.338.634 1.338 1.414s-.601 1.414-1.338 1.414z"/>
-  </svg>
-);
-
-// SVG Icon for Telegram (used in footer)
-const TelegramIconFooter = ({ className }: { className?: string }) => (
-  <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" className={className}>
-    <title>Telegram</title>
-    <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.032.192.032.283.001.085-.006.169-.021.25a1.003 1.003 0 0 1-.193.404l-2.109 7.721c-.193.707-.465.938-.779.951-.371.015-.613-.14-.86-.301-.282-.182-1.079-.69-1.461-.961-.575-.405-1.001-.612-1.001-.926.002-.237.309-.515.919-1.104.002-.002.004-.003.005-.005L15.9 9.765c.1-.09.2-.18.2-.27s-.102-.16-.2-.16c-.09 0-.17.05-.24.12l-4.011 3.697-1.04 3.246c-.125.38-.28.72-.49.96-.21.24-.49.41-.83.41-.48 0-.93-.24-1.12-.68-.2-.44-.4-.88-.6-1.32-.18-.41-.36-.82-.54-1.23l-.02-.04c-.03-.09-.06-.18-.09-.27a.53.53 0 0 1-.03-.28.5.5 0 0 1 .09-.28l.01-.01 7.84-5.002c.02-.01.04-.02.06-.03z"/>
-  </svg>
-);
-
-// SVG Icon for X (Twitter)
-const XIcon = ({ className }: { className?: string }) => (
-  <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" className={className}>
-    <title>X</title>
-    <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/>
-  </svg>
-);
-
 
 export default function AOLBEAMPage() {
   const { toast } = useToast();
@@ -112,9 +88,8 @@ export default function AOLBEAMPage() {
 
       if (error) {
         console.error('Error fetching user profile:', error);
-         if (error.code === 'PGRST116') { // Resource not found, likely new user profile not yet available
+         if (error.code === 'PGRST116') { 
            toast({ variant: "default", title: "Setting up your account...", description: "Please wait a moment." });
-            // Retry after a short delay, as the trigger might take a moment
             setTimeout(async () => {
               const { data: refetchData, error: refetchError } = await supabase
                 .from('user_profiles')
@@ -124,18 +99,23 @@ export default function AOLBEAMPage() {
               if (refetchError) {
                 console.error('Error refetching user profile:', refetchError);
                 toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile. If this persists, please contact support." });
-                setUserProfile(null); // Ensure profile is cleared on error
+                setUserProfile(null);
               } else if (refetchData) {
                 setUserProfile(refetchData as UserProfile);
-                // The check for mandatory paywall is now handled by checkUsageLimit after profile load.
+                 if (!refetchData.is_subscribed && refetchData.interaction_count >= FREE_INTERACTION_LIMIT) {
+                   setShowPaywall(true); // Show paywall if limit reached and not subscribed
+                 }
               }
-            }, 2000); // 2-second delay
+            }, 2000); 
          } else {
           toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile. If this persists, please contact support." });
           setUserProfile(null);
          }
       } else if (data) {
         setUserProfile(data as UserProfile);
+         if (!data.is_subscribed && data.interaction_count >= FREE_INTERACTION_LIMIT) {
+           setShowPaywall(true); // Show paywall if limit reached and not subscribed
+         }
       }
     } catch (e) {
       console.error('Exception fetching user profile:', e);
@@ -155,10 +135,10 @@ export default function AOLBEAMPage() {
       setCurrentUser(user);
       if (user) {
         await fetchAndSetUserProfile(user);
+         // Removed immediate paywall trigger here. It will be handled by checkUsageLimit based on interaction_count
       } else {
         setUserProfile(null);
         setIsLoadingProfile(false);
-        // Restore guest history if logging out
         const guestHistoryRaw = localStorage.getItem('aolbeamHistory_guest');
         if (guestHistoryRaw) {
           try {
@@ -169,13 +149,12 @@ export default function AOLBEAMPage() {
       }
     });
 
-    // Initial user check
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       setCurrentUser(user);
       if (user) {
         await fetchAndSetUserProfile(user);
       } else {
-         setIsLoadingProfile(false); // Ensure loading is false if no user
+         setIsLoadingProfile(false); 
       }
     });
 
@@ -187,24 +166,23 @@ export default function AOLBEAMPage() {
 
   const checkUsageLimit = useCallback((): boolean => {
     if (currentUser && userProfile) {
-      if (userProfile.is_subscribed) return false; // Subscribed users have no limit
+      if (userProfile.is_subscribed) return false; 
       if (userProfile.interaction_count >= FREE_INTERACTION_LIMIT) {
         setShowPaywall(true);
         return true;
       }
-    } else if (!currentUser) { // Guest user
+    } else if (!currentUser) { 
       if (guestInteractionCount >= FREE_INTERACTION_LIMIT) {
         setShowPaywall(true);
         return true;
       }
     }
-    return false; // No limit hit or user is subscribed
+    return false; 
   }, [currentUser, userProfile, guestInteractionCount]);
 
   const incrementInteraction = useCallback(async () => {
     if (currentUser && userProfile && !userProfile.is_subscribed && supabase) {
         const newCount = userProfile.interaction_count + 1;
-        // Optimistically update local state first
         setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null);
         try {
             const { error } = await supabase
@@ -215,30 +193,27 @@ export default function AOLBEAMPage() {
         } catch (error: any) {
             console.error("Error updating interaction count in Supabase:", error);
             toast({ variant: "destructive", title: "Sync Error", description: "Could not save interaction count." });
-            // Revert optimistic update on error
             setUserProfile(prev => prev ? { ...prev, interaction_count: newCount -1 } : null);
         }
-    } else if (!currentUser) { // Guest user
+    } else if (!currentUser) { 
         setGuestInteractionCount(prev => prev + 1);
     }
   }, [currentUser, userProfile, supabase, setGuestInteractionCount, toast]);
 
 
  const addToHistory = useCallback(async (item: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'>) => {
-    // Create the basic history item for local state
     let newHistoryItem: InteractionHistoryItem = {
         ...item,
-        id: Date.now().toString(), // Local unique ID
+        id: Date.now().toString(), 
         timestamp: new Date().toISOString(),
-        isTopicRevised: false, // Default for new items
-        topicDetails: null, // Default for new items
+        isTopicRevised: false, 
+        topicDetails: null, 
         userAnswer: item.userAnswer,
         selectedOption: item.selectedOption,
         evaluation: item.evaluation,
     };
 
     if (supabase && currentUser) {
-        // Prepare record for Supabase
         const dbRecord = {
             user_id: currentUser.id,
             topic: item.topic,
@@ -247,7 +222,6 @@ export default function AOLBEAMPage() {
             answer_format: item.problem.answerFormat,
             multiple_choice_options: item.problem.multipleChoiceOptions,
             correct_answer: item.problem.correctAnswer,
-            // These will be updated later
             user_answer: null,
             selected_option: null,
             evaluation_is_correct: null,
@@ -269,50 +243,32 @@ export default function AOLBEAMPage() {
                 throw error;
             }
             if (data) {
-                newHistoryItem.supabase_id = data.id; // Store Supabase ID
+                newHistoryItem.supabase_id = data.id; 
             }
         } catch (error: any) {
             console.error("Error saving history to Supabase:", error);
             toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account. " + error.message });
         }
-    } else { // Guest user: Add to local history
-       setHistory(prevHistory => [newHistoryItem, ...prevHistory].slice(0, 50)); // Keep history to a reasonable size
+    } else { 
+       setHistory(prevHistory => [newHistoryItem, ...prevHistory].slice(0, 50)); 
     }
-    // Note: For logged-in users, we don't add to local `history` state here.
-    // The profile page will fetch history from Supabase.
-    // If you want a "session history" for logged-in users separate from profile,
-    // you might manage that differently. For now, `HistoryView` for guests uses `history`.
   }, [setHistory, supabase, currentUser, toast]);
 
   const updateLastHistoryItem = useCallback(async (updates: Partial<InteractionHistoryItem>) => {
     if (supabase && currentUser) {
-      // Find the most recent interaction for the current problem
-      // This assumes currentProblem.supabase_id might be set if it's an existing problem
-      // or we fetch the latest interaction if it's a new one just added
       let itemToUpdateId: string | undefined;
-
-      if (currentProblem && (currentProblem as any).supabase_id) {
-          itemToUpdateId = (currentProblem as any).supabase_id;
-      } else {
-          // Fetch the most recent interaction that hasn't been fully answered yet
-          // This logic might need refinement based on exact flow.
-          // For instance, if `addToHistory` always creates a new record,
-          // we need the ID of that new record.
-          const { data: latestInteraction, error: fetchError } = await supabase
-              .from('user_interactions')
-              .select('id')
-              .eq('user_id', currentUser.id)
-              .is('evaluation_is_correct', null) // Example: find one not yet evaluated
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single();
-          
-          if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows found, which is fine
-              console.error("Error fetching last history item ID from Supabase for update:", fetchError);
-          }
-          itemToUpdateId = latestInteraction?.id;
+      const { data: latestInteraction, error: fetchError } = await supabase
+          .from('user_interactions')
+          .select('id')
+          .eq('user_id', currentUser.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+      
+      if (fetchError && fetchError.code !== 'PGRST116') { 
+          console.error("Error fetching last history item ID from Supabase for update:", fetchError);
       }
-
+      itemToUpdateId = latestInteraction?.id;
 
       if (itemToUpdateId) {
         const dbUpdatePayload: any = {};
@@ -334,7 +290,7 @@ export default function AOLBEAMPage() {
               .from('user_interactions')
               .update(dbUpdatePayload)
               .eq('id', itemToUpdateId)
-              .eq('user_id', currentUser.id); // Ensure user can only update their own
+              .eq('user_id', currentUser.id); 
             if (error) {
               throw error;
             }
@@ -343,24 +299,20 @@ export default function AOLBEAMPage() {
             toast({ variant: "destructive", title: "Update Error", description: "Could not save updates to your account. " + error.message });
           }
         }
-      } else if (!currentUser) { // Guest user, update local history
+      } else if (!currentUser) { 
           setHistory(prevHistory => {
             if (prevHistory.length === 0) return prevHistory;
             const updatedItem: InteractionHistoryItem = {
               ...prevHistory[0],
               ...updates,
-              // Ensure nested objects like 'problem' are merged correctly if they are part of 'updates'
               problem: updates.problem ? { ...prevHistory[0].problem!, ...updates.problem } : prevHistory[0].problem,
             };
             return [updatedItem, ...prevHistory.slice(1)];
           });
       } else {
-        // This case means a logged-in user's interaction couldn't be found to update.
-        // Could be a timing issue or the logic to find itemToUpdateId needs refinement.
-        // For now, we can log this. In a production app, you might add a fallback or clearer error.
         console.warn("Could not determine which history item to update in Supabase for logged-in user.");
       }
-    } else if (!currentUser) { // Guest user, update local history (this part is redundant due to above, but safe)
+    } else if (!currentUser) { 
         setHistory(prevHistory => {
           if (prevHistory.length === 0) return prevHistory;
           const updatedItem: InteractionHistoryItem = {
@@ -371,7 +323,7 @@ export default function AOLBEAMPage() {
           return [updatedItem, ...prevHistory.slice(1)];
         });
     }
-  }, [setHistory, supabase, currentUser, toast, currentProblem]); // Added currentProblem to dependencies
+  }, [setHistory, supabase, currentUser, toast]); 
 
 
   const handleGenerateProblem = async (topic: string, type: ProblemType) => {
@@ -392,7 +344,6 @@ export default function AOLBEAMPage() {
         topic,
         problemType: type,
         problem: result,
-        // evaluation, userAnswer, selectedOption, etc., are not known yet
       });
       toast({ title: "Problem Generated!", description: `A new ${type} problem for "${topic}" is ready.` });
     } catch (error) {
@@ -414,22 +365,21 @@ export default function AOLBEAMPage() {
       const updatesForHistory: Partial<InteractionHistoryItem> = { timeTakenSeconds };
 
       if (currentProblemType === 'theory') {
-        // Fetch topic details for evaluation context ONLY IF not already fetched for revision
         const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific topic details available for this evaluation.";
 
         evalOutput = await evaluateTheoryAnswer({
           question: currentProblem.problemStatement,
           studentAnswer: answer,
-          answerFormat: currentProblem.answerFormat, // Pass the expected format
+          answerFormat: currentProblem.answerFormat, 
           topicDetails: fetchedDetailsForEval,
         });
         updatesForHistory.userAnswer = answer;
-      } else { // Practical (MCQ)
+      } else { 
         const isCorrect = answer === currentProblem.correctAnswer;
         evalOutput = {
           isCorrect,
           feedback: isCorrect
-            ? `Correct! ${currentProblem.answerFormat}` // Use answerFormat for explanation
+            ? `Correct! ${currentProblem.answerFormat}` 
             : `Incorrect. ${currentProblem.answerFormat} The correct option was: ${currentProblem.correctAnswer}`,
         };
         updatesForHistory.selectedOption = answer;
@@ -460,7 +410,7 @@ export default function AOLBEAMPage() {
     {
       console.error("Error fetching topic details:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to fetch topic details." });
-      setTopicDetails("Failed to load details. Please try again."); // Set error message in details
+      setTopicDetails("Failed to load details. Please try again."); 
     } finally {
       setIsLoadingDetails(false);
     }
@@ -476,7 +426,6 @@ export default function AOLBEAMPage() {
       feedbackRating: rating,
       feedbackComment: comment,
     });
-    // Toast for feedback submission is handled within ProblemDisplay
   };
 
   const handleNewProblemSameTopic = () => {
@@ -507,7 +456,7 @@ export default function AOLBEAMPage() {
             .update({
                 is_subscribed: true,
                 subscription_plan_id: planId,
-                interaction_count: 0, // Reset interaction count upon subscription
+                interaction_count: 0, 
                 subscription_started_at: new Date().toISOString()
             })
             .eq('id', currentUser.id)
@@ -517,7 +466,7 @@ export default function AOLBEAMPage() {
         if (error) throw error;
 
         if (data) {
-            setUserProfile(data as UserProfile); // Update local profile state
+            setUserProfile(data as UserProfile); 
             setShowPaywall(false);
             toast({ title: "Subscription Activated!", description: "You now have unlimited access and your progress will be saved to your account." });
         }
@@ -554,14 +503,12 @@ export default function AOLBEAMPage() {
     } else {
       setCurrentUser(null);
       setUserProfile(null);
-      setShowPaywall(false); // Ensure paywall is hidden on logout
-      // Attempt to load guest history if available
+      setShowPaywall(false); 
       const guestHistoryRaw = localStorage.getItem('aolbeamHistory_guest');
       if (guestHistoryRaw) {
         try {
           const parsedGuestHistory = JSON.parse(guestHistoryRaw);
           setHistory(parsedGuestHistory);
-           // If there's guest history, try to restore the last state from it
           if (parsedGuestHistory.length > 0) {
             const lastItem = parsedGuestHistory[0];
             setCurrentTopic(lastItem.topic);
@@ -574,23 +521,21 @@ export default function AOLBEAMPage() {
               setTopicDetails(null);
             }
           } else {
-            handleStartNew(); // If no guest history, start fresh
+            handleStartNew(); 
           }
         } catch (e) { 
           console.error("Error parsing guest history on logout:", e); 
-          handleStartNew(); // Start fresh if parsing fails
+          handleStartNew(); 
         }
       } else {
-        handleStartNew(); // Start fresh if no guest history
+        handleStartNew(); 
       }
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
     }
   };
 
 
-  // Effect to load last guest interaction if no user is logged in and history is not empty
   useEffect(() => {
-    // Only run if not loading profile, no current user, and no problem currently loaded
     if (!isLoadingProfile && !currentUser && history.length > 0 && !currentProblem && !isLoadingProblem) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
@@ -616,7 +561,6 @@ export default function AOLBEAMPage() {
       <PaywallModal
         isOpen={showPaywall}
         onClose={() => {
-            // Only allow closing if it's not a mandatory paywall for a logged-in, non-subscribed user
             const isMandatoryNow = !!(currentUser && userProfile && !userProfile.is_subscribed && userProfile.interaction_count >= FREE_INTERACTION_LIMIT);
             if (!isMandatoryNow) {
                 setShowPaywall(false);
@@ -626,7 +570,7 @@ export default function AOLBEAMPage() {
         }}
         onSubscribe={handleSubscribe}
         onLoginRegister={handleSignInWithGoogle}
-        isMandatory={showPaywall && !!currentUser && !!userProfile && !userProfile.is_subscribed && userProfile.interaction_count >= FREE_INTERACTION_LIMIT}
+        isMandatory={showPaywall && !!currentUser && !!userProfile && !userProfile.is_subscribed && (userProfile.interaction_count >= FREE_INTERACTION_LIMIT) }
       />
 
       <header className="sticky top-0 z-30 w-full border-b bg-background/90 backdrop-blur-sm">
@@ -760,66 +704,21 @@ export default function AOLBEAMPage() {
                   isLoading={isLoadingDetails || (currentUser && isLoadingProfile)}
                 />
                 <HistoryView
-                    history={currentUser && userProfile ? [] : history} // Only show local history for guests
+                    history={currentUser && userProfile ? [] : history} 
                 />
               </div>
             </div>
         )}
       </main>
-      <footer className="mt-12 py-8 border-t bg-card/50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <div className="mb-4 flex justify-center items-center gap-2">
-                <Brain className="h-7 w-7 text-primary"/>
-                <p className="text-xl font-semibold text-primary">AOLBEAM</p>
-            </div>
-            <p className="text-sm text-muted-foreground mb-4 max-w-xl mx-auto">Access of Learning: Beam into the world of knowledge. Your AI partner for acing competitive exams.</p>
-            <div className="flex justify-center gap-4 sm:gap-6 mb-6 text-sm flex-wrap">
-              <Link href="/terms-of-service" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                <FileText size={16} /> Terms
-              </Link>
-              <Link href="/privacy-policy" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                <ShieldCheck size={16} /> Privacy
-              </Link>
-              <Link href="/pricing" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                <DollarSign size={16} /> Pricing
-              </Link>
-              <Link href="/contact-us" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                <Mail size={16} /> Contact
-              </Link>
-              <Link href="/blog" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                <Rss size={16} /> Blog
-              </Link>
-               <Link href="/admin/blog" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                <Briefcase size={16} /> Admin
-              </Link>
-            </div>
-            <div className="flex justify-center gap-x-6 gap-y-2 mt-6 mb-4 flex-wrap">
-              <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="Discord" className="text-muted-foreground hover:text-primary transition-colors">
-                <DiscordIconFooter className="h-6 w-6" />
-              </Link>
-              <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="Telegram" className="text-muted-foreground hover:text-primary transition-colors">
-                <TelegramIconFooter className="h-6 w-6" />
-              </Link>
-              <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="text-muted-foreground hover:text-primary transition-colors">
-                <Instagram className="h-6 w-6" />
-              </Link>
-              <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)" className="text-muted-foreground hover:text-primary transition-colors">
-                <XIcon className="h-6 w-6" />
-              </Link>
-              <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="text-muted-foreground hover:text-primary transition-colors">
-                <LinkedinIcon className="h-6 w-6" />
-              </Link>
-            </div>
-            <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} AOLBEAM. All rights reserved. Powered by GenAI.</p>
-             <p className="text-xs text-muted-foreground mt-1">
-                {isLoadingProfile && currentUser ? "Loading interactions count..." :
-                    (currentUser && userProfile?.is_subscribed) ? "You have unlimited interactions!" :
-                    `Free interactions remaining: ${typeof interactionsLeft === 'number' ? interactionsLeft : 'N/A'}`
-                }
-            </p>
-        </div>
-      </footer>
+      <Footer /> {/* Replaced inline footer with component */}
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 pb-4 text-center">
+        <p className="text-xs text-muted-foreground">
+            {isLoadingProfile && currentUser ? "Loading interactions count..." :
+                (currentUser && userProfile?.is_subscribed) ? "You have unlimited interactions!" :
+                `Free interactions remaining: ${typeof interactionsLeft === 'number' ? interactionsLeft : 'N/A'}`
+            }
+        </p>
+      </div>
     </div>
   );
 }
-

@@ -3,9 +3,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CalendarDays, UserCircle, Tag } from 'lucide-react';
+import { ArrowLeft, CalendarDays, UserCircle } from 'lucide-react';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
+import Footer from '@/components/Footer';
 
 // This is a placeholder. In a real app, you'd fetch this data based on the slug.
 const getPostData = async (slug: string) => {
@@ -69,7 +70,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   const post = await getPostData(params.slug);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       <header className="py-4 bg-card/50 border-b mb-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <Link href="/" className="text-3xl font-bold text-primary">AOLBEAM</Link>
@@ -81,7 +82,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
         <article className="max-w-3xl mx-auto bg-card p-6 sm:p-8 rounded-lg shadow-xl">
           <header className="mb-8">
             <div className="relative w-full h-64 sm:h-80 md:h-96 rounded-lg overflow-hidden mb-6">
@@ -113,12 +114,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
         </article>
       </main>
-
-      <footer className="mt-12 py-8 border-t bg-card/50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} AOLBEAM. All rights reserved.</p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

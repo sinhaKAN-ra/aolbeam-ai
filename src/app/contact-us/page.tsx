@@ -1,3 +1,4 @@
+
 // src/app/contact-us/page.tsx
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -5,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Mail, Building, Share2, Instagram, Twitter, Linkedin } from 'lucide-react';
+import Footer from '@/components/Footer';
 
 export const metadata: Metadata = {
   title: 'Contact Us - AOLBEAM',
@@ -27,12 +29,21 @@ const TelegramIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+// SVG Icon for X (Twitter) - Note: This is the new X logo
+const XIcon = ({ className }: { className?: string }) => (
+  <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor" className={className}>
+    <title>X</title>
+    <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/>
+  </svg>
+);
+
+
 export default function ContactUsPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       <header className="py-4 bg-card/50 border-b mb-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-primary">AOLBEAM</h1>
+          <Link href="/" className="text-3xl font-bold text-primary">AOLBEAM</Link>
            <Button asChild variant="outline">
             <Link href="/">
               <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
@@ -40,7 +51,7 @@ export default function ContactUsPage() {
           </Button>
         </div>
       </header>
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex justify-center">
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex justify-center flex-grow">
         <Card className="w-full max-w-lg shadow-lg">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-semibold">Contact Us</CardTitle>
@@ -83,7 +94,7 @@ export default function ContactUsPage() {
                   { name: 'Discord', href: '#', Icon: DiscordIcon },
                   { name: 'Telegram', href: '#', Icon: TelegramIcon },
                   { name: 'Instagram', href: '#', Icon: Instagram },
-                  { name: 'X (Twitter)', href: '#', Icon: Twitter },
+                  { name: 'X (Twitter)', href: '#', Icon: XIcon },
                   { name: 'LinkedIn', href: '#', Icon: Linkedin },
                 ].map(({ name, href, Icon }) => (
                   <div key={name} className="flex items-center gap-3">
@@ -98,13 +109,7 @@ export default function ContactUsPage() {
           </CardContent>
         </Card>
       </main>
-       <footer className="mt-12 py-8 border-t bg-card/50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} AOLBEAM. All rights reserved.</p>
-        </div>
-      </footer>
+       <Footer />
     </div>
   );
 }
-
-    

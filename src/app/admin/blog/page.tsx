@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { generateBlogPost, type GenerateBlogPostInput, type GenerateBlogPostOutput } from '@/ai/flows/generate-blog-post';
 import { Loader2, FileText, Link as LinkIcon, Wand2, ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
+import Footer from '@/components/Footer';
 
 export default function AdminBlogPage() {
   const { toast } = useToast();
@@ -61,7 +62,7 @@ export default function AdminBlogPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-4 sm:p-8">
+    <div className="min-h-screen bg-background text-foreground p-4 sm:p-8 flex flex-col">
       <header className="mb-8">
         <Button variant="outline" asChild className="mb-4">
           <Link href="/">
@@ -73,7 +74,7 @@ export default function AdminBlogPage() {
         <p className="text-sm text-destructive mt-2">Note: This admin page is for demonstration. Implement proper admin authentication and database integration for production use.</p>
       </header>
 
-      <div className="grid md:grid-cols-2 gap-8">
+      <main className="grid md:grid-cols-2 gap-8 flex-grow">
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Wand2 /> Generate Draft</CardTitle>
@@ -129,10 +130,8 @@ export default function AdminBlogPage() {
             </CardContent>
           </Card>
         )}
-      </div>
-       <footer className="mt-12 py-8 border-t text-center">
-        <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} AOLBEAM Admin. For authorized users only.</p>
-      </footer>
+      </main>
+       <Footer />
     </div>
   );
 }

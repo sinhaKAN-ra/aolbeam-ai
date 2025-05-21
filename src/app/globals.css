@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -13,8 +14,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 210 10% 23%;
 
-    --primary: 30 90% 55%; /* Vibrant Orange (Firebase-like) - New */
-    --primary-foreground: 20 10% 10%; /* Dark for contrast with new orange - New */
+    --primary: 30 90% 55%; /* Vibrant Orange */
+    --primary-foreground: 20 10% 10%; /* Dark for contrast with orange */
 
     --secondary: 206 30% 88%; /* Lighter gray for secondary elements */
     --secondary-foreground: 210 10% 23%;
@@ -22,15 +23,15 @@
     --muted: 206 30% 80%; /* Muted gray */
     --muted-foreground: 210 7% 45%; 
 
-    --accent: 207 87% 68%; /* Calming Blue (was primary, now accent) */
-    --accent-foreground: 0 0% 100%; /* White (for blue accent) */
+    --accent: 30 90% 85%; /* Lighter Orange for hover/accent */
+    --accent-foreground: 30 80% 30%; /* Darker Orange text for on-accent */
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
 
     --border: 206 25% 85%;
     --input: 206 25% 88%;
-    --ring: 30 90% 55%; /* Primary color for rings (Firebase-like) - New */
+    --ring: 30 90% 55%; /* Primary color for rings (Orange) */
 
     --radius: 0.5rem;
 
@@ -40,8 +41,8 @@
     --sidebar-foreground: 210 10% 23%;
     --sidebar-primary: 30 90% 55%;
     --sidebar-primary-foreground: 20 10% 10%;
-    --sidebar-accent: 207 87% 68%;
-    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-accent: 30 90% 85%; 
+    --sidebar-accent-foreground: 30 80% 30%;
     --sidebar-border: 206 33% 88%;
     --sidebar-ring: 30 90% 55%;
 
@@ -62,8 +63,8 @@
     --popover: 210 10% 10%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 30 85% 60%; /* Vibrant Orange for dark mode (Firebase-like) - New */
-    --primary-foreground: 0 0% 10%; /* Dark text for orange contrast - New */
+    --primary: 30 85% 60%; /* Vibrant Orange for dark mode */
+    --primary-foreground: 0 0% 10%; /* Dark text for orange contrast */
 
     --secondary: 210 10% 25%;
     --secondary-foreground: 0 0% 98%;
@@ -71,15 +72,15 @@
     --muted: 210 10% 25%;
     --muted-foreground: 0 0% 63.9%;
 
-    --accent: 207 80% 60%; /* Blue for dark mode accent */
-    --accent-foreground: 0 0% 10%; /* Dark text for blue accent */
+    --accent: 30 80% 25%; /* Darker Orange for dark mode accent */
+    --accent-foreground: 30 90% 85%; /* Lighter Orange text for on-dark-accent */
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
 
     --border: 210 10% 30%;
     --input: 210 10% 30%;
-    --ring: 30 85% 60%; /* Primary color for rings (Firebase-like) - New */
+    --ring: 30 85% 60%; /* Primary color for rings (Orange) */
     
     /* Sidebar specific colors - dark */
     /* These remain for now */
@@ -87,8 +88,8 @@
     --sidebar-foreground: 0 0% 95%;
     --sidebar-primary: 30 85% 60%;
     --sidebar-primary-foreground: 0 0% 10%;
-    --sidebar-accent: 207 80% 60%;
-    --sidebar-accent-foreground: 0 0% 10%;
+    --sidebar-accent: 30 80% 25%; 
+    --sidebar-accent-foreground: 30 90% 85%;
     --sidebar-border: 210 10% 20%;
     --sidebar-ring: 30 85% 60%;
 
