@@ -816,14 +816,14 @@ export default function AOLBEAMPage() {
         </div>
       </header>
       
-      <section className="py-16 md:py-24 text-center bg-gradient-to-br from-primary/80 via-primary/50 to-amber-300/50">
+      <section className="py-16 md:py-24 text-center bg-background"> {/* Removed hero gradient */}
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
-             AOLBEAM: Access of Learning
+             <span className="text-primary">Access of Learning</span>
             </h1>
             <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
-              Beam into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
+            <span className="text-primary">Beam</span> into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
               Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
             </p>
             <div className="mt-10">
