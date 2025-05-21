@@ -9,6 +9,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -24,7 +25,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight, Home, Newspaper, Mail, ShieldCheck, DollarSign, BarChartBig as ProfileIcon, ListChecks, MessageSquareText, Sigma, GitFork, InfoIcon as AboutIcon, BookOpen, Sparkles, Lightbulb, History as HistoryIcon, Shuffle } from 'lucide-react';
+import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight, ShieldCheck, Settings } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -42,7 +43,7 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 const FREE_INTERACTION_LIMIT = 5;
 const ACTUAL_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
-
+const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
 
 export default function AOLBEAMPage() {
   const { toast } = useToast();
@@ -94,17 +95,25 @@ export default function AOLBEAMPage() {
         console.error('Error fetching user profile:', error);
          if (error.code === 'PGRST116') { 
            toast({ variant: "default", title: "Setting up your account...", description: "This might take a moment for new users." });
-            const { data: newProfileData, error: insertError } = await supabase
+            // The trigger 'handle_new_user' should have created the profile.
+            // We attempt a fetch again after a short delay, assuming the trigger might have a slight delay.
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            const { data: newProfileData, error: retryError } = await supabase
               .from('user_profiles')
-              .insert({ id: user.id, interaction_count: 0, is_subscribed: false })
-              .select()
+              .select('*')
+              .eq('id', user.id)
               .single();
-            if (insertError) {
-                console.error('Error creating user profile on fallback:', insertError);
+
+            if (retryError) {
+                console.error('Error fetching profile on retry:', retryError);
                 toast({ variant: "destructive", title: "Profile Setup Failed", description: "Could not initialize your profile. Please try logging out and in again." });
                 setUserProfile(null);
             } else if (newProfileData) {
                 setUserProfile(newProfileData as UserProfile);
+            } else {
+                 // This case should ideally not be reached if the trigger works.
+                toast({ variant: "destructive", title: "Profile Incomplete", description: "Your profile is still being set up. Please wait or re-login." });
+                setUserProfile(null);
             }
          } else {
           toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile. If this persists, please contact support." });
@@ -129,8 +138,11 @@ export default function AOLBEAMPage() {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
       const user = session?.user ?? null;
       setCurrentUser(user);
+
       if (user) {
         await fetchAndSetUserProfile(user);
+        // No automatic paywall trigger here for new users.
+        // Paywall is triggered by checkUsageLimit() based on interaction_count.
       } else {
         setUserProfile(null);
         setIsLoadingProfile(false);
@@ -573,22 +585,12 @@ export default function AOLBEAMPage() {
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const navItems = [
-    { href: "/profile", label: "Profile", icon: ProfileIcon },
-    { href: "/pricing", label: "Pricing", icon: DollarSign },
-    { href: "/blog", label: "Blog", icon: Newspaper },
-    { href: "/about", label: "About Us", icon: AboutIcon },
-    { href: "/contact-us", label: "Contact Us", icon: Mail },
-    { href: "/admin/blog", label: "Admin", icon: ShieldCheck },
-  ];
-
-
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <PaywallModal
         isOpen={showPaywall}
         onClose={() => {
-            const isActuallyMandatory = !!(currentUser && userProfile && !userProfile.is_subscribed && userProfile.interaction_count >= FREE_INTERACTION_LIMIT);
+            const isActuallyMandatory = !!(currentUser && userProfile && !userProfile.is_subscribed && (userProfile.interaction_count >= FREE_INTERACTION_LIMIT || !userProfile.is_subscribed));
             if (!isActuallyMandatory) {
                 setShowPaywall(false);
             } else {
@@ -597,7 +599,7 @@ export default function AOLBEAMPage() {
         }}
         onSubscribe={handleSubscribe}
         onLoginRegister={handleSignInWithGoogle}
-        isMandatory={showPaywall && !!(currentUser && userProfile && !userProfile.is_subscribed && (userProfile.interaction_count >= FREE_INTERACTION_LIMIT)) }
+        isMandatory={showPaywall && !!(currentUser && userProfile && !userProfile.is_subscribed && (userProfile.interaction_count >= FREE_INTERACTION_LIMIT || !userProfile.is_subscribed)) }
       />
 
       <header className="sticky top-0 z-30 w-full border-b bg-background/95 backdrop-blur-sm">
@@ -607,19 +609,9 @@ export default function AOLBEAMPage() {
               <Brain className="h-7 w-7" /> AOLBEAM
             </Link>
             
-            <nav className="hidden md:flex items-center space-x-1">
-              {navItems.map((item) => (
-                <Button key={item.label} variant="ghost" asChild>
-                  <Link href={item.href} className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors px-3 py-2">
-                     {item.label}
-                  </Link>
-                </Button>
-              ))}
-            </nav>
-            
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              {isLoadingProfile && currentUser && <Button variant="outline" size="sm" disabled><PageLoader className="mr-2 h-4 w-4 animate-spin" />Loading...</Button>}
+              {isLoadingProfile && currentUser && <Button variant="outline" size="icon" disabled><PageLoader className="h-4 w-4 animate-spin" /></Button>}
               {!isLoadingProfile && currentUser && userProfile ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -632,11 +624,20 @@ export default function AOLBEAMPage() {
                      <DropdownMenuItem disabled className="text-xs text-muted-foreground">
                         {currentUser.email}
                       </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
                       <Link href="/profile">
-                        <ProfileIcon className="mr-2 h-4 w-4" /> Profile
+                        <Settings className="mr-2 h-4 w-4" /> Profile
                       </Link>
                     </DropdownMenuItem>
+                    {currentUser.email === ADMIN_EMAIL && (
+                      <DropdownMenuItem asChild>
+                        <Link href="/admin/blog">
+                          <ShieldCheck className="mr-2 h-4 w-4" /> Admin
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleSignOut}>
                       <LogOut className="mr-2 h-4 w-4" /> Sign Out
                     </DropdownMenuItem>
@@ -658,13 +659,19 @@ export default function AOLBEAMPage() {
           {mobileNavOpen && (
             <div className="md:hidden border-t py-2">
               <nav className="flex flex-col space-y-1">
-                {navItems.map((item) => (
-                   <Button key={item.label} variant="ghost" asChild className="justify-start">
-                    <Link href={item.href} className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full" onClick={()=>setMobileNavOpen(false)}>
-                       <item.icon className="mr-3 h-5 w-5" /> {item.label}
+                 <Button variant="ghost" asChild className="justify-start">
+                    <Link href="/profile" className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full" onClick={()=>setMobileNavOpen(false)}>
+                       <Settings className="mr-3 h-5 w-5" /> Profile
                     </Link>
                   </Button>
-                ))}
+                 {currentUser?.email === ADMIN_EMAIL && (
+                    <Button variant="ghost" asChild className="justify-start">
+                        <Link href="/admin/blog" className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full" onClick={()=>setMobileNavOpen(false)}>
+                        <ShieldCheck className="mr-3 h-5 w-5" /> Admin
+                        </Link>
+                    </Button>
+                 )}
+                {/* Add other primary nav links here if needed for mobile */}
               </nav>
             </div>
           )}
@@ -757,3 +764,4 @@ export default function AOLBEAMPage() {
   );
 }
 
+    
