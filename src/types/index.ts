@@ -1,8 +1,9 @@
 
-import type { GeneratePracticeProblemOutput } from '@/ai/flows/generate-practice-problem'; // This will now include correctAnswer
+import type { GeneratePracticeProblemOutput, GeneratePracticeProblemInput } from '@/ai/flows/generate-practice-problem'; // This will now include correctAnswer
 import type { EvaluateTheoryAnswerOutput } from '@/ai/flows/evaluate-theory-answer';
 
 export type ProblemType = 'theory' | 'practical';
+export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 
 export interface InteractionHistoryItem {
   id: string; // Local/localStorage React key
@@ -10,6 +11,7 @@ export interface InteractionHistoryItem {
   timestamp: string;
   topic: string;
   problemType: ProblemType;
+  difficulty: DifficultyLevel; // Added difficulty
   problem: GeneratePracticeProblemOutput; // This type now includes 'correctAnswer'
   userAnswer?: string; // For theory
   selectedOption?: string; // For practical
@@ -40,3 +42,8 @@ export interface UserProfile {
   updated_at?: string;
   created_at?: string;
 }
+
+// This type is derived from the Zod schema in generate-practice-problem.ts
+export type { GeneratePracticeProblemInput, GeneratePracticeProblemOutput };
+export type { EvaluateTheoryAnswerOutput };
+

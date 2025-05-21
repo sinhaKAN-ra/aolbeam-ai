@@ -17,6 +17,7 @@ import {z} from 'genkit';
 const GeneratePracticeProblemInputSchema = z.object({
   topic: z.string().describe('The topic for which to generate a practice problem.'),
   problemType: z.enum(['theory', 'practical']).describe('The type of problem to generate (theory or practical).'),
+  difficulty: z.enum(['easy', 'medium', 'hard']).optional().default('medium').describe('The desired difficulty level for the problem (easy, medium, hard).'),
 });
 export type GeneratePracticeProblemInput = z.infer<typeof GeneratePracticeProblemInputSchema>;
 
@@ -40,7 +41,7 @@ const prompt = ai.definePrompt({
   name: 'generatePracticeProblemPrompt',
   input: {schema: GeneratePracticeProblemInputSchema},
   output: {schema: GeneratePracticeProblemOutputSchema},
-  prompt: `You are an expert in generating practice problems for students preparing for competitive exams. The student will provide a topic and problem type, and you will generate a practice problem appropriate for that topic and type.
+  prompt: `You are an expert in generating practice problems for students preparing for competitive exams. The student will provide a topic, problem type, and desired difficulty. You will generate a practice problem appropriate for these parameters.
 
 Content Formatting Rules:
 1.  **Mathematical Formulas**: Use LaTeX notation. For inline math, use single dollar signs (e.g., $E=mc^2$). For display/block math, use double dollar signs (e.g., $$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$).
@@ -51,6 +52,7 @@ Ensure all generated content ('problemStatement', 'answerFormat', 'multipleChoic
 
 Topic: {{{topic}}}
 Problem Type: {{{problemType}}}
+Difficulty: {{{difficulty}}}
 
 {
   "problemStatement": "",
@@ -60,13 +62,13 @@ Problem Type: {{{problemType}}}
 }
 
 If the problem type is "theory":
-- Generate a problem that requires a written answer.
+- Generate a problem that requires a written answer, matching the specified difficulty ({{{difficulty}}}).
 - The 'answerFormat' field should describe the expected content and structure of the answer (e.g., "Explain in 2-3 sentences including a key formula.").
 - The 'correctAnswer' field should contain a model or ideal answer.
 - Do not include 'multipleChoiceOptions' or ensure it's an empty array if the schema requires it.
 
 If the problem type is "practical":
-- Generate a multiple-choice problem.
+- Generate a multiple-choice problem, matching the specified difficulty ({{{difficulty}}}).
 - Populate the 'multipleChoiceOptions' array with the choices.
 - The 'correctAnswer' field MUST be the exact string of one of the 'multipleChoiceOptions'.
 - The 'answerFormat' field should provide a brief explanation for *why* the 'correctAnswer' is correct, or general guidance on solving this type of practical problem.
