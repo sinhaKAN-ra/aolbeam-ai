@@ -25,7 +25,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight, ShieldCheck, Settings, Home, Newspaper, Mail, User as ProfileIcon, BarChart3, Zap } from 'lucide-react';
+import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight, ShieldCheck, Settings, Home, Newspaper, Mail, User as ProfileIcon, BarChart3, Zap, Info } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -42,17 +42,18 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 
 const FREE_INTERACTION_LIMIT = 5;
-const ACTUAL_PROBLEM_TYPES: Exclude<ProblemType, 'random' | 'conceptual' | 'numerical' | 'diagram_based'>[] = ['theory', 'practical'];
 const ALL_CONCRETE_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
 
 const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
 
 export default function AOLBEAMPage() {
   const { toast } = useToast();
-  const [supabase, setSupabaseClient] = useState<SupabaseClient | null>(null);
+  // Initialize Supabase client once and make it stable
+  const [supabase] = useState(() => createClientComponentClient());
+  
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(true); // Start true for initial load
+  const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(true);
 
   const [currentTopic, setCurrentTopic] = useState<string>('');
   const [currentProblemType, setCurrentProblemType] = useState<ProblemType>('theory');
@@ -75,11 +76,11 @@ export default function AOLBEAMPage() {
     problemGeneratorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const fetchAndSetUserProfile = useCallback(async (user: User) => {
+  const fetchAndSetUserProfile = useCallback(async (user: User, client: SupabaseClient) => {
     setIsLoadingProfile(true);
-    setUserProfile(null); // Reset profile before fetching/creating
+    setUserProfile(null); 
 
-    if (!supabase) {
+    if (!client) {
       console.error("Supabase client not available for profile fetch.");
       toast({
         variant: 'destructive',
@@ -91,8 +92,8 @@ export default function AOLBEAMPage() {
     }
     
     try {
-      console.log('Attempting to fetch profile from user_profiles table for user:', user.id);
-      let { data: profileData, error: fetchError } = await supabase
+      console.log(`Attempting to fetch profile from user_profiles table for user: ${user.id}`);
+      let { data: profileData, error: fetchError } = await client
         .from('user_profiles')
         .select('*')
         .eq('id', user.id)
@@ -103,8 +104,8 @@ export default function AOLBEAMPage() {
       if (profileData) {
         console.log('Existing profile loaded:', profileData);
         setUserProfile(profileData as UserProfile);
-      } else if (fetchError && fetchError.code === 'PGRST116') { // PGRST116: No rows found
-        console.log('No profile found (PGRST116), attempting to create new one as fallback to trigger...');
+      } else if (fetchError && fetchError.code === 'PGRST116') { 
+        console.log('No profile found (PGRST116), trigger should ideally create one. Attempting to create as fallback...');
         
         const newProfilePayload = {
           id: user.id,
@@ -114,7 +115,7 @@ export default function AOLBEAMPage() {
           is_subscribed: false,
         };
 
-        const { data: insertedProfile, error: insertError } = await supabase
+        const { data: insertedProfile, error: insertError } = await client
           .from('user_profiles')
           .insert(newProfilePayload)
           .select()
@@ -123,9 +124,9 @@ export default function AOLBEAMPage() {
         if (insertedProfile) {
             console.log('New profile created successfully via direct insert:', insertedProfile);
             setUserProfile(insertedProfile as UserProfile);
-        } else if (insertError && insertError.code === '23505') { // 23505: unique_violation (profile already exists, likely created by trigger)
-            console.log('Profile insert failed due to unique violation, likely created by trigger. Re-fetching...');
-            const { data: refetchedData, error: refetchError } = await supabase
+        } else if (insertError && insertError.code === '23505') { 
+            console.log('Profile insert failed due to unique violation (profile likely created by trigger). Re-fetching...');
+            const { data: refetchedData, error: refetchError } = await client
                 .from('user_profiles')
                 .select('*')
                 .eq('id', user.id)
@@ -142,7 +143,7 @@ export default function AOLBEAMPage() {
                     description: `Could not sync your profile: ${refetchError?.message || 'Unknown error'}`
                 });
             }
-        } else { // Other insert error
+        } else { 
             console.error('Error creating user profile during fallback insert:', insertError);
             toast({
                 variant: 'destructive',
@@ -150,7 +151,7 @@ export default function AOLBEAMPage() {
                 description: `Could not create your profile: ${insertError?.message || 'Unknown error'}`
             });
         }
-      } else if (fetchError) { // Other fetch error
+      } else if (fetchError) { 
         console.error('Database error fetching profile:', fetchError);
         toast({ 
           variant: 'destructive', 
@@ -158,7 +159,7 @@ export default function AOLBEAMPage() {
           description: `Could not load your profile: ${fetchError.message}`
         });
       }
-    } catch (error) { // Catch any unexpected errors during the process
+    } catch (error) { 
       console.error('Unexpected error during profile setup:', error);
       toast({
         variant: 'destructive',
@@ -169,35 +170,31 @@ export default function AOLBEAMPage() {
       console.log('Finished profile processing. Setting isLoadingProfile to false.');
       setIsLoadingProfile(false);
     }
-  }, [supabase, toast]);
+  }, [toast]); // Dependencies of fetchAndSetUserProfile are now stable
 
 
-  // Initialize Supabase client and auth state
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !supabase) return;
 
-    console.log('Initializing Supabase client...');
-    const client = createClientComponentClient();
-    setSupabaseClient(client);
+    console.log('Setting up Supabase auth listener...');
 
     const handleAuthChange = async (event: AuthChangeEvent, session: Session | null) => {
       console.log('Auth state changed:', event, { user: session?.user?.email });
       const user = session?.user ?? null;
       setCurrentUser(user);
       
-
       if (user) {
         console.log('User authenticated, fetching profile...');
-        await fetchAndSetUserProfile(user);
+        await fetchAndSetUserProfile(user, supabase); // Pass the stable supabase client
       } else {
         console.log('No user, resetting profile state');
         setUserProfile(null);
-        setIsLoadingProfile(false); // Ensure loading is false if no user
+        setIsLoadingProfile(false); 
         const guestHistoryRaw = localStorage.getItem('aolbeamHistory_guest');
         if (guestHistoryRaw) {
           try {
             const parsedGuestHistory = JSON.parse(guestHistoryRaw);
-            setHistory(parsedGuestHistory);
+            setHistory(parsedGuestHistory); // setHistory is from useLocalStorage, stable
           } catch (e) { 
             console.error("Error parsing guest history:", e); 
           }
@@ -205,13 +202,13 @@ export default function AOLBEAMPage() {
       }
     };
 
-    const { data: { subscription } } = client.auth.onAuthStateChange(handleAuthChange);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
 
     const checkUser = async () => {
-      setIsLoadingProfile(true); // Start loading when checking user
+      setIsLoadingProfile(true); 
       try {
         console.log('Checking for existing session...');
-        const { data: { session }, error } = await client.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('Error getting session:', error);
@@ -220,11 +217,11 @@ export default function AOLBEAMPage() {
         }
         
         const user = session?.user ?? null;
-        setCurrentUser(user); // Set current user based on session
+        setCurrentUser(user); 
         console.log('Initial session check - user:', user?.email);
         
         if (user) {
-          await fetchAndSetUserProfile(user);
+          await fetchAndSetUserProfile(user, supabase); // Pass the stable supabase client
         } else {
           console.log('No active session found');
           setIsLoadingProfile(false);
@@ -241,13 +238,13 @@ export default function AOLBEAMPage() {
       console.log('Cleaning up auth subscription');
       subscription?.unsubscribe();
     };
-  }, [fetchAndSetUserProfile, setHistory]); // supabase removed, setSupabaseClient used. fetchAndSetUserProfile added.
+  }, [supabase, fetchAndSetUserProfile, setHistory]); // Dependencies are now stable
 
 
   const checkUsageLimit = useCallback((): boolean => {
     if (currentUser && userProfile) {
       if (userProfile.is_subscribed) return false; 
-      if (userProfile.interaction_count >= FREE_INTERACTION_LIMIT) {
+      if ((userProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT) {
         setShowPaywall(true);
         return true;
       }
@@ -271,10 +268,10 @@ export default function AOLBEAMPage() {
   }, []);
 
   const incrementInteraction = useCallback(async () => {
-    if (currentUser && userProfile && !userProfile.is_subscribed && supabase) {
-        const newCount = (userProfile.interaction_count || 0) + 1; // Ensure interaction_count is a number
+    if (!supabase) return;
+    if (currentUser && userProfile && !userProfile.is_subscribed) {
+        const newCount = (userProfile.interaction_count || 0) + 1;
         
-        // Optimistically update UI
         setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null); 
         
         try {
@@ -285,7 +282,6 @@ export default function AOLBEAMPage() {
             if (error) {
                 console.error("Error updating interaction count in Supabase:", error);
                 toast({ variant: "destructive", title: "Sync Error", description: "Could not save interaction count. Reverting UI." });
-                // Revert optimistic update on error
                 setUserProfile(prev => prev ? { ...prev, interaction_count: newCount - 1 } : null);
             }
         } catch (error: any) {
@@ -665,7 +661,7 @@ export default function AOLBEAMPage() {
         setTopicDetails(null);
       }
     }
-  }, [currentUser, history, isLoadingProblem, currentProblem, isLoadingProfile]);
+  }, [currentUser, history, isLoadingProblem, currentProblem, isLoadingProfile, setHistory]);
 
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -678,7 +674,7 @@ export default function AOLBEAMPage() {
     if (!currentUser) {
         return `Free interactions remaining: ${Math.max(0, FREE_INTERACTION_LIMIT - guestInteractionCount)}`;
     }
-    return "Interactions: N/A (Error loading profile)"; // Fallback for currentUser but no/failed userProfile
+    return "Interactions: N/A (Error loading profile)"; 
   };
 
 
@@ -687,8 +683,8 @@ export default function AOLBEAMPage() {
       <PaywallModal
         isOpen={showPaywall}
         onClose={() => {
-            const isActuallyMandatory = !!(currentUser && userProfile && !userProfile.is_subscribed && (userProfile.interaction_count >= FREE_INTERACTION_LIMIT ));
-            if (!isActuallyMandatory) {
+            const isMandatoryPaywall = !!(currentUser && userProfile && !userProfile.is_subscribed && ((userProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT ));
+            if (!isMandatoryPaywall) {
                 setShowPaywall(false);
             } else {
                  toast({title: "Plan Selection Required", description: "Please select a plan to continue using AOLBEAM.", variant: "default"});
@@ -696,7 +692,7 @@ export default function AOLBEAMPage() {
         }}
         onSubscribe={handleSubscribe}
         onLoginRegister={handleSignInWithGoogle}
-        isMandatory={showPaywall && !!(currentUser && userProfile && !userProfile.is_subscribed && ((userProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT || !userProfile.is_subscribed)) }
+        isMandatory={showPaywall && !!(currentUser && userProfile && !userProfile.is_subscribed && ((userProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT)) }
       />
 
       <header className="sticky top-0 z-30 w-full border-b bg-background/95 backdrop-blur-sm">
@@ -707,11 +703,7 @@ export default function AOLBEAMPage() {
             </Link>
             
             <nav className="hidden md:flex items-center gap-1">
-                <Button variant="ghost" asChild><Link href="/profile">Profile</Link></Button>
-                <Button variant="ghost" asChild><Link href="/pricing">Pricing</Link></Button>
-                <Button variant="ghost" asChild><Link href="/blog">Blog</Link></Button>
-                <Button variant="ghost" asChild><Link href="/about">About Us</Link></Button>
-                <Button variant="ghost" asChild><Link href="/contact-us">Contact</Link></Button>
+                {/* Desktop Nav Links Removed As Per Request */}
             </nav>
             
             <div className="flex items-center gap-2">
@@ -780,31 +772,7 @@ export default function AOLBEAMPage() {
           {mobileNavOpen && (
             <div className="md:hidden border-t py-2">
               <nav className="flex flex-col space-y-1">
-                 <Button variant="ghost" asChild className="justify-start" onClick={()=>setMobileNavOpen(false)}>
-                    <Link href="/profile" className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full">
-                       <ProfileIcon className="mr-3 h-5 w-5" /> Profile
-                    </Link>
-                  </Button>
-                  <Button variant="ghost" asChild className="justify-start" onClick={()=>setMobileNavOpen(false)}>
-                    <Link href="/pricing" className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full">
-                       <Zap className="mr-3 h-5 w-5" /> Pricing
-                    </Link>
-                  </Button>
-                  <Button variant="ghost" asChild className="justify-start" onClick={()=>setMobileNavOpen(false)}>
-                    <Link href="/blog" className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full">
-                       <Newspaper className="mr-3 h-5 w-5" /> Blog
-                    </Link>
-                  </Button>
-                   <Button variant="ghost" asChild className="justify-start" onClick={()=>setMobileNavOpen(false)}>
-                    <Link href="/about" className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full">
-                       <BarChart3 className="mr-3 h-5 w-5" /> About Us
-                    </Link>
-                  </Button>
-                   <Button variant="ghost" asChild className="justify-start" onClick={()=>setMobileNavOpen(false)}>
-                    <Link href="/contact-us" className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full">
-                       <Mail className="mr-3 h-5 w-5" /> Contact Us
-                    </Link>
-                  </Button>
+                 {/* Mobile Nav Links Removed/Simplified */}
                  {currentUser?.email === ADMIN_EMAIL && (
                     <Button variant="ghost" asChild className="justify-start" onClick={()=>setMobileNavOpen(false)}>
                         <Link href="/admin/blog" className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full">
@@ -946,3 +914,5 @@ export default function AOLBEAMPage() {
     </div>
   );
 }
+
+    
