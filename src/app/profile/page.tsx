@@ -14,7 +14,7 @@ import MathRenderer from '@/components/MathRenderer';
 import type { ProblemType, DifficultyLevel } from '@/types'; 
 import Footer from '@/components/Footer';
 
-import { ArrowLeft, BarChart3, History, Lightbulb, UserCircle, Settings, Star, MessageSquareText, ListChecks, CheckCircle, XCircle, TimerIcon as TimerHistoryIcon, Brain as ConceptualIcon, Sigma as NumericalIcon, GitFork as DiagramIcon } from 'lucide-react';
+import { ArrowLeft, BarChart3, History, Lightbulb, UserCircle, Settings, Star, MessageSquareText, ListChecks, CheckCircle, XCircle, TimerIcon as TimerHistoryIcon, Brain as ConceptualIcon, Sigma as NumericalIcon, GitFork as DiagramIcon, Shuffle } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Your Profile - AOLBEAM',
@@ -25,7 +25,7 @@ interface FetchedInteraction {
   id: string;
   created_at: string;
   topic: string;
-  problem_type: ProblemType;
+  problem_type: ProblemType; // This will be the actual problem type from the DB
   difficulty?: string | null; 
   problem_statement: string;
   answer_format: string;
@@ -44,7 +44,7 @@ interface DisplayHistoryItem {
   id: string;
   timestamp: string;
   topic: string;
-  problemType: ProblemType;
+  problemType: ProblemType; // This will be the actual problem type from the DB
   difficulty?: DifficultyLevel | string | null; 
   problem: {
     problemStatement: string;
@@ -81,6 +81,7 @@ const problemTypeIcons: Record<ProblemType, React.ElementType> = {
   conceptual: ConceptualIcon,
   numerical: NumericalIcon,
   diagram_based: DiagramIcon,
+  random: Shuffle, // Adding random here for type completeness, though DB stores actual type
 };
 
 
@@ -110,7 +111,7 @@ export default async function ProfilePage() {
         id: item.id,
         timestamp: item.created_at,
         topic: item.topic,
-        problemType: item.problem_type,
+        problemType: item.problem_type, // This is the actual type from the database
         difficulty: item.difficulty as DifficultyLevel | null, 
         problem: {
           problemStatement: item.problem_statement,
