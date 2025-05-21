@@ -85,7 +85,8 @@ const problemTypeIcons: Record<ProblemType, React.ElementType> = {
 
 
 export default async function ProfilePage() {
-  const supabase = createServerComponentClient({ cookies });
+  const cookieStore = cookies();
+  const supabase = createServerComponentClient({ cookies: () => cookieStore });
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
