@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BookText, MessageSquareText, ListChecks, Sparkles, Loader2, BarChartBig, Brain, Sigma, GitFork } from 'lucide-react';
+import { BookText, MessageSquareText, ListChecks, Sparkles, Loader2, BarChartBig, Brain, Sigma, GitFork, Shuffle } from 'lucide-react';
 import type { ProblemType, DifficultyLevel } from '@/types';
 
 interface ProblemGeneratorProps {
@@ -26,6 +26,7 @@ const problemTypeOptions: { value: ProblemType; label: string; icon: React.Eleme
   { value: 'conceptual', label: 'Conceptual', icon: Brain },
   { value: 'numerical', label: 'Numerical', icon: Sigma },
   { value: 'diagram_based', label: 'Diagram-Based', icon: GitFork },
+  { value: 'random', label: 'Random', icon: Shuffle },
 ];
 
 export function ProblemGenerator({
@@ -87,10 +88,10 @@ export function ProblemGenerator({
             <RadioGroup
               value={problemType}
               onValueChange={(value: string) => setProblemType(value as ProblemType)}
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" // Adjusted for more options
+              className="grid grid-cols-2 sm:grid-cols-3 gap-3"
             >
               {problemTypeOptions.map(option => (
-                <div key={option.value} className="flex-1 min-w-[140px]"> {/* Ensure options don't get too squeezed */}
+                <div key={option.value} className="flex-1 min-w-[120px]">
                   <RadioGroupItem value={option.value} id={option.value} className="sr-only peer"/>
                   <Label 
                     htmlFor={option.value} 
@@ -130,3 +131,4 @@ export function ProblemGenerator({
     </Card>
   );
 }
+

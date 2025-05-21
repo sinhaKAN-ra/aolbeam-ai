@@ -8,6 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -23,7 +24,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight, Home, Newspaper, Mail, ShieldCheck, DollarSign, BarChartBig as ProfileIcon, ListChecks, MessageSquareText, Sigma, GitFork, InfoIcon as AboutIcon } from 'lucide-react';
+import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight, ShieldCheck, Settings } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -40,6 +41,8 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 
 const FREE_INTERACTION_LIMIT = 5;
+const ACTUAL_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
+const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
 
 export default function AOLBEAMPage() {
   const { toast } = useToast();
@@ -137,45 +140,49 @@ export default function AOLBEAMPage() {
             title: 'Setting up your account...', 
             description: 'This might take a moment for new users.' 
           });
+            // The trigger 'handle_new_user' should have created the profile.
+            // We attempt a fetch again after a short delay, assuming the trigger might have a slight delay.
+            await new Promise(resolve => setTimeout(resolve, 1500));
           
           try {
             console.log('Attempting to insert new profile into database...');
-            const { data: newProfileData, error: insertError, status } = await supabase
+            const { data: newProfileData, error: retryError, status } = await supabase
               .from('user_profiles')
               .insert(newProfile)
               .select()
               .single();
             
-            console.log('Profile insert response - Status:', status, 'Data:', newProfileData, 'Error:', insertError);
+            // console.log('Profile insert response - Status:', status, 'Data:', newProfileData, 'Error:', insertError);
               
-            console.log('Profile creation response:', { newProfileData, insertError });
+            // console.log('Profile creation response:', { newProfileData, insertError });
             
-            if (insertError) {
-              console.error('Error creating user profile - Code:', insertError.code, 'Message:', insertError.message);
-              console.error('Error details:', insertError.details);
+            // if (insertError) {
+            //   console.error('Error creating user profile - Code:', insertError.code, 'Message:', insertError.message);
+            //   console.error('Error details:', insertError.details);
               
-              // Try one more time with minimal data
-              console.log('Retrying with minimal profile data...');
-              const { data: retryData, error: retryError } = await supabase
-                .from('user_profiles')
-                .insert({
-                  id: user.id,
-                  email: user.email,
-                  full_name: 'New User',
-                  interaction_count: 0,
-                  is_subscribed: false
-                })
-                .select()
-                .single();
+            //   // Try one more time with minimal data
+            //   console.log('Retrying with minimal profile data...');
+            //   const { data: retryData, error: retryError } = await supabase
+            //     .from('user_profiles')
+            //     .insert({
+            //       id: user.id,
+            //       email: user.email,
+            //       full_name: 'New User',
+            //       interaction_count: 0,
+            //       is_subscribed: false
+            //     })
+            //     .select()
+            //     .single();
                 
-              if (retryError) {
-                console.error('Retry failed:', retryError);
-                throw new Error('Failed to create profile after retry');
-              }
+            //   if (retryError) {
+            //     console.error('Retry failed:', retryError);
+            //     throw new Error('Failed to create profile after retry');
+            //   }
               
-              console.log('Profile created on retry:', retryData);
-              setUserProfile(retryData as UserProfile);
-            } else if (newProfileData) {
+            //   console.log('Profile created on retry:', retryData);
+            //   setUserProfile(retryData as UserProfile);
+            // } else 
+            if (newProfileData) {
               console.log('New profile created successfully:', newProfileData);
               setUserProfile(newProfileData as UserProfile);
             }
@@ -527,6 +534,7 @@ export default function AOLBEAMPage() {
       const user = session?.user ?? null;
       setCurrentUser(user);
       
+
       if (user) {
         console.log('User authenticated, fetching profile...');
         try {
@@ -587,7 +595,7 @@ export default function AOLBEAMPage() {
       console.log('Cleaning up auth subscription');
       subscription?.unsubscribe();
     };
-  }, [fetchAndSetUserProfile, setHistory]);
+  }, [supabase, fetchAndSetUserProfile, setHistory]);
 
 
   const checkUsageLimit = useCallback((): boolean => {
@@ -639,7 +647,7 @@ export default function AOLBEAMPage() {
   }, [currentUser, userProfile, supabase, setGuestInteractionCount, toast]);
 
 
- const addToHistory = useCallback(async (item: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'>) => {
+ const addToHistory = useCallback(async (item: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'> & { actualProblemType: Exclude<ProblemType, 'random'> }) => {
     let newHistoryItem: InteractionHistoryItem = {
         ...item,
         id: Date.now().toString(), 
@@ -650,13 +658,14 @@ export default function AOLBEAMPage() {
         selectedOption: item.selectedOption,
         evaluation: item.evaluation,
         difficulty: item.difficulty,
+        problemType: item.problemType, // User's selection, could be 'random'
     };
 
     if (supabase && currentUser) {
-        const dbRecord: any = { // Add 'any' to allow flexible fields for now
+        const dbRecord: any = { 
             user_id: currentUser.id,
             topic: item.topic,
-            problem_type: item.problemType,
+            problem_type: item.actualProblemType, // Store the actual generated type
             difficulty: item.difficulty,
             problem_statement: item.problem.problemStatement,
             answer_format: item.problem.answerFormat,
@@ -772,23 +781,30 @@ export default function AOLBEAMPage() {
 
     setIsLoadingProblem(true);
     setCurrentTopic(topic);
-    setCurrentProblemType(type);
+    // setCurrentProblemType(type); // Will be set after randomization if 'random'
     setCurrentDifficulty(difficulty);
     setCurrentProblem(null);
     setEvaluationResult(null);
     setTopicDetails(null);
 
+    let actualProblemTypeForAI: Exclude<ProblemType, 'random'> = type as Exclude<ProblemType, 'random'>;
+    if (type === 'random') {
+        actualProblemTypeForAI = ACTUAL_PROBLEM_TYPES[Math.floor(Math.random() * ACTUAL_PROBLEM_TYPES.length)];
+    }
+    setCurrentProblemType(actualProblemTypeForAI); // Set to actual resolved type for UI consistency
+
     try {
       await incrementInteraction();
-      const result = await generatePracticeProblem({ topic, problemType: type, difficulty });
+      const result = await generatePracticeProblem({ topic, problemType: actualProblemTypeForAI, difficulty });
       setCurrentProblem(result);
       await addToHistory({ 
         topic,
-        problemType: type,
+        problemType: type, // Store the user's selection ('random' or specific)
+        actualProblemType: actualProblemTypeForAI, // Store the actual type generated for DB
         difficulty: difficulty,
         problem: result,
       });
-      toast({ title: "Problem Generated!", description: `A new ${type} problem on "${topic}" (${difficulty}) is ready.` });
+      toast({ title: "Problem Generated!", description: `A new ${actualProblemTypeForAI} problem on "${topic}" (${difficulty}) is ready.` });
     } catch (error) {
       console.error("Error generating problem:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to generate problem. Please try again." });
@@ -809,7 +825,7 @@ export default function AOLBEAMPage() {
 
       const isMcqStyleProblem = currentProblem.multipleChoiceOptions && currentProblem.multipleChoiceOptions.length > 0;
 
-      if (!isMcqStyleProblem) { // Covers theory and other free-text types
+      if (!isMcqStyleProblem) { 
         const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific topic details available for this evaluation.";
 
         evalOutput = await evaluateTheoryAnswer({
@@ -819,7 +835,7 @@ export default function AOLBEAMPage() {
           topicDetails: fetchedDetailsForEval,
         });
         updatesForHistory.userAnswer = answer;
-      } else { // MCQ style problem (practical, or conceptual/numerical/diagram_based if MCQ)
+      } else { 
         const isCorrect = answer === currentProblem.correctAnswer;
         evalOutput = {
           isCorrect,
@@ -875,7 +891,10 @@ export default function AOLBEAMPage() {
 
   const handleNewProblemSameTopic = () => {
     if (currentTopic) {
-      handleGenerateProblem(currentTopic, currentProblemType, currentDifficulty);
+      // If currentProblemType was 'random', we should ideally pick another random type or let user pick again.
+      // For simplicity, let's re-use the last resolved type if it's specific, or default to 'random' if not.
+      const typeToRegenerate = ACTUAL_PROBLEM_TYPES.includes(currentProblemType as any) ? currentProblemType : 'random';
+      handleGenerateProblem(currentTopic, typeToRegenerate, currentDifficulty);
     } else {
       toast({ title: "No Topic", description: "Please generate a problem first to use this option.", variant: "default" });
     }
@@ -883,6 +902,8 @@ export default function AOLBEAMPage() {
 
   const handleStartNew = () => {
     setCurrentTopic('');
+    // setCurrentProblemType('theory'); // Default to theory or random for a completely new start
+    // setCurrentDifficulty('medium');
     setCurrentProblem(null);
     setEvaluationResult(null);
     setTopicDetails(null);
@@ -985,7 +1006,7 @@ export default function AOLBEAMPage() {
     if (!isLoadingProfile && !currentUser && history.length > 0 && !currentProblem && !isLoadingProblem) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
-      setCurrentProblemType(lastItem.problemType);
+      setCurrentProblemType(lastItem.problemType); // This could be 'random'
       setCurrentDifficulty(lastItem.difficulty || 'medium');
       setCurrentProblem(lastItem.problem);
       if (lastItem.evaluation) setEvaluationResult(lastItem.evaluation);
@@ -1003,22 +1024,12 @@ export default function AOLBEAMPage() {
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const navItems = [
-    { href: "/profile", label: "Profile", icon: ProfileIcon },
-    { href: "/pricing", label: "Pricing", icon: DollarSign },
-    { href: "/blog", label: "Blog", icon: Newspaper },
-    { href: "/about", label: "About Us", icon: AboutIcon },
-    { href: "/contact-us", label: "Contact Us", icon: Mail },
-    { href: "/admin/blog", label: "Admin", icon: ShieldCheck },
-  ];
-
-
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <PaywallModal
         isOpen={showPaywall}
         onClose={() => {
-            const isActuallyMandatory = !!(currentUser && userProfile && !userProfile.is_subscribed && userProfile.interaction_count >= FREE_INTERACTION_LIMIT);
+            const isActuallyMandatory = !!(currentUser && userProfile && !userProfile.is_subscribed && (userProfile.interaction_count >= FREE_INTERACTION_LIMIT || !userProfile.is_subscribed));
             if (!isActuallyMandatory) {
                 setShowPaywall(false);
             } else {
@@ -1027,7 +1038,7 @@ export default function AOLBEAMPage() {
         }}
         onSubscribe={handleSubscribe}
         onLoginRegister={handleSignInWithGoogle}
-        isMandatory={showPaywall && !!(currentUser && userProfile && !userProfile.is_subscribed && (userProfile.interaction_count >= FREE_INTERACTION_LIMIT)) }
+        isMandatory={showPaywall && !!(currentUser && userProfile && !userProfile.is_subscribed && (userProfile.interaction_count >= FREE_INTERACTION_LIMIT || !userProfile.is_subscribed)) }
       />
 
       <header className="sticky top-0 z-30 w-full border-b bg-background/95 backdrop-blur-sm">
@@ -1037,19 +1048,9 @@ export default function AOLBEAMPage() {
               <Brain className="h-7 w-7" /> AOLBEAM
             </Link>
             
-            <nav className="hidden md:flex items-center space-x-1">
-              {navItems.map((item) => (
-                <Button key={item.label} variant="ghost" asChild>
-                  <Link href={item.href} className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors px-3 py-2">
-                     {item.label}
-                  </Link>
-                </Button>
-              ))}
-            </nav>
-            
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              {isLoadingProfile && currentUser && <Button variant="outline" size="sm" disabled><PageLoader className="mr-2 h-4 w-4 animate-spin" />Loading...</Button>}
+              {isLoadingProfile && currentUser && <Button variant="outline" size="icon" disabled><PageLoader className="h-4 w-4 animate-spin" /></Button>}
               {!isLoadingProfile && currentUser && userProfile ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1062,11 +1063,20 @@ export default function AOLBEAMPage() {
                      <DropdownMenuItem disabled className="text-xs text-muted-foreground">
                         {currentUser.email}
                       </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
                       <Link href="/profile">
-                        <ProfileIcon className="mr-2 h-4 w-4" /> Profile
+                        <Settings className="mr-2 h-4 w-4" /> Profile
                       </Link>
                     </DropdownMenuItem>
+                    {currentUser.email === ADMIN_EMAIL && (
+                      <DropdownMenuItem asChild>
+                        <Link href="/admin/blog">
+                          <ShieldCheck className="mr-2 h-4 w-4" /> Admin
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleSignOut}>
                       <LogOut className="mr-2 h-4 w-4" /> Sign Out
                     </DropdownMenuItem>
@@ -1104,13 +1114,19 @@ export default function AOLBEAMPage() {
           {mobileNavOpen && (
             <div className="md:hidden border-t py-2">
               <nav className="flex flex-col space-y-1">
-                {navItems.map((item) => (
-                   <Button key={item.label} variant="ghost" asChild className="justify-start">
-                    <Link href={item.href} className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full" onClick={()=>setMobileNavOpen(false)}>
-                       <item.icon className="mr-3 h-5 w-5" /> {item.label}
+                 <Button variant="ghost" asChild className="justify-start">
+                    <Link href="/profile" className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full" onClick={()=>setMobileNavOpen(false)}>
+                       <Settings className="mr-3 h-5 w-5" /> Profile
                     </Link>
                   </Button>
-                ))}
+                 {currentUser?.email === ADMIN_EMAIL && (
+                    <Button variant="ghost" asChild className="justify-start">
+                        <Link href="/admin/blog" className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full" onClick={()=>setMobileNavOpen(false)}>
+                        <ShieldCheck className="mr-3 h-5 w-5" /> Admin
+                        </Link>
+                    </Button>
+                 )}
+                {/* Add other primary nav links here if needed for mobile */}
               </nav>
             </div>
           )}
@@ -1219,3 +1235,4 @@ export default function AOLBEAMPage() {
   );
 }
 
+    
