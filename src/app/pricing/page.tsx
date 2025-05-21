@@ -1,5 +1,6 @@
-
 // src/app/pricing/page.tsx
+"use client";
+
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription as PlanCardDe
 import { ArrowLeft, Check, Info, Zap, CreditCard } from 'lucide-react';
 import type { SubscriptionPlan } from '@/types';
 
+// Note: Metadata export is fine in a Client Component at the page level.
+// Next.js will handle it appropriately.
 export const metadata: Metadata = {
   title: 'Pricing Plans - AOLBEAM',
   description: 'Choose a subscription plan that fits your needs and unlock unlimited access to AOLBEAM features.',
