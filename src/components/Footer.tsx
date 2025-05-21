@@ -1,7 +1,7 @@
 
 // src/components/Footer.tsx
 import Link from 'next/link';
-import { Brain, FileText, ShieldCheck, DollarSign, Mail, Rss, Briefcase, Instagram, Linkedin as LinkedinIcon } from 'lucide-react';
+import { Brain, FileText, ShieldCheck, DollarSign, Mail, Rss, Briefcase, Instagram, Linkedin as LinkedinIcon, InfoIcon as AboutIcon } from 'lucide-react';
 
 // SVG Icon for Discord
 const DiscordIconFooter = ({ className }: { className?: string }) => (
@@ -40,6 +40,9 @@ export default function Footer() {
           Access of Learning: Beam into the world of knowledge. Your AI partner for acing competitive exams.
         </p>
         <div className="flex justify-center gap-4 sm:gap-6 mb-6 text-sm flex-wrap">
+          <Link href="/about" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+            <AboutIcon size={16} /> About Us
+          </Link>
           <Link href="/terms-of-service" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
             <FileText size={16} /> Terms
           </Link>

@@ -11,7 +11,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
 import {
   generatePracticeProblem,
   type GeneratePracticeProblemOutput,
@@ -25,7 +24,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight, Home, Newspaper, Mail, ShieldCheck, DollarSign, BarChartBig as ProfileIcon, ListChecks, MessageSquareText, Sigma, GitFork } from 'lucide-react';
+import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight, Home, Newspaper, Mail, ShieldCheck, DollarSign, BarChartBig as ProfileIcon, ListChecks, MessageSquareText, Sigma, GitFork, InfoIcon as AboutIcon } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -38,6 +37,7 @@ import { HistoryView } from '@/components/HistoryView';
 import { PaywallModal } from '@/components/PaywallModal';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import Footer from '@/components/Footer';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 
 const FREE_INTERACTION_LIMIT = 5;
@@ -90,10 +90,8 @@ export default function AOLBEAMPage() {
 
       if (error) {
         console.error('Error fetching user profile:', error);
-         if (error.code === 'PGRST116') { // Profile doesn't exist, trigger might not have run or this is an old user
+         if (error.code === 'PGRST116') { 
            toast({ variant: "default", title: "Setting up your account...", description: "This might take a moment for new users." });
-            // Attempt to create profile if it's missing (though trigger should handle this)
-            // This is a fallback, ideally the DB trigger `handle_new_user` manages profile creation.
             const { data: newProfileData, error: insertError } = await supabase
               .from('user_profiles')
               .insert({ id: user.id, interaction_count: 0, is_subscribed: false })
@@ -105,6 +103,7 @@ export default function AOLBEAMPage() {
                 setUserProfile(null);
             } else if (newProfileData) {
                 setUserProfile(newProfileData as UserProfile);
+                 // For brand new users, paywall is not shown immediately; they get free interactions.
             }
          } else {
           toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile. If this persists, please contact support." });
@@ -112,6 +111,9 @@ export default function AOLBEAMPage() {
          }
       } else if (data) {
         setUserProfile(data as UserProfile);
+        // if (!data.is_subscribed) { // Removed: Don't show paywall immediately if not subscribed
+        //   setShowPaywall(true);
+        // }
       }
     } catch (e) {
       console.error('Exception fetching user profile:', e);
@@ -131,10 +133,12 @@ export default function AOLBEAMPage() {
       setCurrentUser(user);
       if (user) {
         await fetchAndSetUserProfile(user);
+        // if (event === "SIGNED_IN" && userProfile && !userProfile.is_subscribed) { // Moved this logic out
+        //   setShowPaywall(true);
+        // }
       } else {
         setUserProfile(null);
         setIsLoadingProfile(false);
-        // Load guest history if available
         const guestHistoryRaw = localStorage.getItem('aolbeamHistory_guest');
         if (guestHistoryRaw) {
           try {
@@ -157,7 +161,7 @@ export default function AOLBEAMPage() {
     return () => {
       authListener?.subscription?.unsubscribe();
     };
-  }, [supabase, fetchAndSetUserProfile, setHistory]);
+  }, [supabase, fetchAndSetUserProfile, setHistory, userProfile]);
 
 
   const checkUsageLimit = useCallback((): boolean => {
@@ -179,7 +183,7 @@ export default function AOLBEAMPage() {
   const incrementInteraction = useCallback(async () => {
     if (currentUser && userProfile && !userProfile.is_subscribed && supabase) {
         const newCount = userProfile.interaction_count + 1;
-        setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null); // Optimistic update
+        setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null); 
         try {
             const { error } = await supabase
                 .from('user_profiles')
@@ -189,7 +193,7 @@ export default function AOLBEAMPage() {
         } catch (error: any) {
             console.error("Error updating interaction count in Supabase:", error);
             toast({ variant: "destructive", title: "Sync Error", description: "Could not save interaction count." });
-            setUserProfile(prev => prev ? { ...prev, interaction_count: newCount -1 } : null); // Revert on error
+            setUserProfile(prev => prev ? { ...prev, interaction_count: newCount -1 } : null); 
         }
     } else if (!currentUser) { 
         setGuestInteractionCount(prev => prev + 1);
@@ -211,7 +215,7 @@ export default function AOLBEAMPage() {
     };
 
     if (supabase && currentUser) {
-        const dbRecord = {
+        const dbRecord: any = { // Add 'any' to allow flexible fields for now
             user_id: currentUser.id,
             topic: item.topic,
             problem_type: item.problemType,
@@ -365,8 +369,9 @@ export default function AOLBEAMPage() {
       let evalOutput: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string };
       const updatesForHistory: Partial<InteractionHistoryItem> = { timeTakenSeconds };
 
-      if (['theory', 'conceptual', 'numerical', 'diagram_based'].includes(currentProblemType) && !currentProblem.multipleChoiceOptions?.length) {
-        // Fetch details only if not already fetched for this problem context
+      const isMcqStyleProblem = currentProblem.multipleChoiceOptions && currentProblem.multipleChoiceOptions.length > 0;
+
+      if (!isMcqStyleProblem) { // Covers theory and other free-text types
         const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific topic details available for this evaluation.";
 
         evalOutput = await evaluateTheoryAnswer({
@@ -376,7 +381,7 @@ export default function AOLBEAMPage() {
           topicDetails: fetchedDetailsForEval,
         });
         updatesForHistory.userAnswer = answer;
-      } else { // Practical (MCQ) or MCQ-style conceptual/numerical/diagram
+      } else { // MCQ style problem (practical, or conceptual/numerical/diagram_based if MCQ)
         const isCorrect = answer === currentProblem.correctAnswer;
         evalOutput = {
           isCorrect,
@@ -440,8 +445,6 @@ export default function AOLBEAMPage() {
 
   const handleStartNew = () => {
     setCurrentTopic('');
-    // setCurrentProblemType('theory'); // Keep last used
-    // setCurrentDifficulty('medium'); // Keep last used
     setCurrentProblem(null);
     setEvaluationResult(null);
     setTopicDetails(null);
@@ -562,11 +565,11 @@ export default function AOLBEAMPage() {
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  // Define navigation items
   const navItems = [
     { href: "/profile", label: "Profile", icon: ProfileIcon },
     { href: "/pricing", label: "Pricing", icon: DollarSign },
     { href: "/blog", label: "Blog", icon: Newspaper },
+    { href: "/about", label: "About Us", icon: AboutIcon },
     { href: "/contact-us", label: "Contact Us", icon: Mail },
     { href: "/admin/blog", label: "Admin", icon: ShieldCheck },
   ];
@@ -586,7 +589,7 @@ export default function AOLBEAMPage() {
         }}
         onSubscribe={handleSubscribe}
         onLoginRegister={handleSignInWithGoogle}
-        isMandatory={showPaywall && !!currentUser && !!userProfile && !userProfile.is_subscribed && (userProfile.interaction_count >= FREE_INTERACTION_LIMIT) }
+        isMandatory={showPaywall && !!(currentUser && userProfile && !userProfile.is_subscribed && (userProfile.interaction_count >= FREE_INTERACTION_LIMIT)) }
       />
 
       <header className="sticky top-0 z-30 w-full border-b bg-background/95 backdrop-blur-sm">
@@ -660,14 +663,14 @@ export default function AOLBEAMPage() {
         </div>
       </header>
       
-      <section className="py-16 md:py-24 text-center bg-background"> {/* Removed hero gradient */}
+      <section className="py-16 md:py-24 text-center bg-gradient-to-br from-primary/80 via-primary/50 to-amber-300/50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
-             <span className="text-primary">Access of Learning</span>
+              AOLBEAM: Access of Learning
             </h1>
             <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
-            <span className="text-primary">Beam</span> into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
+             Beam into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
               Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
             </p>
             <div className="mt-10">
@@ -690,14 +693,15 @@ export default function AOLBEAMPage() {
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8">
               <div className="lg:col-span-3 flex flex-col gap-6">
                 <ProblemGenerator
-                onGenerate={handleGenerateProblem}
-                isLoading={!!(isLoadingProblem || (currentUser && isLoadingProfile))}
-                defaultTopic={currentTopic}
-                defaultProblemType={currentProblemType}
+                  onGenerate={handleGenerateProblem}
+                  isLoading={!!(isLoadingProblem || (currentUser && isLoadingProfile))}
+                  defaultTopic={currentTopic}
+                  defaultProblemType={currentProblemType}
+                  defaultDifficulty={currentDifficulty}
                 />
                 {currentProblem && (
                 <>
-                <div className="flex gap-2 mt-0"> {/* Removed mt-4 to keep buttons closer to generator card */}
+                <div className="flex gap-2 mt-0"> 
                     <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (currentUser && isLoadingProfile))}>
                         <RefreshCcw className="mr-2 h-4 w-4" /> Another (Same Topic)
                     </Button>
@@ -709,7 +713,7 @@ export default function AOLBEAMPage() {
                     problem={currentProblem}
                     problemType={currentProblemType}
                     onSubmitAnswer={handleEvaluateAnswer}
-                    onFeedbackSubmit={handleProblemFeedback} // Pass the handler
+                    onFeedbackSubmit={handleProblemFeedback} 
                     isLoading={!!(isLoadingEvaluation || (currentUser && isLoadingProfile))}
                     currentTopic={currentTopic}
                 />
@@ -720,10 +724,10 @@ export default function AOLBEAMPage() {
 
               <div className="lg:col-span-2 flex flex-col gap-6">
                 <TopicRevision
-                topic={currentProblem ? currentTopic : null} // Pass currentTopic only if a problem exists
-                details={topicDetails}
-                onFetchDetails={handleFetchTopicDetails}
-                isLoading={!!(isLoadingDetails || (currentUser && isLoadingProfile))}
+                  topic={currentProblem ? currentTopic : null} 
+                  details={topicDetails}
+                  onFetchDetails={handleFetchTopicDetails}
+                  isLoading={!!(isLoadingDetails || (currentUser && isLoadingProfile))}
                 />
                 <HistoryView
                     history={currentUser && userProfile ? [] : history} 
@@ -744,3 +748,4 @@ export default function AOLBEAMPage() {
     </div>
   );
 }
+
