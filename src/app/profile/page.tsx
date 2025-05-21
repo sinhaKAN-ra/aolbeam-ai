@@ -26,6 +26,7 @@ interface FetchedInteraction {
   created_at: string;
   topic: string;
   problem_type: ProblemType;
+  difficulty?: string | null; // Added difficulty
   problem_statement: string;
   answer_format: string;
   multiple_choice_options?: string[] | null;
@@ -36,7 +37,7 @@ interface FetchedInteraction {
   evaluation_feedback?: string | null;
   is_topic_revised?: boolean | null;
   topic_details_content?: string | null;
-  time_taken_seconds?: number | null; // Added this field
+  time_taken_seconds?: number | null;
 }
 
 interface DisplayHistoryItem {
@@ -44,6 +45,7 @@ interface DisplayHistoryItem {
   timestamp: string;
   topic: string;
   problemType: ProblemType;
+  difficulty?: string | null; // Added difficulty
   problem: {
     problemStatement: string;
     answerFormat: string;
@@ -58,7 +60,7 @@ interface DisplayHistoryItem {
   };
   isTopicRevised?: boolean;
   topicDetails?: string | null;
-  timeTakenSeconds?: number | null; // Added this field
+  timeTakenSeconds?: number | null;
 }
 
 const formatTimeTakenForDisplay = (totalSeconds?: number | null): string | null => {
@@ -100,6 +102,7 @@ export default async function ProfilePage() {
         timestamp: item.created_at,
         topic: item.topic,
         problemType: item.problem_type,
+        difficulty: item.difficulty, // Map difficulty
         problem: {
           problemStatement: item.problem_statement,
           answerFormat: item.answer_format,
@@ -113,7 +116,7 @@ export default async function ProfilePage() {
           : undefined,
         isTopicRevised: item.is_topic_revised || false,
         topicDetails: item.topic_details_content || null,
-        timeTakenSeconds: item.time_taken_seconds, // Map the new field
+        timeTakenSeconds: item.time_taken_seconds,
       }));
     }
   } catch (e) {
@@ -276,7 +279,7 @@ export default async function ProfilePage() {
                         <span className="font-semibold text-foreground">{topic.name}</span>
                         <p className="text-xs text-muted-foreground">Current Accuracy: {Math.round(topic.accuracy*100)}% - Last practiced: {topic.lastPracticed}</p>
                         <Button variant="link" size="sm" className="px-0 h-auto py-1 text-xs mt-1" asChild>
-                            <Link href={`/?topic=${encodeURIComponent(topic.name)}&type=theory`}>Practice {topic.name} &rarr;</Link>
+                            <Link href={`/?topic=${encodeURIComponent(topic.name)}&type=theory&difficulty=${item.difficulty || 'medium'}`}>Practice {topic.name} &rarr;</Link>
                         </Button>
                       </li>
                     ))}
@@ -307,7 +310,7 @@ export default async function ProfilePage() {
                         <div className="flex justify-between items-center w-full">
                           <div className="flex items-center gap-2 text-left">
                             {item.problemType === 'theory' ? <MessageSquareText className="w-5 h-5 text-primary flex-shrink-0" /> : <ListChecks className="w-5 h-5 text-primary flex-shrink-0" />}
-                            <span className="font-medium truncate max-w-[150px] sm:max-w-[250px] md:max-w-xs">{item.topic}</span>
+                            <span className="font-medium truncate max-w-[150px] sm:max-w-[250px] md:max-w-xs">{item.topic} ({item.difficulty || 'N/A'})</span>
                           </div>
                           {item.evaluation && (
                              <Badge variant={item.evaluation.isCorrect ? "default" : "destructive"} className={`${item.evaluation.isCorrect ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'} text-white ml-2`}>
@@ -323,7 +326,7 @@ export default async function ProfilePage() {
                       <AccordionContent className="px-4 pb-3 pt-1 text-sm">
                         <div className="space-y-3 prose prose-sm dark:prose-invert max-w-none">
                           <div>
-                            <strong className="block text-muted-foreground mb-1">Problem:</strong>
+                            <strong className="block text-muted-foreground mb-1">Problem ({item.difficulty || 'N/A'}):</strong>
                             <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.problemStatement} /></div>
                           </div>
                           {item.problemType === 'theory' && item.userAnswer && (
@@ -356,7 +359,7 @@ export default async function ProfilePage() {
                               <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.evaluation.feedback} /></div>
                             </div>
                           )}
-                          {item.timeTakenSeconds !== null && item.timeTakenSeconds !== undefined && (
+                          {item.timeTakenSeconds !== null && item.timeTakenSeconds !== undefined && item.timeTakenSeconds >= 0 && (
                             <div>
                               <strong className="block text-muted-foreground mb-1 flex items-center gap-1">
                                 <TimerHistoryIcon size={14} /> Time Taken:
