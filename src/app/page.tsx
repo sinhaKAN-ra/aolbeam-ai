@@ -24,7 +24,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight, Home, Newspaper, Mail, ShieldCheck, DollarSign, BarChartBig as ProfileIcon, ListChecks, MessageSquareText, Sigma, GitFork, InfoIcon as AboutIcon } from 'lucide-react';
+import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight, Home, Newspaper, Mail, ShieldCheck, DollarSign, BarChartBig as ProfileIcon, ListChecks, MessageSquareText, Sigma, GitFork, InfoIcon as AboutIcon, BookOpen, Sparkles, Lightbulb, History as HistoryIcon, Shuffle } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -41,6 +41,8 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 
 const FREE_INTERACTION_LIMIT = 5;
+const ACTUAL_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
+
 
 export default function AOLBEAMPage() {
   const { toast } = useToast();
@@ -103,7 +105,6 @@ export default function AOLBEAMPage() {
                 setUserProfile(null);
             } else if (newProfileData) {
                 setUserProfile(newProfileData as UserProfile);
-                 // For brand new users, paywall is not shown immediately; they get free interactions.
             }
          } else {
           toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile. If this persists, please contact support." });
@@ -111,9 +112,6 @@ export default function AOLBEAMPage() {
          }
       } else if (data) {
         setUserProfile(data as UserProfile);
-        // if (!data.is_subscribed) { // Removed: Don't show paywall immediately if not subscribed
-        //   setShowPaywall(true);
-        // }
       }
     } catch (e) {
       console.error('Exception fetching user profile:', e);
@@ -133,9 +131,6 @@ export default function AOLBEAMPage() {
       setCurrentUser(user);
       if (user) {
         await fetchAndSetUserProfile(user);
-        // if (event === "SIGNED_IN" && userProfile && !userProfile.is_subscribed) { // Moved this logic out
-        //   setShowPaywall(true);
-        // }
       } else {
         setUserProfile(null);
         setIsLoadingProfile(false);
@@ -161,7 +156,7 @@ export default function AOLBEAMPage() {
     return () => {
       authListener?.subscription?.unsubscribe();
     };
-  }, [supabase, fetchAndSetUserProfile, setHistory, userProfile]);
+  }, [supabase, fetchAndSetUserProfile, setHistory]);
 
 
   const checkUsageLimit = useCallback((): boolean => {
@@ -201,7 +196,7 @@ export default function AOLBEAMPage() {
   }, [currentUser, userProfile, supabase, setGuestInteractionCount, toast]);
 
 
- const addToHistory = useCallback(async (item: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'>) => {
+ const addToHistory = useCallback(async (item: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'> & { actualProblemType: Exclude<ProblemType, 'random'> }) => {
     let newHistoryItem: InteractionHistoryItem = {
         ...item,
         id: Date.now().toString(), 
@@ -212,13 +207,14 @@ export default function AOLBEAMPage() {
         selectedOption: item.selectedOption,
         evaluation: item.evaluation,
         difficulty: item.difficulty,
+        problemType: item.problemType, // User's selection, could be 'random'
     };
 
     if (supabase && currentUser) {
-        const dbRecord: any = { // Add 'any' to allow flexible fields for now
+        const dbRecord: any = { 
             user_id: currentUser.id,
             topic: item.topic,
-            problem_type: item.problemType,
+            problem_type: item.actualProblemType, // Store the actual generated type
             difficulty: item.difficulty,
             problem_statement: item.problem.problemStatement,
             answer_format: item.problem.answerFormat,
@@ -334,23 +330,30 @@ export default function AOLBEAMPage() {
 
     setIsLoadingProblem(true);
     setCurrentTopic(topic);
-    setCurrentProblemType(type);
+    // setCurrentProblemType(type); // Will be set after randomization if 'random'
     setCurrentDifficulty(difficulty);
     setCurrentProblem(null);
     setEvaluationResult(null);
     setTopicDetails(null);
 
+    let actualProblemTypeForAI: Exclude<ProblemType, 'random'> = type as Exclude<ProblemType, 'random'>;
+    if (type === 'random') {
+        actualProblemTypeForAI = ACTUAL_PROBLEM_TYPES[Math.floor(Math.random() * ACTUAL_PROBLEM_TYPES.length)];
+    }
+    setCurrentProblemType(actualProblemTypeForAI); // Set to actual resolved type for UI consistency
+
     try {
       await incrementInteraction();
-      const result = await generatePracticeProblem({ topic, problemType: type, difficulty });
+      const result = await generatePracticeProblem({ topic, problemType: actualProblemTypeForAI, difficulty });
       setCurrentProblem(result);
       await addToHistory({ 
         topic,
-        problemType: type,
+        problemType: type, // Store the user's selection ('random' or specific)
+        actualProblemType: actualProblemTypeForAI, // Store the actual type generated for DB
         difficulty: difficulty,
         problem: result,
       });
-      toast({ title: "Problem Generated!", description: `A new ${type} problem on "${topic}" (${difficulty}) is ready.` });
+      toast({ title: "Problem Generated!", description: `A new ${actualProblemTypeForAI} problem on "${topic}" (${difficulty}) is ready.` });
     } catch (error) {
       console.error("Error generating problem:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to generate problem. Please try again." });
@@ -371,7 +374,7 @@ export default function AOLBEAMPage() {
 
       const isMcqStyleProblem = currentProblem.multipleChoiceOptions && currentProblem.multipleChoiceOptions.length > 0;
 
-      if (!isMcqStyleProblem) { // Covers theory and other free-text types
+      if (!isMcqStyleProblem) { 
         const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific topic details available for this evaluation.";
 
         evalOutput = await evaluateTheoryAnswer({
@@ -381,7 +384,7 @@ export default function AOLBEAMPage() {
           topicDetails: fetchedDetailsForEval,
         });
         updatesForHistory.userAnswer = answer;
-      } else { // MCQ style problem (practical, or conceptual/numerical/diagram_based if MCQ)
+      } else { 
         const isCorrect = answer === currentProblem.correctAnswer;
         evalOutput = {
           isCorrect,
@@ -437,7 +440,10 @@ export default function AOLBEAMPage() {
 
   const handleNewProblemSameTopic = () => {
     if (currentTopic) {
-      handleGenerateProblem(currentTopic, currentProblemType, currentDifficulty);
+      // If currentProblemType was 'random', we should ideally pick another random type or let user pick again.
+      // For simplicity, let's re-use the last resolved type if it's specific, or default to 'random' if not.
+      const typeToRegenerate = ACTUAL_PROBLEM_TYPES.includes(currentProblemType as any) ? currentProblemType : 'random';
+      handleGenerateProblem(currentTopic, typeToRegenerate, currentDifficulty);
     } else {
       toast({ title: "No Topic", description: "Please generate a problem first to use this option.", variant: "default" });
     }
@@ -445,6 +451,8 @@ export default function AOLBEAMPage() {
 
   const handleStartNew = () => {
     setCurrentTopic('');
+    // setCurrentProblemType('theory'); // Default to theory or random for a completely new start
+    // setCurrentDifficulty('medium');
     setCurrentProblem(null);
     setEvaluationResult(null);
     setTopicDetails(null);
@@ -547,7 +555,7 @@ export default function AOLBEAMPage() {
     if (!isLoadingProfile && !currentUser && history.length > 0 && !currentProblem && !isLoadingProblem) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
-      setCurrentProblemType(lastItem.problemType);
+      setCurrentProblemType(lastItem.problemType); // This could be 'random'
       setCurrentDifficulty(lastItem.difficulty || 'medium');
       setCurrentProblem(lastItem.problem);
       if (lastItem.evaluation) setEvaluationResult(lastItem.evaluation);

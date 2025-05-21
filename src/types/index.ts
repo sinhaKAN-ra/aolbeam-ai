@@ -2,7 +2,7 @@
 import type { GeneratePracticeProblemOutput, GeneratePracticeProblemInput } from '@/ai/flows/generate-practice-problem'; // This will now include correctAnswer
 import type { EvaluateTheoryAnswerOutput } from '@/ai/flows/evaluate-theory-answer';
 
-export type ProblemType = 'theory' | 'practical' | 'conceptual' | 'numerical' | 'diagram_based';
+export type ProblemType = 'theory' | 'practical' | 'conceptual' | 'numerical' | 'diagram_based' | 'random';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 
 export interface InteractionHistoryItem {
@@ -10,9 +10,9 @@ export interface InteractionHistoryItem {
   supabase_id?: string; // ID from the Supabase database table
   timestamp: string;
   topic: string;
-  problemType: ProblemType;
+  problemType: ProblemType; // This can be 'random' if the user selected it, but the problem itself will be of a concrete type
   difficulty: DifficultyLevel;
-  problem: GeneratePracticeProblemOutput;
+  problem: GeneratePracticeProblemOutput; // This will contain the actual problem type generated
   userAnswer?: string; // For theory
   selectedOption?: string; // For practical
   evaluation?: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string };
@@ -46,3 +46,4 @@ export interface UserProfile {
 // This type is derived from the Zod schema in generate-practice-problem.ts
 export type { GeneratePracticeProblemInput, GeneratePracticeProblemOutput };
 export type { EvaluateTheoryAnswerOutput };
+
