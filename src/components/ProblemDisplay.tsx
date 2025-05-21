@@ -14,7 +14,7 @@ import type { ProblemType } from '@/types';
 import MathRenderer from './MathRenderer';
 import { useToast } from '@/hooks/use-toast';
 
-type FeedbackRating = "" | "good" | "unclear" | "incorrect_ans" | "irrelevant";
+export type FeedbackRating = "" | "good" | "unclear" | "incorrect_ans" | "irrelevant";
 
 interface ProblemDisplayProps {
   problem: GeneratePracticeProblemOutput;

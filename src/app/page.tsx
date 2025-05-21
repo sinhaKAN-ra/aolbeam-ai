@@ -690,19 +690,18 @@ export default function AOLBEAMPage() {
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8">
               <div className="lg:col-span-3 flex flex-col gap-6">
                 <ProblemGenerator
-                  onGenerate={handleGenerateProblem}
-                  isLoading={isLoadingProblem || (currentUser && isLoadingProfile)}
-                  defaultTopic={currentTopic}
-                  defaultProblemType={currentProblemType}
-                  defaultDifficulty={currentDifficulty}
+                onGenerate={handleGenerateProblem}
+                isLoading={!!(isLoadingProblem || (currentUser && isLoadingProfile))}
+                defaultTopic={currentTopic}
+                defaultProblemType={currentProblemType}
                 />
                 {currentProblem && (
                 <>
-                <div className="flex gap-2 mt-0"> 
-                    <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1" disabled={isLoadingProblem || (currentUser && isLoadingProfile)}>
+                <div className="flex gap-2 mt-0"> {/* Removed mt-4 to keep buttons closer to generator card */}
+                    <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (currentUser && isLoadingProfile))}>
                         <RefreshCcw className="mr-2 h-4 w-4" /> Another (Same Topic)
                     </Button>
-                    <Button onClick={handleStartNew} variant="outline" className="flex-1" disabled={isLoadingProblem || (currentUser && isLoadingProfile)}>
+                    <Button onClick={handleStartNew} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (currentUser && isLoadingProfile))}>
                         <FilePlus2 className="mr-2 h-4 w-4" /> Start New Topic
                     </Button>
                 </div>
@@ -710,8 +709,8 @@ export default function AOLBEAMPage() {
                     problem={currentProblem}
                     problemType={currentProblemType}
                     onSubmitAnswer={handleEvaluateAnswer}
-                    onFeedbackSubmit={handleProblemFeedback}
-                    isLoading={isLoadingEvaluation || (currentUser && isLoadingProfile)}
+                    onFeedbackSubmit={handleProblemFeedback} // Pass the handler
+                    isLoading={!!(isLoadingEvaluation || (currentUser && isLoadingProfile))}
                     currentTopic={currentTopic}
                 />
                 </>
@@ -721,10 +720,10 @@ export default function AOLBEAMPage() {
 
               <div className="lg:col-span-2 flex flex-col gap-6">
                 <TopicRevision
-                  topic={currentProblem ? currentTopic : null} 
-                  details={topicDetails}
-                  onFetchDetails={handleFetchTopicDetails}
-                  isLoading={isLoadingDetails || (currentUser && isLoadingProfile)}
+                topic={currentProblem ? currentTopic : null} // Pass currentTopic only if a problem exists
+                details={topicDetails}
+                onFetchDetails={handleFetchTopicDetails}
+                isLoading={!!(isLoadingDetails || (currentUser && isLoadingProfile))}
                 />
                 <HistoryView
                     history={currentUser && userProfile ? [] : history} 

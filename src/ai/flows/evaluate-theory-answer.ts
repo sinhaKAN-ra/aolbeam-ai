@@ -23,7 +23,18 @@ export type EvaluateTheoryAnswerInput = z.infer<typeof EvaluateTheoryAnswerInput
 
 const EvaluateTheoryAnswerOutputSchema = z.object({
   isCorrect: z.boolean().describe('Whether the student answer is correct based on the question, expected answer format, and topic details.'),
-  feedback: z.string().describe('Detailed feedback on the answer, including areas for improvement. Should use LaTeX for math (e.g., $E=mc^2$ or $$x^2$$), Markdown for code (e.g., ```python\\nprint("Hello")\\n```), and describe diagrams or use Mermaid syntax (e.g., ```mermaid\\ngraph TD; A-->B;\\n```).'),
+  feedback: z.string().describe('Detailed feedback on the answer, including areas for improvement. Should use LaTeX for math (e.g., $E=mc^2$ or $$x^2$$), Markdown for code (e.g., ```python\nprint("Hello")\n```), and describe diagrams or use Mermaid syntax (e.g., ```mermaid\ngraph TD; A-->B;\n```).'),
+  explanation: z.string().optional().describe('Detailed explanation of why the answer is correct or incorrect.'),
+  correctAnswer: z.string().optional().describe('The correct answer or solution to the problem.'),
+  score: z.number().optional().describe('The score achieved for this answer.'),
+  maxScore: z.number().optional().describe('The maximum possible score for this question.'),
+  areasForImprovement: z.array(z.string()).optional().describe('Specific areas where the student can improve.'),
+  suggestedResources: z.array(z.object({
+    type: z.enum(['video', 'article', 'document']),
+    title: z.string(),
+    url: z.string(),
+    reason: z.string(),
+  })).optional().describe('Suggested resources for further learning.')
 });
 export type EvaluateTheoryAnswerOutput = z.infer<typeof EvaluateTheoryAnswerOutputSchema>;
 
