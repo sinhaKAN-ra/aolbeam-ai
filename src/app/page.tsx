@@ -26,8 +26,8 @@ import {
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
 import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight, ShieldCheck, Settings, Home, Newspaper, Mail, User as ProfileIcon, BarChart3, Zap, Info } from 'lucide-react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { createClientComponentClient, type SupabaseClient } from '@supabase/auth-helpers-nextjs';
+import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 import type { InteractionHistoryItem, ProblemType, UserProfile, DifficultyLevel } from '@/types';
 import { ProblemGenerator } from '@/components/ProblemGenerator';
@@ -48,8 +48,7 @@ const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
 
 export default function AOLBEAMPage() {
   const { toast } = useToast();
-  // Initialize Supabase client once and make it stable
-  const [supabase] = useState(() => createClientComponentClient());
+  const [supabase] = useState<SupabaseClient>(() => createClientComponentClient());
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -66,6 +65,7 @@ export default function AOLBEAMPage() {
   const [isLoadingEvaluation, setIsLoadingEvaluation] = useState<boolean>(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState<boolean>(false);
 
+  // This history is for the main page display and localStorage backup for guests
   const [history, setHistory] = useLocalStorage<InteractionHistoryItem[]>('aolbeamHistory_guest', []);
   const [guestInteractionCount, setGuestInteractionCount] = useLocalStorage<number>('aolbeamGuestInteractionCount', 0);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
@@ -107,7 +107,7 @@ export default function AOLBEAMPage() {
       } else if (fetchError && fetchError.code === 'PGRST116') { 
         console.log('No profile found (PGRST116), trigger should ideally create one. Attempting to create as fallback...');
         
-        const newProfilePayload = {
+        const newProfilePayload: Partial<UserProfile> = { // Use Partial to ensure only intended fields are set
           id: user.id,
           email: user.email!, 
           full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'New User',
@@ -170,14 +170,10 @@ export default function AOLBEAMPage() {
       console.log('Finished profile processing. Setting isLoadingProfile to false.');
       setIsLoadingProfile(false);
     }
-  }, [toast]); // Dependencies of fetchAndSetUserProfile are now stable
+  }, [toast]);
 
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !supabase) return;
-
-    console.log('Setting up Supabase auth listener...');
-
     const handleAuthChange = async (event: AuthChangeEvent, session: Session | null) => {
       console.log('Auth state changed:', event, { user: session?.user?.email });
       const user = session?.user ?? null;
@@ -185,20 +181,16 @@ export default function AOLBEAMPage() {
       
       if (user) {
         console.log('User authenticated, fetching profile...');
-        await fetchAndSetUserProfile(user, supabase); // Pass the stable supabase client
+        await fetchAndSetUserProfile(user, supabase);
+        // If the user just signed in and isn't subscribed, show paywall.
+        if (event === "SIGNED_IN" && userProfile && !userProfile.is_subscribed) {
+             // We now let checkUsageLimit handle showing paywall after free interactions
+        }
       } else {
         console.log('No user, resetting profile state');
         setUserProfile(null);
-        setIsLoadingProfile(false); 
-        const guestHistoryRaw = localStorage.getItem('aolbeamHistory_guest');
-        if (guestHistoryRaw) {
-          try {
-            const parsedGuestHistory = JSON.parse(guestHistoryRaw);
-            setHistory(parsedGuestHistory); // setHistory is from useLocalStorage, stable
-          } catch (e) { 
-            console.error("Error parsing guest history:", e); 
-          }
-        }
+        setIsLoadingProfile(false);
+        // `history` state (from useLocalStorage) will persist guest items
       }
     };
 
@@ -221,7 +213,7 @@ export default function AOLBEAMPage() {
         console.log('Initial session check - user:', user?.email);
         
         if (user) {
-          await fetchAndSetUserProfile(user, supabase); // Pass the stable supabase client
+          await fetchAndSetUserProfile(user, supabase);
         } else {
           console.log('No active session found');
           setIsLoadingProfile(false);
@@ -238,7 +230,7 @@ export default function AOLBEAMPage() {
       console.log('Cleaning up auth subscription');
       subscription?.unsubscribe();
     };
-  }, [supabase, fetchAndSetUserProfile, setHistory]); // Dependencies are now stable
+  }, [supabase, fetchAndSetUserProfile, userProfile]); // Added userProfile here to re-check paywall status if profile updates
 
 
   const checkUsageLimit = useCallback((): boolean => {
@@ -272,6 +264,7 @@ export default function AOLBEAMPage() {
     if (currentUser && userProfile && !userProfile.is_subscribed) {
         const newCount = (userProfile.interaction_count || 0) + 1;
         
+        // Optimistically update UI
         setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null); 
         
         try {
@@ -282,6 +275,7 @@ export default function AOLBEAMPage() {
             if (error) {
                 console.error("Error updating interaction count in Supabase:", error);
                 toast({ variant: "destructive", title: "Sync Error", description: "Could not save interaction count. Reverting UI." });
+                // Revert optimistic update
                 setUserProfile(prev => prev ? { ...prev, interaction_count: newCount - 1 } : null);
             }
         } catch (error: any) {
@@ -295,30 +289,30 @@ export default function AOLBEAMPage() {
   }, [currentUser, userProfile, supabase, setGuestInteractionCount, toast]);
 
 
- const addToHistory = useCallback(async (item: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'> & { actualProblemType: Exclude<ProblemType, 'random'> }) => {
+  const addToHistory = useCallback(async (itemToAdd: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'> & { actualProblemType: Exclude<ProblemType, 'random'> }) => {
     let newHistoryItem: InteractionHistoryItem = {
-        ...item,
+        ...itemToAdd,
         id: Date.now().toString(), 
         timestamp: new Date().toISOString(),
         isTopicRevised: false, 
         topicDetails: null, 
-        userAnswer: item.userAnswer,
-        selectedOption: item.selectedOption,
-        evaluation: item.evaluation,
-        difficulty: item.difficulty,
-        problemType: item.problemType, 
+        userAnswer: itemToAdd.userAnswer,
+        selectedOption: itemToAdd.selectedOption,
+        evaluation: itemToAdd.evaluation,
+        difficulty: itemToAdd.difficulty,
+        problemType: itemToAdd.problemType, 
     };
 
-    if (supabase && currentUser) {
+    if (supabase && currentUser && userProfile) { // Ensure userProfile is also checked
         const dbRecord: any = { 
             user_id: currentUser.id,
-            topic: item.topic,
-            problem_type: item.actualProblemType, 
-            difficulty: item.difficulty,
-            problem_statement: item.problem.problemStatement,
-            answer_format: item.problem.answerFormat,
-            multiple_choice_options: item.problem.multipleChoiceOptions,
-            correct_answer: item.problem.correctAnswer,
+            topic: itemToAdd.topic,
+            problem_type: itemToAdd.actualProblemType, 
+            difficulty: itemToAdd.difficulty,
+            problem_statement: itemToAdd.problem.problemStatement,
+            answer_format: itemToAdd.problem.answerFormat,
+            multiple_choice_options: itemToAdd.problem.multipleChoiceOptions,
+            correct_answer: itemToAdd.problem.correctAnswer,
             user_answer: null, 
             selected_option: null, 
             evaluation_is_correct: null, 
@@ -346,15 +340,16 @@ export default function AOLBEAMPage() {
             console.error("Error saving history to Supabase:", error);
             toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account. " + error.message });
         }
-    } else { 
-       setHistory(prevHistory => [newHistoryItem, ...prevHistory].slice(0, 50)); 
     }
-  }, [setHistory, supabase, currentUser, toast]);
+    // Always update the local history (which backs localStorage for guests) for immediate UI feedback on the main page
+    setHistory(prevHistory => [newHistoryItem, ...prevHistory].slice(0, 50)); 
+  }, [setHistory, supabase, currentUser, userProfile, toast]); // Added userProfile
 
   const updateLastHistoryItem = useCallback(async (updates: Partial<InteractionHistoryItem>) => {
-    if (supabase && currentUser) {
+    if (supabase && currentUser && userProfile) { // Ensure userProfile is also checked
       let itemToUpdateSupabaseId: string | undefined;
       
+      // Fetch the latest interaction ID for the current user to update
       const { data: latestInteraction, error: fetchError } = await supabase
           .from('user_interactions')
           .select('id')
@@ -363,13 +358,14 @@ export default function AOLBEAMPage() {
           .limit(1)
           .single();
       
-      if (fetchError && fetchError.code !== 'PGRST116') { 
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows found, which is okay if no history yet
           console.error("Error fetching last history item ID from Supabase for update:", fetchError);
       }
       itemToUpdateSupabaseId = latestInteraction?.id;
 
       if (itemToUpdateSupabaseId) {
         const dbUpdatePayload: any = {};
+        // Map InteractionHistoryItem fields to user_interactions table columns
         if (updates.userAnswer !== undefined) dbUpdatePayload.user_answer = updates.userAnswer;
         if (updates.selectedOption !== undefined) dbUpdatePayload.selected_option = updates.selectedOption;
         if (updates.evaluation !== undefined) {
@@ -388,7 +384,7 @@ export default function AOLBEAMPage() {
               .from('user_interactions')
               .update(dbUpdatePayload)
               .eq('id', itemToUpdateSupabaseId)
-              .eq('user_id', currentUser.id); 
+              .eq('user_id', currentUser.id); // Extra check for security
             if (error) {
               throw error;
             }
@@ -397,35 +393,28 @@ export default function AOLBEAMPage() {
             toast({ variant: "destructive", title: "Update Error", description: "Could not save updates to your account. " + error.message });
           }
         }
-      } else if (!currentUser) { 
-          setHistory(prevHistory => {
-            if (prevHistory.length === 0) return prevHistory;
-            const updatedItem: InteractionHistoryItem = {
-              ...prevHistory[0],
-              ...updates,
-              problem: updates.problem ? { ...prevHistory[0].problem!, ...updates.problem } : prevHistory[0].problem,
-            };
-            return [updatedItem, ...prevHistory.slice(1)];
-          });
       } else {
+        // This case might happen if addToHistory failed to save to DB but added locally,
+        // or if it's the very first interaction and the Supabase record isn't confirmed yet.
         console.warn("Could not determine which history item to update in Supabase for logged-in user.");
       }
-    } else if (!currentUser) { 
-        setHistory(prevHistory => {
-          if (prevHistory.length === 0) return prevHistory;
-          const updatedItem: InteractionHistoryItem = {
-            ...prevHistory[0],
-            ...updates,
-            problem: updates.problem ? { ...prevHistory[0].problem!, ...updates.problem } : prevHistory[0].problem,
-          };
-          return [updatedItem, ...prevHistory.slice(1)];
-        });
     }
-  }, [setHistory, supabase, currentUser, toast]); 
+    // Always update the local history (which backs localStorage for guests) for immediate UI feedback on the main page
+    setHistory(prevHistory => {
+      if (prevHistory.length === 0) return prevHistory;
+      const updatedItem: InteractionHistoryItem = {
+        ...prevHistory[0],
+        ...updates,
+        // Ensure nested problem object is also merged, not overwritten if only partial problem update
+        problem: updates.problem ? { ...prevHistory[0].problem!, ...updates.problem } : prevHistory[0].problem,
+      };
+      return [updatedItem, ...prevHistory.slice(1)];
+    });
+  }, [setHistory, supabase, currentUser, userProfile, toast]); // Added userProfile
 
 
   const handleGenerateProblem = async (topic: string, type: ProblemType, difficulty: DifficultyLevel) => {
-    if (isLoadingProfile && currentUser || checkUsageLimit()) return;
+    if ((currentUser && isLoadingProfile) || checkUsageLimit()) return;
 
     setIsLoadingProblem(true);
     setCurrentTopic(topic);
@@ -448,8 +437,8 @@ export default function AOLBEAMPage() {
       setCurrentProblem(result);
       await addToHistory({ 
         topic,
-        problemType: type, 
-        actualProblemType: actualProblemTypeForAI, 
+        problemType: type, // User's selection (can be 'random')
+        actualProblemType: actualProblemTypeForAI, // The concrete type AI generated
         difficulty: difficulty,
         problem: result,
       });
@@ -540,7 +529,8 @@ export default function AOLBEAMPage() {
 
   const handleNewProblemSameTopic = () => {
     if (currentTopic) {
-      const typeToRegenerate = ALL_CONCRETE_PROBLEM_TYPES.includes(currentProblemType as Exclude<ProblemType, 'random'>) ? currentProblemType : 'random';
+      // Use the actual generated type for regeneration if available, otherwise the user's selection
+      const typeToRegenerate = currentProblem ? currentProblemType : (ALL_CONCRETE_PROBLEM_TYPES.includes(currentProblemType as Exclude<ProblemType, 'random'>) ? currentProblemType : 'random');
       handleGenerateProblem(currentTopic, typeToRegenerate, currentDifficulty);
     } else {
       toast({ title: "No Topic", description: "Please generate a problem first to use this option.", variant: "default" });
@@ -552,11 +542,12 @@ export default function AOLBEAMPage() {
     setCurrentProblem(null);
     setEvaluationResult(null);
     setTopicDetails(null);
+    // Don't clear history here, let it persist for the session / guest
     toast({ title: "Ready for New Topic", description: "Enter a new topic and problem type." });
   };
 
   const handleSubscribe = async (planId: string) => {
-    if (!supabase || !currentUser) {
+    if (!supabase || !currentUser || !userProfile) { // Ensure userProfile exists
       toast({ variant: "destructive", title: "Error", description: "Authentication service not ready or user not logged in."});
       return;
     }
@@ -615,29 +606,20 @@ export default function AOLBEAMPage() {
       setCurrentUser(null);
       setUserProfile(null);
       setShowPaywall(false); 
-      const guestHistoryRaw = localStorage.getItem('aolbeamHistory_guest');
-      if (guestHistoryRaw) {
-        try {
-          const parsedGuestHistory = JSON.parse(guestHistoryRaw);
-          setHistory(parsedGuestHistory);
-          if (parsedGuestHistory.length > 0) {
-            const lastItem = parsedGuestHistory[0];
-            setCurrentTopic(lastItem.topic);
-            setCurrentProblemType(lastItem.problemType);
-            setCurrentDifficulty(lastItem.difficulty || 'medium');
-            setCurrentProblem(lastItem.problem);
-            if (lastItem.evaluation) setEvaluationResult(lastItem.evaluation);
-            if (lastItem.isTopicRevised && lastItem.topicDetails) {
-              setTopicDetails(lastItem.topicDetails);
-            } else {
-              setTopicDetails(null);
-            }
-          } else {
-            handleStartNew(); 
-          }
-        } catch (e) { 
-          console.error("Error parsing guest history on logout:", e); 
-          handleStartNew(); 
+      // The 'history' state (from useLocalStorage) will now be the source for HistoryView
+      // and will contain what was previously guest history or session history.
+      // We might want to reload current problem from this history if it's not empty.
+      if (history.length > 0) {
+        const lastItem = history[0];
+        setCurrentTopic(lastItem.topic);
+        setCurrentProblemType(lastItem.problemType);
+        setCurrentDifficulty(lastItem.difficulty || 'medium');
+        setCurrentProblem(lastItem.problem);
+        if (lastItem.evaluation) setEvaluationResult(lastItem.evaluation);
+        if (lastItem.isTopicRevised && lastItem.topicDetails) {
+          setTopicDetails(lastItem.topicDetails);
+        } else {
+          setTopicDetails(null);
         }
       } else {
         handleStartNew(); 
@@ -648,6 +630,8 @@ export default function AOLBEAMPage() {
 
 
   useEffect(() => {
+    // This effect ensures that if a guest was using the app,
+    // and their localStorage history is loaded, the UI reflects the last state.
     if (!isLoadingProfile && !currentUser && history.length > 0 && !currentProblem && !isLoadingProblem) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
@@ -661,7 +645,7 @@ export default function AOLBEAMPage() {
         setTopicDetails(null);
       }
     }
-  }, [currentUser, history, isLoadingProblem, currentProblem, isLoadingProfile, setHistory]);
+  }, [currentUser, history, isLoadingProblem, currentProblem, isLoadingProfile]);
 
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -899,7 +883,7 @@ export default function AOLBEAMPage() {
                   isLoading={!!(isLoadingDetails || (!!currentUser && isLoadingProfile))}
                 />
                 <HistoryView
-                    history={currentUser && userProfile ? [] : history} 
+                    history={history} 
                 />
               </div>
             </div>
