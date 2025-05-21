@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -73,100 +72,528 @@ export default function AOLBEAMPage() {
     problemGeneratorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-        const client = createClientComponentClient();
-        setSupabaseClient(client);
-    }
-  }, []);
-
-
   const fetchAndSetUserProfile = useCallback(async (user: User) => {
-    if (!supabase) return;
-    setIsLoadingProfile(true);
+    if (!supabase) {
+      const error = new Error('Supabase client not available');
+      console.error(error);
+      toast({
+        variant: 'destructive',
+        title: 'Connection Error',
+        description: 'Failed to connect to the server. Please try again.'
+      });
+      setIsLoadingProfile(false);
+      return;
+    }
+    
     try {
-      const { data, error } = await supabase
+      // First, ensure the user_profiles table exists
+      console.log('🔄 Verifying user_profiles table exists...');
+      await verifyUserProfilesTable(supabase);
+    } catch (error) {
+      console.error('❌ Error verifying user_profiles table:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Database Error',
+        description: 'Could not verify the user profiles table. Please contact support.'
+      });
+      setIsLoadingProfile(false);
+      return;
+    }
+    
+    console.log('Starting fetchAndSetUserProfile for user:', user.id, 'Email:', user.email);
+    console.log('Supabase client available:', !!supabase);
+    
+    setIsLoadingProfile(true);
+    
+    try {
+      console.log('Attempting to fetch profile from user_profiles table...');
+      const { data, error, status } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
+      console.log('Profile fetch response - Status:', status, 'Data:', data, 'Error:', error);
+
       if (error) {
-        console.error('Error fetching user profile:', error);
-         if (error.code === 'PGRST116') { 
-           toast({ variant: "default", title: "Setting up your account...", description: "This might take a moment for new users." });
+        console.log('Profile fetch error:', error);
+        console.log('Error code:', error.code, 'Details:', error.details, 'Hint:', error.hint, 'Message:', error.message);
+        
+        // If profile doesn't exist, create a new one
+        if (error.code === 'PGRST116' || error.code === 'PGRST116') { 
+          console.log('No profile found, creating new one...');
+          
+          const newProfile = {
+            id: user.id, 
+            email: user.email,
+            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'New User',
+            interaction_count: 0, 
+            is_subscribed: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          console.log('Attempting to create new profile with data:', newProfile);
+          
+          toast({ 
+            variant: 'default', 
+            title: 'Setting up your account...', 
+            description: 'This might take a moment for new users.' 
+          });
             // The trigger 'handle_new_user' should have created the profile.
             // We attempt a fetch again after a short delay, assuming the trigger might have a slight delay.
             await new Promise(resolve => setTimeout(resolve, 1500));
-            const { data: newProfileData, error: retryError } = await supabase
+          
+          try {
+            console.log('Attempting to insert new profile into database...');
+            const { data: newProfileData, error: retryError, status } = await supabase
               .from('user_profiles')
-              .select('*')
-              .eq('id', user.id)
+              .insert(newProfile)
+              .select()
               .single();
-
-            if (retryError) {
-                console.error('Error fetching profile on retry:', retryError);
-                toast({ variant: "destructive", title: "Profile Setup Failed", description: "Could not initialize your profile. Please try logging out and in again." });
-                setUserProfile(null);
-            } else if (newProfileData) {
-                setUserProfile(newProfileData as UserProfile);
-            } else {
-                 // This case should ideally not be reached if the trigger works.
-                toast({ variant: "destructive", title: "Profile Incomplete", description: "Your profile is still being set up. Please wait or re-login." });
-                setUserProfile(null);
+            
+            // console.log('Profile insert response - Status:', status, 'Data:', newProfileData, 'Error:', insertError);
+              
+            // console.log('Profile creation response:', { newProfileData, insertError });
+            
+            // if (insertError) {
+            //   console.error('Error creating user profile - Code:', insertError.code, 'Message:', insertError.message);
+            //   console.error('Error details:', insertError.details);
+              
+            //   // Try one more time with minimal data
+            //   console.log('Retrying with minimal profile data...');
+            //   const { data: retryData, error: retryError } = await supabase
+            //     .from('user_profiles')
+            //     .insert({
+            //       id: user.id,
+            //       email: user.email,
+            //       full_name: 'New User',
+            //       interaction_count: 0,
+            //       is_subscribed: false
+            //     })
+            //     .select()
+            //     .single();
+                
+            //   if (retryError) {
+            //     console.error('Retry failed:', retryError);
+            //     throw new Error('Failed to create profile after retry');
+            //   }
+              
+            //   console.log('Profile created on retry:', retryData);
+            //   setUserProfile(retryData as UserProfile);
+            // } else 
+            if (newProfileData) {
+              console.log('New profile created successfully:', newProfileData);
+              setUserProfile(newProfileData as UserProfile);
             }
-         } else {
-          toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile. If this persists, please contact support." });
+          } catch (createError) {
+            console.error('Unexpected error during profile creation:', createError);
+            
+            // Log the full error details
+            if (createError instanceof Error) {
+              console.error('Error details:', {
+                name: createError.name,
+                message: createError.message,
+                stack: createError.stack,
+                cause: createError.cause
+              });
+            }
+            
+            // Notify user about the issue
+            toast({
+              variant: 'destructive',
+              title: 'Profile Creation Issue',
+              description: 'Could not create your profile. Using a temporary profile instead.'
+            });
+            
+            // Create a fallback profile in memory if database creation fails
+            const fallbackProfile = {
+              id: user.id,
+              email: user.email,
+              full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'New User',
+              interaction_count: 0,
+              is_subscribed: false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              is_fallback: true // Mark as fallback profile
+            };
+            
+            console.warn('Using fallback in-memory profile:', fallbackProfile);
+            setUserProfile(fallbackProfile as UserProfile);
+            
+            // Ensure loading state is cleared even if something goes wrong
+            setIsLoadingProfile(false);
+          }
+        } else {
+          // Other database error
+          console.error('Database error:', error);
+          toast({ 
+            variant: 'destructive', 
+            title: 'Profile Error', 
+            description: 'Could not load your profile. If this persists, please contact support.' 
+          });
           setUserProfile(null);
-         }
+        }
       } else if (data) {
+        console.log('Existing profile loaded:', data);
         setUserProfile(data as UserProfile);
       }
     } catch (e) {
-      console.error('Exception fetching user profile:', e);
-      toast({ variant: "destructive", title: "Profile Error", description: "An unexpected error occurred while loading your profile." });
+      console.error('Unexpected error in fetchAndSetUserProfile:', e);
+      toast({ 
+        variant: 'destructive', 
+        title: 'Profile Error', 
+        description: 'An unexpected error occurred while loading your profile.' 
+      });
       setUserProfile(null);
     } finally {
+      console.log('Finished loading profile, setting isLoadingProfile to false');
       setIsLoadingProfile(false);
     }
   }, [supabase, toast]);
 
 
-  useEffect(() => {
-    if (!supabase) return;
+  // Helper function to execute a promise with a timeout
+  const withTimeout = <T,>(
+    promise: () => Promise<T>,
+    timeoutMs: number,
+    errorMessage: string
+  ): Promise<T> => {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error(`${errorMessage} (timeout after ${timeoutMs}ms)`));
+      }, timeoutMs);
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
+      promise()
+        .then(resolve)
+        .catch(reject)
+        .finally(() => clearTimeout(timeoutId));
+    });
+  };
+
+  // Function to verify and create user_profiles table if needed
+  const verifyUserProfilesTable = async (supabaseClient: SupabaseClient): Promise<boolean> => {
+    try {
+      console.log('🔍 Verifying user_profiles table exists...');
+      
+      // First, try to query the table with a simple select
+      console.log('🔎 Attempting to query user_profiles table...');
+      
+      // Add a timeout to the query (30 seconds)
+      const queryPromise = () => supabaseClient
+        .from('user_profiles')
+        .select('*')
+        .limit(1);
+      
+      const result = await withTimeout<{
+        data: any[] | null;
+        error: any;
+        status: number;
+        statusText: string;
+      }>(
+        async () => {
+          try {
+            console.log('🔍 Starting user_profiles table query...');
+            const queryResult = await queryPromise();
+            console.log('✅ Query completed successfully:', {
+              status: queryResult.status,
+              statusText: queryResult.statusText,
+              hasError: !!queryResult.error,
+              errorMessage: queryResult.error?.message
+            });
+            return {
+              data: queryResult.data,
+              error: queryResult.error,
+              status: queryResult.status,
+              statusText: queryResult.statusText
+            };
+          } catch (error) {
+            console.error('❌ Error during query execution:', error);
+            throw error;
+          }
+        },
+        30000, // 30 second timeout
+        'Query to user_profiles table timed out'
+      );
+      
+      const { data: tableInfo, error: tableError, status, statusText } = result;
+      
+      console.log('📊 Query result:', { 
+        status, 
+        statusText, 
+        hasError: !!tableError,
+        errorMessage: tableError?.message
+      });
+      
+      // If no error, table exists and is accessible
+      if (!tableError) {
+        console.log('✅ user_profiles table exists and is accessible');
+        return true;
+      }
+      
+      // Check if the error is because the table doesn't exist
+      if (tableError.code === '42P01') { // Table doesn't exist
+        console.log('🔄 user_profiles table not found, attempting to create it...');
+        
+        // Try to create the table using a raw SQL query through RPC
+        console.log('🏗️ Attempting to create table via RPC...');
+        try {
+          const { data: createResult, error: createError } = await supabaseClient.rpc('create_user_profiles_table');
+          
+          if (!createError) {
+            console.log('✅ Successfully created table via RPC');
+            return true;
+          }
+          
+          console.warn('⚠️ Failed to create user_profiles table via RPC, trying direct SQL...', createError);
+          
+          // If RPC fails, try a direct SQL query (this requires the service_role key)
+          console.log('🔄 Attempting direct SQL approach...');
+          try {
+            // First, check if we can query the auth.users table (should be accessible)
+            const { data: authUsers, error: authError } = await supabaseClient
+              .from('auth.users')
+              .select('id')
+              .limit(1);
+              
+            console.log('🔐 Auth users query result:', { authUsers, authError });
+            
+            if (authError) {
+              console.error('❌ Cannot query auth.users table:', authError);
+              throw new Error(`Insufficient permissions to access auth.users: ${authError.message}`);
+            }
+            
+            // Define SQL statements to execute in sequence with their descriptions
+            const sqlStatements = [
+              {
+                sql: `CREATE TABLE IF NOT EXISTS public.user_profiles (
+                  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+                  email TEXT NOT NULL,
+                  full_name TEXT,
+                  interaction_count INTEGER DEFAULT 0,
+                  is_subscribed BOOLEAN DEFAULT false,
+                  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )`,
+                description: 'Create user_profiles table'
+              },
+              {
+                sql: 'ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY',
+                description: 'Enable RLS on user_profiles'
+              },
+              {
+                sql: 'DROP POLICY IF EXISTS "Users can view their own profile" ON public.user_profiles',
+                description: 'Drop existing view policy'
+              },
+              {
+                sql: `CREATE POLICY "Users can view their own profile" 
+                  ON public.user_profiles FOR SELECT 
+                  USING (auth.uid() = id)`,
+                description: 'Create view policy'
+              },
+              {
+                sql: 'DROP POLICY IF EXISTS "Users can insert their own profile" ON public.user_profiles',
+                description: 'Drop existing insert policy'
+              },
+              {
+                sql: `CREATE POLICY "Users can insert their own profile"
+                  ON public.user_profiles FOR INSERT
+                  WITH CHECK (auth.uid() = id)`,
+                description: 'Create insert policy'
+              },
+              {
+                sql: 'DROP POLICY IF EXISTS "Users can update their own profile" ON public.user_profiles',
+                description: 'Drop existing update policy'
+              },
+              {
+                sql: `CREATE POLICY "Users can update their own profile"
+                  ON public.user_profiles FOR UPDATE
+                  USING (auth.uid() = id)`,
+                description: 'Create update policy'
+              }
+            ];
+            
+            // Execute each statement one by one with timeout
+            for (const { sql, description } of sqlStatements) {
+              try {
+                console.log(`🔄 Executing: ${description}`);
+                console.debug('SQL:', sql);
+                
+                const rpcResult = await withTimeout<{ error: any } | null>(
+                  async () => {
+                    try {
+                      const result = await supabaseClient.rpc('execute_sql', { query: sql });
+                      return { error: result.error };
+                    } catch (error) {
+                      console.error('RPC call failed:', error);
+                      return { error };
+                    }
+                  },
+                  10000, // 10 second timeout per statement
+                  `SQL execution timed out: ${description}`
+                );
+                
+                const error = rpcResult?.error;
+                if (error) {
+                  console.error(`❌ Failed to execute SQL (${description}):`, error);
+                  const errorMessage = error instanceof Error ? error.message : String(error);
+                  throw new Error(`Failed to ${description.toLowerCase()}: ${errorMessage}`);
+                }
+                
+                console.log(`✅ Success: ${description}`);
+                
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                console.error(`❌ Error in ${description}:`, errorMessage);
+                throw error; // Re-throw to be caught by the outer try-catch
+              }
+            }
+            
+            console.log('✅ Successfully created table via direct SQL');
+            return true;
+            
+          } catch (sqlException: unknown) {
+            const errorMessage = sqlException instanceof Error 
+              ? sqlException.message 
+              : 'Unknown SQL error during table creation';
+            console.error('❌ Direct SQL approach failed:', errorMessage);
+            throw new Error(`Direct SQL approach failed: ${errorMessage}`);
+          }
+          
+        } catch (rpcException: unknown) {
+          const errorMessage = rpcException instanceof Error 
+            ? rpcException.message 
+            : 'Unknown RPC error';
+          console.error('❌ RPC call failed with exception:', errorMessage);
+          throw new Error(`RPC call failed: ${errorMessage}`);
+        }
+      }
+      
+      // If we get here, there was an error that we don't know how to handle
+      const errorMessage = tableError?.message || 'Unknown database error';
+      console.error('❌ Error checking user_profiles table:', errorMessage);
+      throw new Error(`Database error: ${errorMessage}`);
+      
+    } catch (error: unknown) {
+      console.error('❌ Error in verifyUserProfilesTable:', error);
+      
+      // If all else fails, try one last approach - insert a dummy record
+      try {
+        if (!supabase) {
+          throw new Error('Supabase client not available for fallback');
+        }
+        
+        console.log('🔄 Trying fallback: inserting dummy record');
+        const dummyId = '00000000-0000-0000-0000-000000000000';
+        
+        const { error: insertError } = await supabase
+          .from('user_profiles')
+          .insert({
+            id: dummyId,
+            email: 'dummy@example.com',
+            full_name: 'Dummy User',
+            interaction_count: 0,
+            is_subscribed: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+          
+        if (!insertError) {
+          // Clean up the dummy record
+          await supabase
+            .from('user_profiles')
+            .delete()
+            .eq('id', dummyId);
+            
+          console.log('✅ Successfully verified table access via dummy record');
+          return true;
+        }
+        
+        throw insertError || new Error('Failed to insert dummy record');
+      } catch (fallbackError: unknown) {
+        const errorMessage = fallbackError instanceof Error 
+          ? fallbackError.message 
+          : 'Unknown error during fallback table verification';
+          
+        console.error('❌ Fallback table verification failed:', errorMessage);
+        throw new Error(`Could not verify table access: ${errorMessage}`);
+      }
+    }
+  };
+
+  // Initialize Supabase client and auth state
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    console.log('Initializing Supabase client...');
+    const client = createClientComponentClient();
+    setSupabaseClient(client);
+
+    const handleAuthChange = async (event: string, session: Session | null) => {
+      console.log('Auth state changed:', event, { user: session?.user });
       const user = session?.user ?? null;
       setCurrentUser(user);
+      
 
       if (user) {
-        await fetchAndSetUserProfile(user);
-        // No automatic paywall trigger here for new users.
-        // Paywall is triggered by checkUsageLimit() based on interaction_count.
+        console.log('User authenticated, fetching profile...');
+        try {
+          await fetchAndSetUserProfile(user);
+        } catch (error) {
+          console.error('Error in fetchAndSetUserProfile:', error);
+          setIsLoadingProfile(false);
+        }
       } else {
+        console.log('No user, resetting profile state');
         setUserProfile(null);
         setIsLoadingProfile(false);
+        // Restore guest history if available
         const guestHistoryRaw = localStorage.getItem('aolbeamHistory_guest');
         if (guestHistoryRaw) {
           try {
             const parsedGuestHistory = JSON.parse(guestHistoryRaw);
             setHistory(parsedGuestHistory);
-          } catch(e) { console.error("Error parsing guest history on logout:", e); }
+          } catch (e) { 
+            console.error("Error parsing guest history:", e); 
+          }
         }
       }
-    });
+    };
 
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      setCurrentUser(user);
-      if (user) {
-        await fetchAndSetUserProfile(user);
-      } else {
-         setIsLoadingProfile(false); 
+    const { data: { subscription } } = client.auth.onAuthStateChange(handleAuthChange);
+
+    // Initial session check
+    const checkUser = async () => {
+      try {
+        console.log('Checking for existing session...');
+        const { data: { session }, error } = await client.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          setIsLoadingProfile(false);
+          return;
+        }
+        
+        const user = session?.user ?? null;
+        console.log('Initial session check - user:', user?.email);
+        
+        if (user) {
+          await fetchAndSetUserProfile(user);
+        } else {
+          console.log('No active session found');
+          setIsLoadingProfile(false);
+        }
+      } catch (error) {
+        console.error('Error in checkUser:', error);
+        setIsLoadingProfile(false);
       }
-    });
+    };
+
+    checkUser();
 
     return () => {
-      authListener?.subscription?.unsubscribe();
+      console.log('Cleaning up auth subscription');
+      subscription?.unsubscribe();
     };
   }, [supabase, fetchAndSetUserProfile, setHistory]);
 
@@ -186,6 +613,18 @@ export default function AOLBEAMPage() {
     }
     return false; 
   }, [currentUser, userProfile, guestInteractionCount]);
+
+  // Debug effect to log profile state changes
+  useEffect(() => {
+    console.log('Profile state updated - isLoadingProfile:', isLoadingProfile, 'currentUser:', !!currentUser, 'userProfile:', userProfile);
+  }, [isLoadingProfile, currentUser, userProfile]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      console.log('Cleaning up AOLBEAMPage component');
+    };
+  }, []);
 
   const incrementInteraction = useCallback(async () => {
     if (currentUser && userProfile && !userProfile.is_subscribed && supabase) {
@@ -505,8 +944,8 @@ export default function AOLBEAMPage() {
 
   const handleSignInWithGoogle = async () => {
     if (!supabase) {
-        toast({ variant: "destructive", title: "Authentication Error", description: "Authentication service not ready. Please try again shortly." });
-        return;
+      toast({ variant: "destructive", title: "Authentication Error", description: "Authentication service not ready. Please try again shortly." });
+      return;
     }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -645,9 +1084,25 @@ export default function AOLBEAMPage() {
                 </DropdownMenu>
               ) : (
                  !isLoadingProfile && !currentUser && (
-                    <Button variant="outline" size="sm" onClick={handleSignInWithGoogle} disabled={!supabase}>
-                     <UserCircle className="mr-2 h-4 w-4" /> Login / Sign Up
-                    </Button>
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleSignInWithGoogle} 
+                        disabled={!supabase || isLoadingProfile}
+                        className="min-w-[120px]"
+                      >
+                        {isLoadingProfile ? (
+                          <>
+                            <PageLoader className="mr-2 h-4 w-4 animate-spin" />
+                            Please wait...
+                          </>
+                        ) : (
+                          <>
+                            <UserCircle className="mr-2 h-4 w-4" />
+                            Login / Sign Up
+                          </>
+                        )}
+                      </Button>
                  )
               )}
               <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileNavOpen(!mobileNavOpen)}>
@@ -678,14 +1133,14 @@ export default function AOLBEAMPage() {
         </div>
       </header>
       
-      <section className="py-16 md:py-24 text-center bg-gradient-to-br from-primary/80 via-primary/50 to-amber-300/50">
+      <section className="py-16 md:py-24 text-center bg-background"> {/* Removed hero gradient */}
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
-              AOLBEAM: Access of Learning
+             <span className="text-primary">Access of Learning</span>
             </h1>
             <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
-             Beam into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
+            <span className="text-primary">Beam</span> into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
               Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
             </p>
             <div className="mt-10">
@@ -699,17 +1154,33 @@ export default function AOLBEAMPage() {
 
       <main ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16 flex-grow">
         {isLoadingProfile && currentUser && (
-            <div className="flex justify-center items-center h-64">
-                <PageLoader className="h-12 w-12 animate-spin text-primary" />
-                <p className="ml-4 text-lg text-muted-foreground">Loading your profile...</p>
+          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
+            <div className="space-y-6 max-w-md mx-auto">
+              <div className="relative">
+                <PageLoader className="h-16 w-16 text-primary mx-auto animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="h-12 w-12 rounded-full bg-primary/10 animate-ping"></div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold tracking-tight">Welcome to AOLBEAM</h2>
+                <p className="text-muted-foreground">We're setting up your learning environment</p>
+                <div className="pt-4">
+                  <div className="inline-flex items-center space-x-2 text-sm text-muted-foreground">
+                    <span className="inline-flex h-2 w-2 rounded-full bg-primary/70 animate-pulse"></span>
+                    <span>Loading your profile...</span>
+                  </div>
+                </div>
+              </div>
             </div>
+          </div>
         )}
-        {(!isLoadingProfile || !currentUser) && (
+        {!isLoadingProfile && (
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8">
               <div className="lg:col-span-3 flex flex-col gap-6">
                 <ProblemGenerator
                   onGenerate={handleGenerateProblem}
-                  isLoading={!!(isLoadingProblem || (currentUser && isLoadingProfile))}
+                  isLoading={isLoadingProblem}
                   defaultTopic={currentTopic}
                   defaultProblemType={currentProblemType}
                   defaultDifficulty={currentDifficulty}
