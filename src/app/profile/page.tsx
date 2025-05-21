@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import MathRenderer from '@/components/MathRenderer';
-import type { ProblemType, DifficultyLevel } from '@/types'; // Updated ProblemType import
+import type { ProblemType, DifficultyLevel } from '@/types'; 
 import Footer from '@/components/Footer';
 
 import { ArrowLeft, BarChart3, History, Lightbulb, UserCircle, Settings, Star, MessageSquareText, ListChecks, CheckCircle, XCircle, TimerIcon as TimerHistoryIcon, Brain as ConceptualIcon, Sigma as NumericalIcon, GitFork as DiagramIcon } from 'lucide-react';
@@ -45,7 +45,7 @@ interface DisplayHistoryItem {
   timestamp: string;
   topic: string;
   problemType: ProblemType;
-  difficulty?: string | null; 
+  difficulty?: DifficultyLevel | string | null; 
   problem: {
     problemStatement: string;
     answerFormat: string;
@@ -110,7 +110,7 @@ export default async function ProfilePage() {
         timestamp: item.created_at,
         topic: item.topic,
         problemType: item.problem_type,
-        difficulty: item.difficulty, 
+        difficulty: item.difficulty as DifficultyLevel | null, 
         problem: {
           problemStatement: item.problem_statement,
           answerFormat: item.answer_format,
@@ -154,7 +154,7 @@ export default async function ProfilePage() {
       }
       return acc;
     }, [] as { name: string; accuracy: number }[])
-    .slice(0, 2); 
+    .slice(0, 3); // Show top 3 strengths
 
 
   const focusAreas = userHistory
@@ -170,7 +170,8 @@ export default async function ProfilePage() {
         }
       }
       return acc;
-    }, [] as { name: string; accuracy: number, lastPracticed: string, problemType: ProblemType, difficulty?: string | null }[]);
+    }, [] as { name: string; accuracy: number, lastPracticed: string, problemType: ProblemType, difficulty?: DifficultyLevel | string | null }[])
+    .slice(0, 3); // Show top 3 focus areas
 
 
   return (
@@ -301,7 +302,7 @@ export default async function ProfilePage() {
           <Card className="shadow-lg">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <History className="text-primary" /> Recent Practice History
+                <History className="text-primary" /> Recent History
               </CardTitle>
               <CardDescription>
                 Review your past practice sessions.
@@ -317,31 +318,37 @@ export default async function ProfilePage() {
                     return (
                       <AccordionItem value={item.id} key={item.id} className="bg-card border rounded-md shadow-sm">
                         <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                          <div className="flex justify-between items-center w-full">
-                            <div className="flex items-center gap-2 text-left">
+                           <div className="flex justify-between items-center w-full gap-2">
+                            <div className="flex items-center gap-2 min-w-0 flex-grow text-left">
                               <ProblemIcon className="w-5 h-5 text-primary flex-shrink-0" />
-                              <span className="font-medium truncate max-w-[120px] sm:max-w-[200px] md:max-w-xs">{item.topic}</span>
-                              <Badge variant="outline" className="text-xs hidden sm:inline-flex">{item.problemType}</Badge>
-                              <Badge variant="outline" className="text-xs">{item.difficulty || 'N/A'}</Badge>
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 min-w-0">
+                                <span className="font-medium truncate">{item.topic}</span>
+                                <div className="flex gap-1 text-xs">
+                                    <Badge variant="outline" className="hidden sm:inline-flex">{item.problemType}</Badge>
+                                    <Badge variant="outline">{item.difficulty || 'N/A'}</Badge>
+                                </div>
+                              </div>
                             </div>
-                            {item.evaluation && (
-                              <Badge variant={item.evaluation.isCorrect ? "default" : "destructive"} className={`${item.evaluation.isCorrect ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'} text-white ml-2`}>
-                                {item.evaluation.isCorrect ? <CheckCircle size={14}/> : <XCircle size={14}/>}
-                                <span className="ml-1">{item.evaluation.isCorrect ? 'Correct' : 'Incorrect'}</span>
-                              </Badge>
-                            )}
-                            <span className="text-xs text-muted-foreground hidden sm:inline ml-auto pl-2 flex-shrink-0">
-                              {new Date(item.timestamp).toLocaleDateString()}
-                            </span>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {item.evaluation && (
+                                <Badge variant={item.evaluation.isCorrect ? "default" : "destructive"} className={`${item.evaluation.isCorrect ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'} text-white`}>
+                                  {item.evaluation.isCorrect ? <CheckCircle size={14}/> : <XCircle size={14}/>}
+                                  <span className="ml-1">{item.evaluation.isCorrect ? 'Correct' : 'Incorrect'}</span>
+                                </Badge>
+                              )}
+                              <span className="text-xs text-muted-foreground hidden sm:inline">
+                                {new Date(item.timestamp).toLocaleDateString()}
+                              </span>
+                            </div>
                           </div>
                         </AccordionTrigger>
                         <AccordionContent className="px-4 pb-3 pt-1 text-sm">
                           <div className="space-y-3 prose prose-sm dark:prose-invert max-w-none">
                             <div>
-                              <strong className="block text-muted-foreground mb-1">Problem ({item.difficulty || 'N/A'} - {item.problemType}):</strong>
+                              <strong className="block text-muted-foreground mb-1">Problem:</strong>
                               <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.problemStatement} /></div>
                             </div>
-                            {item.problemType !== 'practical' && item.userAnswer && (
+                            {item.userAnswer && !item.selectedOption && (
                               <div>
                                 <strong className="block text-muted-foreground mb-1">Your Answer:</strong>
                                 <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.userAnswer} /></div>
@@ -359,7 +366,7 @@ export default async function ProfilePage() {
                                 </div>
                               </>
                             )}
-                            {item.problemType !== 'practical' && !item.problem.multipleChoiceOptions?.length && item.evaluation && (
+                            {!(item.problem.multipleChoiceOptions && item.problem.multipleChoiceOptions.length > 0) && item.evaluation && ( // For free-text problems with evaluation
                               <div>
                                 <strong className="block text-muted-foreground mt-2 mb-1">Model Answer / Key Points:</strong>
                                 <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>

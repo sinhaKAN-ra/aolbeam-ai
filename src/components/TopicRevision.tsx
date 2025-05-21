@@ -5,7 +5,7 @@ import type * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Info, Loader2, BookOpen, Brain } from 'lucide-react';
+import { Info, Loader2, BookOpen, Brain, Lightbulb } from 'lucide-react';
 import MathRenderer from './MathRenderer';
 
 interface TopicRevisionProps {
@@ -23,12 +23,12 @@ export function TopicRevision({ topic, details, onFetchDetails, isLoading }: Top
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl font-semibold">
-            <BookOpen className="text-primary" /> Topic Revision
+            <Lightbulb className="text-primary" /> Concept Insights
           </CardTitle>
           <CardDescription className="text-sm mt-1">
             {explanatoryMessage}
             <br /><br />
-            Generate a problem first to revise its topic.
+            Generate a problem first to get insights on its topic.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -42,7 +42,7 @@ export function TopicRevision({ topic, details, onFetchDetails, isLoading }: Top
     <Card className="shadow-lg">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xl font-semibold">
-          <Brain className="text-primary" /> Topic Revision: <span className="font-normal">{topic}</span>
+          <Lightbulb className="text-primary" /> Concept Insights: <span className="font-normal">{topic}</span>
         </CardTitle>
         <CardDescription className="text-sm mt-1">
          {explanatoryMessage}
@@ -51,7 +51,7 @@ export function TopicRevision({ topic, details, onFetchDetails, isLoading }: Top
       <CardContent>
         {!details && (
           <Button onClick={() => onFetchDetails(topic)} disabled={isLoading} className="w-full text-base py-3">
-            {isLoading ? <Loader2 className="animate-spin" /> : <><Info className="mr-2 h-4 w-4" /> Revise Topic Details</>}
+            {isLoading ? <Loader2 className="animate-spin" /> : <><Info className="mr-2 h-4 w-4" /> Fetch Insights</>}
           </Button>
         )}
         {details && (
