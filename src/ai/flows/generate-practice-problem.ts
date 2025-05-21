@@ -30,19 +30,22 @@ const GeneratePracticeProblemOutputSchema = z.object({
     .describe(
       `For theory-like questions (theory, conceptual, diagram-based if free-text): describes expected content/structure (e.g., "Explain in 2-3 sentences..."). For practical/MCQ questions (practical, or conceptual/numerical/diagram_based if MCQ): provides an explanation for why the correct answer is correct or general guidance/steps to solve.`
     ),
-  multipleChoiceOptions: z.array(z.string().describe(`Multiple choice option. Should use LaTeX for math, Markdown for code, and describe/use Mermaid for diagrams if applicable.`)).optional().describe(`Multiple choice options. Primarily for "practical" type, but can be used for "conceptual", "numerical", or "diagram_based" if appropriate for an MCQ format.`),
+  multipleChoiceOptions: z.array(z.string().describe(`Multiple choice option. Should use LaTeX for math, Markdown for code, and describe/use Mermaid for diagrams if applicable.`)).optional().describe(`Multiple choice options. Primarily for "practical" type, but can be used for "conceptual", "numerical", or "diagram_based" if appropriate for an MCQ format. If the problem is not MCQ, this should be empty or omitted.`),
   correctAnswer: z.string().describe(`The correct answer. For MCQ problems, this is the exact string of the correct multiple-choice option. For theory/free-text problems (theory, conceptual, numerical if not MCQ, diagram_based if free-text), this is the ideal model answer or key points/numerical value. Should use LaTeX for math, Markdown for code, and describe/use Mermaid for diagrams if applicable.`),
+  difficulty: z.enum(['easy', 'medium', 'hard']).optional().describe('The difficulty level of the generated problem. Should match the input difficulty if provided.')
 });
 export type GeneratePracticeProblemOutput = z.infer<typeof GeneratePracticeProblemOutputSchema>;
 
 export async function generatePracticeProblem(input: GeneratePracticeProblemInput): Promise<GeneratePracticeProblemOutput> {
-  return generatePracticeProblemFlow(input);
+  const result = await generatePracticeProblemFlow(input);
+  // Ensure the output difficulty matches the input, or defaults to medium if input was undefined
+  return { ...result, difficulty: input.difficulty || 'medium' };
 }
 
 const prompt = ai.definePrompt({
   name: 'generatePracticeProblemPrompt',
   input: {schema: GeneratePracticeProblemInputSchema},
-  output: {schema: GeneratePracticeProblemOutputSchema},
+  output: {schema: GeneratePracticeProblemOutputSchema.omit({ difficulty: true })}, // AI doesn't output difficulty, we add it post-call
   prompt: `You are an expert in generating practice problems for students preparing for competitive exams. The student will provide a topic, problem type, and desired difficulty. You will generate a practice problem appropriate for these parameters.
 
 Content Formatting Rules:
@@ -57,7 +60,7 @@ graph TD;
 A[Start] --> B(Process);
 B --> C{Decision};
 C --> D[End];
-\`\`\`). If Mermaid.js is not suitable, provide a clear textual description of the diagram.
+\`\`\`). If Mermaid.js is not suitable or too complex for reliable rendering, provide a clear textual description of the diagram instead.
 
 Ensure all generated content ('problemStatement', 'answerFormat', 'multipleChoiceOptions', 'correctAnswer') adheres to these formatting rules for math, code, and diagrams. The LaTeX, Markdown, and Mermaid syntax must be syntactically correct and properly escaped within the JSON string.
 
@@ -86,38 +89,43 @@ If Problem Type is "conceptual":
 - Generate a problem that tests deep understanding of concepts, matching the specified difficulty ({{{difficulty}}}).
 - This can be a theory-style question (requiring textual explanation) OR an MCQ.
 - If theory-style:
-    - 'answerFormat' should describe expected content/structure.
-    - 'correctAnswer' should be a model textual answer.
-    - 'multipleChoiceOptions' should be empty.
+    - 'problemStatement' should pose the conceptual question.
+    - 'answerFormat' should describe expected content/structure of the explanation.
+    - 'correctAnswer' should be a model textual answer explaining the concept.
+    - 'multipleChoiceOptions' should be an empty array or not provided.
 - If MCQ-style:
-    - Populate 'multipleChoiceOptions'.
-    - 'correctAnswer' MUST be the exact string of one option.
-    - 'answerFormat' should explain why the chosen concept/option is correct.
+    - 'problemStatement' MUST pose the conceptual question.
+    - Populate 'multipleChoiceOptions' with at least 3 and at most 5 distinct choices relevant to the concept.
+    - 'correctAnswer' MUST be the exact string of one of the 'multipleChoiceOptions'.
+    - 'answerFormat' should explain why the chosen concept/option is correct and other options are incorrect.
 
 If Problem Type is "numerical":
 - Generate a problem that requires a numerical calculation or answer, matching the specified difficulty ({{{difficulty}}}).
 - 'problemStatement' should present the problem, possibly with data.
 - This can be free-text (expecting a number) OR an MCQ with numerical options.
 - If free-text:
-    - 'answerFormat' should guide on units or precision, and briefly outline solution steps.
+    - 'problemStatement' should clearly state what needs to be calculated.
+    - 'answerFormat' should guide on units or precision, and briefly outline solution steps or formulas needed.
     - 'correctAnswer' should be the numerical answer (e.g., "42", "3.14 m/s^2").
-    - 'multipleChoiceOptions' should be empty.
+    - 'multipleChoiceOptions' should be an empty array or not provided.
 - If MCQ-style:
-    - Populate 'multipleChoiceOptions' with numerical choices.
+    - 'problemStatement' MUST pose the numerical problem.
+    - Populate 'multipleChoiceOptions' with numerical choices, including plausible distractors.
     - 'correctAnswer' MUST be the exact string of one numerical option.
     - 'answerFormat' should explain the calculation steps leading to the correct option.
 
 If Problem Type is "diagram_based":
 - Generate a problem that requires interpretation, analysis, or creation related to a diagram, matching the specified difficulty ({{{difficulty}}}).
-- 'problemStatement' MUST include a diagram (using Mermaid.js syntax like \`\`\`mermaid
-...\`\`\` if possible, otherwise a clear textual description).
+- 'problemStatement' MUST include a diagram (using Mermaid.js syntax like \`\`\`mermaid\n...\`\`\` if possible, otherwise a clear textual description if Mermaid syntax is too complex or unsuitable).
 - This can be a theory-style question OR an MCQ.
 - If theory-style (e.g., "Explain the process shown in the diagram"):
+    - 'problemStatement' should include the diagram and pose the question.
     - 'answerFormat' should describe expected content/structure of the explanation.
     - 'correctAnswer' should be a model textual answer explaining the diagram.
-    - 'multipleChoiceOptions' should be empty.
+    - 'multipleChoiceOptions' should be an empty array or not provided.
 - If MCQ-style (e.g., "What does label X in the diagram represent?"):
-    - Populate 'multipleChoiceOptions'.
+    - 'problemStatement' MUST include the diagram and pose the question.
+    - Populate 'multipleChoiceOptions' with options relevant to the diagram.
     - 'correctAnswer' MUST be the exact string of one option.
     - 'answerFormat' should explain why the chosen option is correct in relation to the diagram.
 
@@ -131,11 +139,16 @@ const generatePracticeProblemFlow = ai.defineFlow(
   {
     name: 'generatePracticeProblemFlow',
     inputSchema: GeneratePracticeProblemInputSchema,
-    outputSchema: GeneratePracticeProblemOutputSchema,
+    outputSchema: GeneratePracticeProblemOutputSchema.omit({ difficulty: true }),
   },
   async input => {
     const {output} = await prompt(input);
     return output!;
   }
 );
+
+// Ensure `difficulty` is part of the final problem object returned to the client
+// and stored in history, matching the input or defaulting.
+// The AI model itself is not asked to generate the 'difficulty' field in its output.
+// We add it back here based on the input 'difficulty'.
 

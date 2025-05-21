@@ -18,7 +18,7 @@ export type FeedbackRating = "" | "good" | "unclear" | "incorrect_ans" | "irrele
 
 interface ProblemDisplayProps {
   problem: GeneratePracticeProblemOutput;
-  problemType: ProblemType;
+  problemType: ProblemType; // This prop helps in initial high-level distinction if needed elsewhere, but MCQs are primary driver
   onSubmitAnswer: (answer: string, timeTakenSeconds?: number) => void;
   onFeedbackSubmit: (rating: FeedbackRating, comment: string) => void;
   isLoading: boolean;
@@ -39,21 +39,18 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<boolean>(false);
   const { toast } = useToast();
 
-  // Timer state
   const [isTimerActive, setIsTimerActive] = useState<boolean>(false);
   const [elapsedTimeInSeconds, setElapsedTimeInSeconds] = useState<number>(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number>(0);
 
   useEffect(() => {
-    // Reset fields and timer when a new problem is displayed
     setUserAnswer('');
     setSelectedOption('');
     setFeedbackRating("");
     setFeedbackComment('');
     setFeedbackSubmitted(false);
     
-    // Reset timer
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -61,10 +58,8 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
     setIsTimerActive(false);
     setElapsedTimeInSeconds(0);
     startTimeRef.current = 0;
-
   }, [problem]);
 
-  // Cleanup timer on component unmount
   useEffect(() => {
     return () => {
       if (intervalRef.current) {
@@ -74,14 +69,12 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
   }, []);
 
   const handleStartTimer = () => {
-    if (isTimerActive) { // Effectively a "Pause" button
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+    if (isTimerActive && intervalRef.current) { // Pause
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
       setIsTimerActive(false);
     } else { // Start or Resume
-      startTimeRef.current = Date.now() - (elapsedTimeInSeconds * 1000); // Adjust start time if resuming
+      startTimeRef.current = Date.now() - (elapsedTimeInSeconds * 1000);
       setIsTimerActive(true);
       intervalRef.current = setInterval(() => {
         setElapsedTimeInSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
@@ -91,18 +84,19 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (intervalRef.current) { // Stop timer on submit
+    if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    setIsTimerActive(false); // Ensure timer is marked as inactive
+    setIsTimerActive(false);
 
     const finalTimeTaken = elapsedTimeInSeconds;
+    const isMcqProblem = problem.multipleChoiceOptions && problem.multipleChoiceOptions.length > 0;
 
-    if (problemType === 'theory' && userAnswer.trim()) {
-      onSubmitAnswer(userAnswer, finalTimeTaken);
-    } else if (problemType === 'practical' && selectedOption) {
+    if (isMcqProblem && selectedOption) {
       onSubmitAnswer(selectedOption, finalTimeTaken);
+    } else if (!isMcqProblem && userAnswer.trim()) {
+      onSubmitAnswer(userAnswer, finalTimeTaken);
     }
   };
 
@@ -123,13 +117,16 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
       description: "Thank you for helping us improve.",
     });
   };
-
-  const canSubmitAnswer = problemType === 'theory' ? userAnswer.trim() !== '' : selectedOption !== '';
+  
+  const isMcqStyleProblem = problem.multipleChoiceOptions && problem.multipleChoiceOptions.length > 0;
+  const canSubmitAnswer = isMcqStyleProblem ? selectedOption !== '' : userAnswer.trim() !== '';
+  const isTimerNeededToStart = !isTimerActive && elapsedTimeInSeconds === 0;
 
   return (
     <Card className="shadow-lg">
       <CardHeader>
         <CardTitle className="text-xl font-semibold">Practice Problem: <span className="text-primary">{currentTopic}</span></CardTitle>
+        <CardDescription>Type: {problemType} - Difficulty: {problem.difficulty || 'N/A'}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="mb-4 text-base prose max-w-none dark:prose-invert">
@@ -148,7 +145,35 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {problemType === 'theory' ? (
+          {isMcqStyleProblem ? (
+            <div className="space-y-2">
+              <Label className="text-base font-medium">Select an Option</Label>
+              <RadioGroup
+                value={selectedOption}
+                onValueChange={setSelectedOption}
+                className="space-y-2"
+                disabled={isTimerNeededToStart}
+              >
+                {problem.multipleChoiceOptions?.map((option, index) => (
+                  <div key={index} className={`flex items-center space-x-2 p-3 border rounded-md transition-colors 
+                                            ${(isTimerNeededToStart) ? 'cursor-not-allowed opacity-70' 
+                                              : 'hover:border-primary data-[state=checked]:border-primary data-[state=checked]:bg-primary/10'}`}>
+                    <RadioGroupItem 
+                      value={option} 
+                      id={`option-${index}`} 
+                      disabled={isTimerNeededToStart}
+                    />
+                    <Label 
+                      htmlFor={`option-${index}`} 
+                      className={`cursor-pointer text-base flex-1 prose prose-sm max-w-none dark:prose-invert ${(isTimerNeededToStart) ? 'cursor-not-allowed' : ''}`}
+                    >
+                        <MathRenderer content={option}/>
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+            </div>
+          ) : (
             <div className="space-y-2">
               <Label htmlFor="theory-answer" className="text-base font-medium">Your Answer</Label>
               <Textarea
@@ -159,41 +184,13 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
                 rows={6}
                 required
                 className="text-base"
-                disabled={!isTimerActive && elapsedTimeInSeconds === 0} 
+                disabled={isTimerNeededToStart} 
               />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label className="text-base font-medium">Select an Option</Label>
-              <RadioGroup
-                value={selectedOption}
-                onValueChange={setSelectedOption}
-                className="space-y-2"
-                disabled={!isTimerActive && elapsedTimeInSeconds === 0}
-              >
-                {problem.multipleChoiceOptions?.map((option, index) => (
-                  <div key={index} className={`flex items-center space-x-2 p-3 border rounded-md transition-colors 
-                                            ${(!isTimerActive && elapsedTimeInSeconds === 0) ? 'cursor-not-allowed opacity-70' 
-                                              : 'hover:border-primary data-[state=checked]:border-primary data-[state=checked]:bg-primary/10'}`}>
-                    <RadioGroupItem 
-                      value={option} 
-                      id={`option-${index}`} 
-                      disabled={!isTimerActive && elapsedTimeInSeconds === 0}
-                    />
-                    <Label 
-                      htmlFor={`option-${index}`} 
-                      className={`cursor-pointer text-base flex-1 prose prose-sm max-w-none dark:prose-invert ${(!isTimerActive && elapsedTimeInSeconds === 0) ? 'cursor-not-allowed' : ''}`}
-                    >
-                        <MathRenderer content={option}/>
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
             </div>
           )}
           <Button 
             type="submit" 
-            disabled={isLoading || !canSubmitAnswer || (!isTimerActive && elapsedTimeInSeconds === 0 && !userAnswer && !selectedOption)} 
+            disabled={isLoading || !canSubmitAnswer || isTimerNeededToStart} 
             className="w-full text-base py-3"
           >
             {isLoading ? <Loader2 className="animate-spin" /> : <><Send className="mr-2 h-4 w-4" /> Submit Answer</>}
@@ -249,5 +246,3 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
     </Card>
   );
 }
-
-    
