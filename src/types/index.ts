@@ -34,6 +34,8 @@ export interface SubscriptionPlan {
 
 export interface UserProfile {
   id: string; // Corresponds to auth.users.id
+  email: string;
+  full_name: string;
   is_subscribed: boolean;
   subscription_plan_id?: string | null;
   subscription_started_at?: string | null; // ISO date string
@@ -41,6 +43,7 @@ export interface UserProfile {
   interaction_count: number;
   updated_at?: string;
   created_at?: string;
+
 }
 
 // This type is derived from the Zod schema in generate-practice-problem.ts
