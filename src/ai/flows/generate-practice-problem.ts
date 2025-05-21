@@ -22,14 +22,16 @@ const GeneratePracticeProblemInputSchema = z.object({
 export type GeneratePracticeProblemInput = z.infer<typeof GeneratePracticeProblemInputSchema>;
 
 const GeneratePracticeProblemOutputSchema = z.object({
-  problemStatement: z.string().describe('The generated practice problem statement. Should use LaTeX for math (e.g., $E=mc^2$ or $$x^2$$), Markdown for code (e.g., ```python\\nprint("Hello")\\n```), and describe diagrams or use Mermaid syntax (e.g., ```mermaid\\ngraph TD; A-->B;\\n```).'),
+  problemStatement: z.string().describe(
+    `The generated practice problem statement. Should use LaTeX for math (e.g., $E=mc^2$ or $$x^2$$), Markdown for code (e.g., \`\`\`python\nprint("Hello")\n\`\`\`), and describe diagrams or use Mermaid syntax (e.g., \`\`\`mermaid\ngraph TD; A-->B;\n\`\`\`).`
+  ),
   answerFormat: z
     .string()
     .describe(
-      'For theory-like questions (theory, conceptual, diagram-based if free-text): describes expected content/structure (e.g., "Explain in 2-3 sentences..."). For practical/MCQ questions (practical, or conceptual/numerical/diagram-based if MCQ): provides an explanation for why the correct answer is correct or general guidance/steps to solve.'
+      `For theory-like questions (theory, conceptual, diagram-based if free-text): describes expected content/structure (e.g., "Explain in 2-3 sentences..."). For practical/MCQ questions (practical, or conceptual/numerical/diagram_based if MCQ): provides an explanation for why the correct answer is correct or general guidance/steps to solve.`
     ),
-  multipleChoiceOptions: z.array(z.string().describe('Multiple choice option. Should use LaTeX for math, Markdown for code, and describe/use Mermaid for diagrams if applicable.')).optional().describe('Multiple choice options. Primarily for "practical" type, but can be used for "conceptual", "numerical", or "diagram_based" if appropriate for an MCQ format.'),
-  correctAnswer: z.string().describe('The correct answer. For MCQ problems, this is the exact string of the correct multiple-choice option. For theory/free-text problems (theory, conceptual, numerical if not MCQ, diagram-based if free-text), this is the ideal model answer or key points/numerical value. Should use LaTeX for math, Markdown for code, and describe/use Mermaid for diagrams if applicable.'),
+  multipleChoiceOptions: z.array(z.string().describe(`Multiple choice option. Should use LaTeX for math, Markdown for code, and describe/use Mermaid for diagrams if applicable.`)).optional().describe(`Multiple choice options. Primarily for "practical" type, but can be used for "conceptual", "numerical", or "diagram_based" if appropriate for an MCQ format.`),
+  correctAnswer: z.string().describe(`The correct answer. For MCQ problems, this is the exact string of the correct multiple-choice option. For theory/free-text problems (theory, conceptual, numerical if not MCQ, diagram_based if free-text), this is the ideal model answer or key points/numerical value. Should use LaTeX for math, Markdown for code, and describe/use Mermaid for diagrams if applicable.`),
 });
 export type GeneratePracticeProblemOutput = z.infer<typeof GeneratePracticeProblemOutputSchema>;
 
@@ -45,8 +47,17 @@ const prompt = ai.definePrompt({
 
 Content Formatting Rules:
 1.  **Mathematical Formulas**: Use LaTeX notation. For inline math, use single dollar signs (e.g., $E=mc^2$). For display/block math, use double dollar signs (e.g., $$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$).
-2.  **Code Snippets**: Use Markdown fenced code blocks with language identifiers (e.g., \`\`\`python\\nprint("Hello World")\\n\`\`\` or \`\`\`javascript\\nconsole.log("Hi");\\n\`\`\`).
-3.  **Diagrams**: If a diagram is needed, first try to represent it using Mermaid.js syntax within a Markdown code block (e.g., \`\`\`mermaid\\ngraph TD;\\nA[Start] --> B(Process);\\nB --> C{Decision};\\nC --> D[End];\\n\`\`\`). If Mermaid.js is not suitable, provide a clear textual description of the diagram.
+2.  **Code Snippets**: Use Markdown fenced code blocks with language identifiers (e.g., \`\`\`python
+print("Hello World")
+\`\`\` or \`\`\`javascript
+console.log("Hi");
+\`\`\`).
+3.  **Diagrams**: If a diagram is needed, first try to represent it using Mermaid.js syntax within a Markdown code block (e.g., \`\`\`mermaid
+graph TD;
+A[Start] --> B(Process);
+B --> C{Decision};
+C --> D[End];
+\`\`\`). If Mermaid.js is not suitable, provide a clear textual description of the diagram.
 
 Ensure all generated content ('problemStatement', 'answerFormat', 'multipleChoiceOptions', 'correctAnswer') adheres to these formatting rules for math, code, and diagrams. The LaTeX, Markdown, and Mermaid syntax must be syntactically correct and properly escaped within the JSON string.
 
@@ -64,11 +75,12 @@ If Problem Type is "theory":
 - 'multipleChoiceOptions' should be an empty array or not provided.
 
 If Problem Type is "practical":
-- Generate a multiple-choice problem, matching the specified difficulty ({{{difficulty}}}).
-- 'problemStatement' should pose the question.
-- Populate 'multipleChoiceOptions' array with distinct choices.
-- 'correctAnswer' MUST be the exact string of one of the 'multipleChoiceOptions'.
-- 'answerFormat' should provide a brief explanation for *why* the 'correctAnswer' is correct, or general guidance on solving this type of practical problem.
+- Generate a multiple-choice question (MCQ), matching the specified difficulty ({{{difficulty}}}).
+- 'problemStatement' MUST pose the question clearly.
+- It is MANDATORY to populate the 'multipleChoiceOptions' array with at least 3 and at most 5 distinct choices. Each option must be a plausible answer.
+- 'correctAnswer' MUST be the exact string content of one of the 'multipleChoiceOptions'. Ensure this is an exact match.
+- 'answerFormat' MUST provide a step-by-step explanation for why the 'correctAnswer' is correct and why other options might be incorrect, or provide general guidance/steps to solve this type of practical problem.
+- DO NOT leave 'multipleChoiceOptions' empty for "practical" problems.
 
 If Problem Type is "conceptual":
 - Generate a problem that tests deep understanding of concepts, matching the specified difficulty ({{{difficulty}}}).
@@ -97,7 +109,8 @@ If Problem Type is "numerical":
 
 If Problem Type is "diagram_based":
 - Generate a problem that requires interpretation, analysis, or creation related to a diagram, matching the specified difficulty ({{{difficulty}}}).
-- 'problemStatement' MUST include a diagram (using Mermaid.js syntax like \`\`\`mermaid\\n...\`\`\` if possible, otherwise a clear textual description).
+- 'problemStatement' MUST include a diagram (using Mermaid.js syntax like \`\`\`mermaid
+...\`\`\` if possible, otherwise a clear textual description).
 - This can be a theory-style question OR an MCQ.
 - If theory-style (e.g., "Explain the process shown in the diagram"):
     - 'answerFormat' should describe expected content/structure of the explanation.
@@ -125,3 +138,4 @@ const generatePracticeProblemFlow = ai.defineFlow(
     return output!;
   }
 );
+
