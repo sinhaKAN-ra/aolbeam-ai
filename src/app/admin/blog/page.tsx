@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { generateBlogPost, type GenerateBlogPostInput, type GenerateBlogPostOutput } from '@/ai/flows/generate-blog-post';
-import { Loader2, FileText, Link as LinkIcon, Wand2, ChevronLeft } from 'lucide-react';
+import { Loader2, FileText, Link as LinkIcon, Wand2, ChevronLeft, Info } from 'lucide-react';
 import Link from 'next/link';
 import Footer from '@/components/Footer';
 
@@ -71,7 +71,20 @@ export default function AdminBlogPage() {
         </Button>
         <h1 className="text-3xl font-bold text-primary">Admin - Blog Post Generator</h1>
         <p className="text-muted-foreground">Use AI to draft blog posts. Remember to review and edit before publishing.</p>
-        <p className="text-sm text-destructive mt-2">Note: This admin page is for demonstration. Implement proper admin authentication and database integration for production use.</p>
+        <Card className="mt-4 border-orange-500 bg-orange-50 dark:bg-orange-900/30">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <Info className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-orange-700 dark:text-orange-300">Important Note</p>
+                <p className="text-xs text-orange-600 dark:text-orange-400">
+                  This page is for AI draft generation only. Generated content is not automatically saved to a database or published. 
+                  Proper admin authentication and blog management features would be required for a production system.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </header>
 
       <main className="grid md:grid-cols-2 gap-8 flex-grow">
@@ -135,3 +148,4 @@ export default function AdminBlogPage() {
     </div>
   );
 }
+

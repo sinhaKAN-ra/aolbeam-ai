@@ -50,7 +50,7 @@ Instructions for the output:
 2.  **Suggested Slug**: Generate a URL-friendly slug from the title (e.g., "how-to-study-effectively" from "How to Study Effectively"). Use hyphens and lowercase.
 3.  **Content**:
     *   Write the full blog post in **Markdown format**.
-    *   The content should be well-structured. Use H2 for main sections and H3 for sub-sections.
+    *   The content should be well-structured. Use H2 for main sections and H3 for sub-sections. Do NOT include an H1 (#) heading in the content field, as the 'title' field will be used for that.
     *   Include a brief introduction that grabs the reader's attention and outlines what the post will cover.
     *   Develop the main body with informative and practical advice, insights, or motivational points related to the topic.
     *   If provided, naturally weave the keywords into the content. Do not stuff keywords; prioritize readability and value.
@@ -61,9 +61,7 @@ Instructions for the output:
 4.  **Meta Description**: Write a concise and engaging meta description (around 150-160 characters) for SEO. This should summarize the post and encourage clicks from search results.
 
 Ensure the Markdown is well-formed.
-Example of Markdown structure:
-# Blog Post Title (This will be your 'title' field, the AI should not generate H1 in content)
-
+Example of Markdown structure (for the 'content' field - remember, no H1):
 ## Introduction
 ...
 
@@ -92,3 +90,4 @@ const generateBlogPostFlow = ai.defineFlow(
     return output!;
   }
 );
+
