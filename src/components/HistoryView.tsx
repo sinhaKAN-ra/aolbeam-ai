@@ -5,7 +5,7 @@ import type * as React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { History as HistoryIcon, MessageSquareText, ListChecks, CheckCircle, XCircle, Brain as ConceptualIcon, Sigma as NumericalIcon, GitFork as DiagramIcon } from 'lucide-react';
+import { History as HistoryIcon, MessageSquareText, ListChecks, CheckCircle, XCircle, Brain as ConceptualIcon, Sigma as NumericalIcon, GitFork as DiagramIcon, Shuffle } from 'lucide-react';
 import type { InteractionHistoryItem, ProblemType } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import MathRenderer from './MathRenderer';
@@ -21,6 +21,7 @@ const problemTypeIcons: Record<ProblemType, React.ElementType> = {
   conceptual: ConceptualIcon,
   numerical: NumericalIcon,
   diagram_based: DiagramIcon,
+  random: Shuffle,
 };
 
 export function HistoryView({ history, onRevisitProblem }: HistoryViewProps) {
