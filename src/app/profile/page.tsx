@@ -11,10 +11,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import MathRenderer from '@/components/MathRenderer';
-import type { ProblemType } from '@/types';
+import type { ProblemType, DifficultyLevel } from '@/types'; // Updated ProblemType import
 import Footer from '@/components/Footer';
 
-import { ArrowLeft, BarChart3, History, Lightbulb, UserCircle, Settings, Star, MessageSquareText, ListChecks, CheckCircle, XCircle, TimerIcon as TimerHistoryIcon } from 'lucide-react';
+import { ArrowLeft, BarChart3, History, Lightbulb, UserCircle, Settings, Star, MessageSquareText, ListChecks, CheckCircle, XCircle, TimerIcon as TimerHistoryIcon, Brain as ConceptualIcon, Sigma as NumericalIcon, GitFork as DiagramIcon } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Your Profile - AOLBEAM',
@@ -26,7 +26,7 @@ interface FetchedInteraction {
   created_at: string;
   topic: string;
   problem_type: ProblemType;
-  difficulty?: string | null; // Added difficulty
+  difficulty?: string | null; 
   problem_statement: string;
   answer_format: string;
   multiple_choice_options?: string[] | null;
@@ -45,7 +45,7 @@ interface DisplayHistoryItem {
   timestamp: string;
   topic: string;
   problemType: ProblemType;
-  difficulty?: string | null; // Added difficulty
+  difficulty?: string | null; 
   problem: {
     problemStatement: string;
     answerFormat: string;
@@ -75,6 +75,14 @@ const formatTimeTakenForDisplay = (totalSeconds?: number | null): string | null 
   return `${seconds}s`;
 };
 
+const problemTypeIcons: Record<ProblemType, React.ElementType> = {
+  theory: MessageSquareText,
+  practical: ListChecks,
+  conceptual: ConceptualIcon,
+  numerical: NumericalIcon,
+  diagram_based: DiagramIcon,
+};
+
 
 export default async function ProfilePage() {
   const supabase = createServerComponentClient({ cookies });
@@ -102,7 +110,7 @@ export default async function ProfilePage() {
         timestamp: item.created_at,
         topic: item.topic,
         problemType: item.problem_type,
-        difficulty: item.difficulty, // Map difficulty
+        difficulty: item.difficulty, 
         problem: {
           problemStatement: item.problem_statement,
           answerFormat: item.answer_format,
@@ -158,11 +166,11 @@ export default async function ProfilePage() {
         const accuracy = topicItems.length > 0 ? correctCount / topicItems.length : 0;
          const lastPracticed = new Date(topicItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0].timestamp).toLocaleDateString();
         if (accuracy < 0.70) { 
-          acc.push({ name: item.topic, accuracy, lastPracticed });
+          acc.push({ name: item.topic, accuracy, lastPracticed, problemType: item.problemType, difficulty: item.difficulty });
         }
       }
       return acc;
-    }, [] as { name: string; accuracy: number, lastPracticed: string }[]);
+    }, [] as { name: string; accuracy: number, lastPracticed: string, problemType: ProblemType, difficulty?: string | null }[]);
 
 
   return (
@@ -279,7 +287,7 @@ export default async function ProfilePage() {
                         <span className="font-semibold text-foreground">{topic.name}</span>
                         <p className="text-xs text-muted-foreground">Current Accuracy: {Math.round(topic.accuracy*100)}% - Last practiced: {topic.lastPracticed}</p>
                         <Button variant="link" size="sm" className="px-0 h-auto py-1 text-xs mt-1" asChild>
-                            <Link href={`/?topic=${encodeURIComponent(topic.name)}&type=theory&difficulty=${item.difficulty || 'medium'}`}>Practice {topic.name} &rarr;</Link>
+                            <Link href={`/?topic=${encodeURIComponent(topic.name)}&type=${encodeURIComponent(topic.problemType)}&difficulty=${encodeURIComponent(topic.difficulty || 'medium')}`}>Practice {topic.name} &rarr;</Link>
                         </Button>
                       </li>
                     ))}
@@ -304,82 +312,87 @@ export default async function ProfilePage() {
                 <p className="text-muted-foreground text-center py-6">Your practice history will appear here once you start solving problems.</p>
               ) : (
                 <Accordion type="single" collapsible className="w-full space-y-2">
-                  {userHistory.map((item) => (
-                    <AccordionItem value={item.id} key={item.id} className="bg-card border rounded-md shadow-sm">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                        <div className="flex justify-between items-center w-full">
-                          <div className="flex items-center gap-2 text-left">
-                            {item.problemType === 'theory' ? <MessageSquareText className="w-5 h-5 text-primary flex-shrink-0" /> : <ListChecks className="w-5 h-5 text-primary flex-shrink-0" />}
-                            <span className="font-medium truncate max-w-[150px] sm:max-w-[250px] md:max-w-xs">{item.topic} ({item.difficulty || 'N/A'})</span>
+                  {userHistory.map((item) => {
+                    const ProblemIcon = problemTypeIcons[item.problemType] || MessageSquareText;
+                    return (
+                      <AccordionItem value={item.id} key={item.id} className="bg-card border rounded-md shadow-sm">
+                        <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                          <div className="flex justify-between items-center w-full">
+                            <div className="flex items-center gap-2 text-left">
+                              <ProblemIcon className="w-5 h-5 text-primary flex-shrink-0" />
+                              <span className="font-medium truncate max-w-[120px] sm:max-w-[200px] md:max-w-xs">{item.topic}</span>
+                              <Badge variant="outline" className="text-xs hidden sm:inline-flex">{item.problemType}</Badge>
+                              <Badge variant="outline" className="text-xs">{item.difficulty || 'N/A'}</Badge>
+                            </div>
+                            {item.evaluation && (
+                              <Badge variant={item.evaluation.isCorrect ? "default" : "destructive"} className={`${item.evaluation.isCorrect ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'} text-white ml-2`}>
+                                {item.evaluation.isCorrect ? <CheckCircle size={14}/> : <XCircle size={14}/>}
+                                <span className="ml-1">{item.evaluation.isCorrect ? 'Correct' : 'Incorrect'}</span>
+                              </Badge>
+                            )}
+                            <span className="text-xs text-muted-foreground hidden sm:inline ml-auto pl-2 flex-shrink-0">
+                              {new Date(item.timestamp).toLocaleDateString()}
+                            </span>
                           </div>
-                          {item.evaluation && (
-                             <Badge variant={item.evaluation.isCorrect ? "default" : "destructive"} className={`${item.evaluation.isCorrect ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'} text-white ml-2`}>
-                              {item.evaluation.isCorrect ? <CheckCircle size={14}/> : <XCircle size={14}/>}
-                              <span className="ml-1">{item.evaluation.isCorrect ? 'Correct' : 'Incorrect'}</span>
-                            </Badge>
-                          )}
-                          <span className="text-xs text-muted-foreground hidden sm:inline ml-auto pl-2 flex-shrink-0">
-                            {new Date(item.timestamp).toLocaleDateString()}
-                          </span>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-3 pt-1 text-sm">
-                        <div className="space-y-3 prose prose-sm dark:prose-invert max-w-none">
-                          <div>
-                            <strong className="block text-muted-foreground mb-1">Problem ({item.difficulty || 'N/A'}):</strong>
-                            <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.problemStatement} /></div>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-4 pb-3 pt-1 text-sm">
+                          <div className="space-y-3 prose prose-sm dark:prose-invert max-w-none">
+                            <div>
+                              <strong className="block text-muted-foreground mb-1">Problem ({item.difficulty || 'N/A'} - {item.problemType}):</strong>
+                              <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.problemStatement} /></div>
+                            </div>
+                            {item.problemType !== 'practical' && item.userAnswer && (
+                              <div>
+                                <strong className="block text-muted-foreground mb-1">Your Answer:</strong>
+                                <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.userAnswer} /></div>
+                              </div>
+                            )}
+                            {item.problem.multipleChoiceOptions && item.problem.multipleChoiceOptions.length > 0 && item.selectedOption && (
+                              <>
+                                <div>
+                                  <strong className="block text-muted-foreground mb-1">Your Choice:</strong>
+                                  <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.selectedOption} /></div>
+                                </div>
+                                <div>
+                                  <strong className="block text-muted-foreground mt-2 mb-1">Correct Answer:</strong>
+                                  <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
+                                </div>
+                              </>
+                            )}
+                            {item.problemType !== 'practical' && !item.problem.multipleChoiceOptions?.length && item.evaluation && (
+                              <div>
+                                <strong className="block text-muted-foreground mt-2 mb-1">Model Answer / Key Points:</strong>
+                                <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
+                              </div>
+                            )}
+                            {item.evaluation?.feedback && (
+                              <div>
+                                <strong className="block text-muted-foreground mb-1">Feedback:</strong>
+                                <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.evaluation.feedback} /></div>
+                              </div>
+                            )}
+                            {item.timeTakenSeconds !== null && item.timeTakenSeconds !== undefined && item.timeTakenSeconds >= 0 && (
+                              <div>
+                                <strong className="block text-muted-foreground mb-1 flex items-center gap-1">
+                                  <TimerHistoryIcon size={14} /> Time Taken:
+                                </strong>
+                                <p className="p-2 rounded bg-muted/30">{formatTimeTakenForDisplay(item.timeTakenSeconds)}</p>
+                              </div>
+                            )}
+                            {item.isTopicRevised && item.topicDetails && (
+                              <div>
+                                <strong className="block text-muted-foreground mb-1">Revised Details:</strong>
+                                <div className="p-2 rounded bg-muted/30 max-h-32 overflow-y-auto"><MathRenderer content={item.topicDetails} /></div>
+                              </div>
+                            )}
+                            {!item.evaluation && (
+                              <p className="text-muted-foreground italic">This problem was generated but not answered.</p>
+                            )}
                           </div>
-                          {item.problemType === 'theory' && item.userAnswer && (
-                            <div>
-                              <strong className="block text-muted-foreground mb-1">Your Answer:</strong>
-                              <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.userAnswer} /></div>
-                            </div>
-                          )}
-                          {item.problemType === 'practical' && item.selectedOption && (
-                            <>
-                              <div>
-                                <strong className="block text-muted-foreground mb-1">Your Choice:</strong>
-                                 <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.selectedOption} /></div>
-                              </div>
-                              <div>
-                                <strong className="block text-muted-foreground mt-2 mb-1">Correct Answer:</strong>
-                                 <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
-                              </div>
-                            </>
-                          )}
-                           {item.problemType === 'theory' && item.evaluation && (
-                             <div>
-                              <strong className="block text-muted-foreground mt-2 mb-1">Model Answer / Key Points:</strong>
-                               <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
-                            </div>
-                           )}
-                          {item.evaluation?.feedback && (
-                            <div>
-                              <strong className="block text-muted-foreground mb-1">Feedback:</strong>
-                              <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.evaluation.feedback} /></div>
-                            </div>
-                          )}
-                          {item.timeTakenSeconds !== null && item.timeTakenSeconds !== undefined && item.timeTakenSeconds >= 0 && (
-                            <div>
-                              <strong className="block text-muted-foreground mb-1 flex items-center gap-1">
-                                <TimerHistoryIcon size={14} /> Time Taken:
-                              </strong>
-                              <p className="p-2 rounded bg-muted/30">{formatTimeTakenForDisplay(item.timeTakenSeconds)}</p>
-                            </div>
-                          )}
-                          {item.isTopicRevised && item.topicDetails && (
-                            <div>
-                              <strong className="block text-muted-foreground mb-1">Revised Details:</strong>
-                              <div className="p-2 rounded bg-muted/30 max-h-32 overflow-y-auto"><MathRenderer content={item.topicDetails} /></div>
-                            </div>
-                          )}
-                           {!item.evaluation && (
-                             <p className="text-muted-foreground italic">This problem was generated but not answered.</p>
-                           )}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
                 </Accordion>
               )}
             </CardContent>
@@ -392,5 +405,3 @@ export default async function ProfilePage() {
     </div>
   );
 }
-
-    

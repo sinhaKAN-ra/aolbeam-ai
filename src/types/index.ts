@@ -2,7 +2,7 @@
 import type { GeneratePracticeProblemOutput, GeneratePracticeProblemInput } from '@/ai/flows/generate-practice-problem'; // This will now include correctAnswer
 import type { EvaluateTheoryAnswerOutput } from '@/ai/flows/evaluate-theory-answer';
 
-export type ProblemType = 'theory' | 'practical';
+export type ProblemType = 'theory' | 'practical' | 'conceptual' | 'numerical' | 'diagram_based';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 
 export interface InteractionHistoryItem {
@@ -11,8 +11,8 @@ export interface InteractionHistoryItem {
   timestamp: string;
   topic: string;
   problemType: ProblemType;
-  difficulty: DifficultyLevel; // Added difficulty
-  problem: GeneratePracticeProblemOutput; // This type now includes 'correctAnswer'
+  difficulty: DifficultyLevel;
+  problem: GeneratePracticeProblemOutput;
   userAnswer?: string; // For theory
   selectedOption?: string; // For practical
   evaluation?: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string };
@@ -46,4 +46,3 @@ export interface UserProfile {
 // This type is derived from the Zod schema in generate-practice-problem.ts
 export type { GeneratePracticeProblemInput, GeneratePracticeProblemOutput };
 export type { EvaluateTheoryAnswerOutput };
-

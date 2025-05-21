@@ -25,7 +25,7 @@ import {
   fetchTopicDetails,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight, Home, Newspaper, Mail, Shield } from 'lucide-react'; // Shield for Admin
+import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight, Home, Newspaper, Mail, ShieldCheck, DollarSign, BarChartBig as ProfileIcon, ListChecks, MessageSquareText, Sigma, GitFork } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { User, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -90,34 +90,28 @@ export default function AOLBEAMPage() {
 
       if (error) {
         console.error('Error fetching user profile:', error);
-         if (error.code === 'PGRST116') { 
-           toast({ variant: "default", title: "Setting up your account...", description: "Please wait a moment." });
-            setTimeout(async () => {
-              const { data: refetchData, error: refetchError } = await supabase
-                .from('user_profiles')
-                .select('*')
-                .eq('id', user.id)
-                .single();
-              if (refetchError) {
-                console.error('Error refetching user profile:', refetchError);
-                toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile. If this persists, please contact support." });
+         if (error.code === 'PGRST116') { // Profile doesn't exist, trigger might not have run or this is an old user
+           toast({ variant: "default", title: "Setting up your account...", description: "This might take a moment for new users." });
+            // Attempt to create profile if it's missing (though trigger should handle this)
+            // This is a fallback, ideally the DB trigger `handle_new_user` manages profile creation.
+            const { data: newProfileData, error: insertError } = await supabase
+              .from('user_profiles')
+              .insert({ id: user.id, interaction_count: 0, is_subscribed: false })
+              .select()
+              .single();
+            if (insertError) {
+                console.error('Error creating user profile on fallback:', insertError);
+                toast({ variant: "destructive", title: "Profile Setup Failed", description: "Could not initialize your profile. Please try logging out and in again." });
                 setUserProfile(null);
-              } else if (refetchData) {
-                setUserProfile(refetchData as UserProfile);
-                 if (!refetchData.is_subscribed && refetchData.interaction_count >= FREE_INTERACTION_LIMIT) {
-                   // Paywall will be triggered by checkUsageLimit if limit is reached
-                 }
-              }
-            }, 2000); 
+            } else if (newProfileData) {
+                setUserProfile(newProfileData as UserProfile);
+            }
          } else {
           toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile. If this persists, please contact support." });
           setUserProfile(null);
          }
       } else if (data) {
         setUserProfile(data as UserProfile);
-         if (!data.is_subscribed && data.interaction_count >= FREE_INTERACTION_LIMIT) {
-            // Paywall will be triggered by checkUsageLimit if limit is reached
-         }
       }
     } catch (e) {
       console.error('Exception fetching user profile:', e);
@@ -137,17 +131,10 @@ export default function AOLBEAMPage() {
       setCurrentUser(user);
       if (user) {
         await fetchAndSetUserProfile(user);
-        if (event === "SIGNED_IN" && userProfile && !userProfile.is_subscribed && userProfile.interaction_count === 0) {
-            // Fresh sign in, profile exists but not subscribed and 0 interactions -> means new user from trigger.
-            // Or if profile had >0 interactions but they just subscribed, it would be reset.
-            // The key is !userProfile.is_subscribed to show paywall.
-            // And interaction_count should be checked by checkUsageLimit.
-            // If we want to force paywall for *brand new* users post-login, this is a place.
-            // For now, let's ensure the checkUsageLimit handles it after profile load.
-        }
       } else {
         setUserProfile(null);
         setIsLoadingProfile(false);
+        // Load guest history if available
         const guestHistoryRaw = localStorage.getItem('aolbeamHistory_guest');
         if (guestHistoryRaw) {
           try {
@@ -170,7 +157,7 @@ export default function AOLBEAMPage() {
     return () => {
       authListener?.subscription?.unsubscribe();
     };
-  }, [supabase, fetchAndSetUserProfile, setHistory, userProfile]); // Added userProfile to dependency array for SIGNED_IN logic
+  }, [supabase, fetchAndSetUserProfile, setHistory]);
 
 
   const checkUsageLimit = useCallback((): boolean => {
@@ -192,7 +179,7 @@ export default function AOLBEAMPage() {
   const incrementInteraction = useCallback(async () => {
     if (currentUser && userProfile && !userProfile.is_subscribed && supabase) {
         const newCount = userProfile.interaction_count + 1;
-        setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null);
+        setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null); // Optimistic update
         try {
             const { error } = await supabase
                 .from('user_profiles')
@@ -220,7 +207,7 @@ export default function AOLBEAMPage() {
         userAnswer: item.userAnswer,
         selectedOption: item.selectedOption,
         evaluation: item.evaluation,
-        difficulty: item.difficulty, // Add difficulty
+        difficulty: item.difficulty,
     };
 
     if (supabase && currentUser) {
@@ -228,15 +215,15 @@ export default function AOLBEAMPage() {
             user_id: currentUser.id,
             topic: item.topic,
             problem_type: item.problemType,
-            difficulty: item.difficulty, // Add difficulty
+            difficulty: item.difficulty,
             problem_statement: item.problem.problemStatement,
             answer_format: item.problem.answerFormat,
             multiple_choice_options: item.problem.multipleChoiceOptions,
             correct_answer: item.problem.correctAnswer,
-            user_answer: null, // Will be updated later
-            selected_option: null, // Will be updated later
-            evaluation_is_correct: null, // Will be updated later
-            evaluation_feedback: null, // Will be updated later
+            user_answer: null, 
+            selected_option: null, 
+            evaluation_is_correct: null, 
+            evaluation_feedback: null, 
             is_topic_revised: false,
             topic_details_content: null,
             feedback_rating: null,
@@ -267,8 +254,8 @@ export default function AOLBEAMPage() {
 
   const updateLastHistoryItem = useCallback(async (updates: Partial<InteractionHistoryItem>) => {
     if (supabase && currentUser) {
-      let itemToUpdateId: string | undefined;
-      // Fetch the most recent interaction ID for this user
+      let itemToUpdateSupabaseId: string | undefined;
+      
       const { data: latestInteraction, error: fetchError } = await supabase
           .from('user_interactions')
           .select('id')
@@ -277,13 +264,12 @@ export default function AOLBEAMPage() {
           .limit(1)
           .single();
       
-      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows found, which is okay if it's the first interaction
+      if (fetchError && fetchError.code !== 'PGRST116') { 
           console.error("Error fetching last history item ID from Supabase for update:", fetchError);
-          // Potentially show a toast here or handle, but don't stop local updates
       }
-      itemToUpdateId = latestInteraction?.id;
+      itemToUpdateSupabaseId = latestInteraction?.id;
 
-      if (itemToUpdateId) {
+      if (itemToUpdateSupabaseId) {
         const dbUpdatePayload: any = {};
         if (updates.userAnswer !== undefined) dbUpdatePayload.user_answer = updates.userAnswer;
         if (updates.selectedOption !== undefined) dbUpdatePayload.selected_option = updates.selectedOption;
@@ -296,15 +282,14 @@ export default function AOLBEAMPage() {
         if (updates.feedbackRating !== undefined) dbUpdatePayload.feedback_rating = updates.feedbackRating;
         if (updates.feedbackComment !== undefined) dbUpdatePayload.feedback_comment = updates.feedbackComment;
         if (updates.timeTakenSeconds !== undefined) dbUpdatePayload.time_taken_seconds = updates.timeTakenSeconds;
-        // Note: difficulty and problem type are set at creation, not typically updated.
         
         if (Object.keys(dbUpdatePayload).length > 0) {
           try {
             const { error } = await supabase
               .from('user_interactions')
               .update(dbUpdatePayload)
-              .eq('id', itemToUpdateId)
-              .eq('user_id', currentUser.id); // Crucial: ensure user can only update their own
+              .eq('id', itemToUpdateSupabaseId)
+              .eq('user_id', currentUser.id); 
             if (error) {
               throw error;
             }
@@ -314,24 +299,19 @@ export default function AOLBEAMPage() {
           }
         }
       } else if (!currentUser) { 
-          // This block handles guest user updates (localStorage)
           setHistory(prevHistory => {
             if (prevHistory.length === 0) return prevHistory;
             const updatedItem: InteractionHistoryItem = {
               ...prevHistory[0],
               ...updates,
-              // Ensure nested objects are merged correctly if they exist in updates
               problem: updates.problem ? { ...prevHistory[0].problem!, ...updates.problem } : prevHistory[0].problem,
             };
             return [updatedItem, ...prevHistory.slice(1)];
           });
       } else {
-        // This case means a logged-in user, but we couldn't find a supabase_id for the last local item.
-        // This might happen if addToHistory failed to get a supabase_id.
-        // For now, we'll log a warning. A more robust solution might try to re-insert or handle this.
         console.warn("Could not determine which history item to update in Supabase for logged-in user.");
       }
-    } else if (!currentUser) { // Explicitly handle guest users again for clarity
+    } else if (!currentUser) { 
         setHistory(prevHistory => {
           if (prevHistory.length === 0) return prevHistory;
           const updatedItem: InteractionHistoryItem = {
@@ -342,7 +322,7 @@ export default function AOLBEAMPage() {
           return [updatedItem, ...prevHistory.slice(1)];
         });
     }
-  }, [setHistory, supabase, currentUser, toast]); // Removed local `history` from deps as we fetch Supabase ID
+  }, [setHistory, supabase, currentUser, toast]); 
 
 
   const handleGenerateProblem = async (topic: string, type: ProblemType, difficulty: DifficultyLevel) => {
@@ -363,7 +343,7 @@ export default function AOLBEAMPage() {
       await addToHistory({ 
         topic,
         problemType: type,
-        difficulty: difficulty, // Add difficulty
+        difficulty: difficulty,
         problem: result,
       });
       toast({ title: "Problem Generated!", description: `A new ${type} problem on "${topic}" (${difficulty}) is ready.` });
@@ -385,23 +365,23 @@ export default function AOLBEAMPage() {
       let evalOutput: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string };
       const updatesForHistory: Partial<InteractionHistoryItem> = { timeTakenSeconds };
 
-      if (currentProblemType === 'theory') {
+      if (['theory', 'conceptual', 'numerical', 'diagram_based'].includes(currentProblemType) && !currentProblem.multipleChoiceOptions?.length) {
         // Fetch details only if not already fetched for this problem context
         const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific topic details available for this evaluation.";
 
         evalOutput = await evaluateTheoryAnswer({
           question: currentProblem.problemStatement,
           studentAnswer: answer,
-          answerFormat: currentProblem.answerFormat, // Guidelines for AI evaluation
+          answerFormat: currentProblem.answerFormat, 
           topicDetails: fetchedDetailsForEval,
         });
         updatesForHistory.userAnswer = answer;
-      } else { // Practical (MCQ)
+      } else { // Practical (MCQ) or MCQ-style conceptual/numerical/diagram
         const isCorrect = answer === currentProblem.correctAnswer;
         evalOutput = {
           isCorrect,
           feedback: isCorrect
-            ? `Correct! ${currentProblem.answerFormat}` // answerFormat here is the explanation
+            ? `Correct! ${currentProblem.answerFormat}` 
             : `Incorrect. ${currentProblem.answerFormat} The correct option was: ${currentProblem.correctAnswer}`,
         };
         updatesForHistory.selectedOption = answer;
@@ -432,7 +412,7 @@ export default function AOLBEAMPage() {
     {
       console.error("Error fetching topic details:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to fetch topic details." });
-      setTopicDetails("Failed to load details. Please try again."); // Provide fallback UI feedback
+      setTopicDetails("Failed to load details. Please try again."); 
     } finally {
       setIsLoadingDetails(false);
     }
@@ -448,7 +428,6 @@ export default function AOLBEAMPage() {
       feedbackRating: rating,
       feedbackComment: comment,
     });
-    // Toast for feedback submission is handled within ProblemDisplay
   };
 
   const handleNewProblemSameTopic = () => {
@@ -461,8 +440,8 @@ export default function AOLBEAMPage() {
 
   const handleStartNew = () => {
     setCurrentTopic('');
-    // setCurrentProblemType('theory'); // Or keep last used?
-    // setCurrentDifficulty('medium');
+    // setCurrentProblemType('theory'); // Keep last used
+    // setCurrentDifficulty('medium'); // Keep last used
     setCurrentProblem(null);
     setEvaluationResult(null);
     setTopicDetails(null);
@@ -481,17 +460,17 @@ export default function AOLBEAMPage() {
             .update({
                 is_subscribed: true,
                 subscription_plan_id: planId,
-                interaction_count: 0, // Reset interaction count upon subscription
+                interaction_count: 0, 
                 subscription_started_at: new Date().toISOString()
             })
             .eq('id', currentUser.id)
-            .select() // Fetch the updated profile
+            .select() 
             .single();
 
         if (error) throw error;
 
         if (data) {
-            setUserProfile(data as UserProfile); // Update local profile state
+            setUserProfile(data as UserProfile); 
             setShowPaywall(false);
             toast({ title: "Subscription Activated!", description: "You now have unlimited access and your progress will be saved to your account." });
         }
@@ -528,14 +507,12 @@ export default function AOLBEAMPage() {
     } else {
       setCurrentUser(null);
       setUserProfile(null);
-      setShowPaywall(false); // Reset paywall state on logout
-      // Load guest history if available
+      setShowPaywall(false); 
       const guestHistoryRaw = localStorage.getItem('aolbeamHistory_guest');
       if (guestHistoryRaw) {
         try {
           const parsedGuestHistory = JSON.parse(guestHistoryRaw);
           setHistory(parsedGuestHistory);
-          // Optionally restore last guest session state
           if (parsedGuestHistory.length > 0) {
             const lastItem = parsedGuestHistory[0];
             setCurrentTopic(lastItem.topic);
@@ -549,21 +526,20 @@ export default function AOLBEAMPage() {
               setTopicDetails(null);
             }
           } else {
-            handleStartNew(); // Clear fields if guest history is empty
+            handleStartNew(); 
           }
         } catch (e) { 
           console.error("Error parsing guest history on logout:", e); 
-          handleStartNew(); // Clear fields on error
+          handleStartNew(); 
         }
       } else {
-        handleStartNew(); // Clear fields if no guest history
+        handleStartNew(); 
       }
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
     }
   };
 
 
-  // Restore last guest session if no user is logged in and history exists
   useEffect(() => {
     if (!isLoadingProfile && !currentUser && history.length > 0 && !currentProblem && !isLoadingProblem) {
       const lastItem = history[0];
@@ -586,17 +562,26 @@ export default function AOLBEAMPage() {
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
+  // Define navigation items
+  const navItems = [
+    { href: "/profile", label: "Profile", icon: ProfileIcon },
+    { href: "/pricing", label: "Pricing", icon: DollarSign },
+    { href: "/blog", label: "Blog", icon: Newspaper },
+    { href: "/contact-us", label: "Contact Us", icon: Mail },
+    { href: "/admin/blog", label: "Admin", icon: ShieldCheck },
+  ];
+
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <PaywallModal
         isOpen={showPaywall}
         onClose={() => {
-            // Only allow closing if it's not mandatory (i.e., user hit limit as guest, or logged in but not yet hit limit)
             const isActuallyMandatory = !!(currentUser && userProfile && !userProfile.is_subscribed && userProfile.interaction_count >= FREE_INTERACTION_LIMIT);
             if (!isActuallyMandatory) {
                 setShowPaywall(false);
             } else {
-                 toast({title: "Plan Selection Required", description: "Please select a plan to continue using AOLBEAM.", variant: "destructive"});
+                 toast({title: "Plan Selection Required", description: "Please select a plan to continue using AOLBEAM.", variant: "default"});
             }
         }}
         onSubscribe={handleSubscribe}
@@ -604,22 +589,23 @@ export default function AOLBEAMPage() {
         isMandatory={showPaywall && !!currentUser && !!userProfile && !userProfile.is_subscribed && (userProfile.interaction_count >= FREE_INTERACTION_LIMIT) }
       />
 
-      {/* Simplified Header */}
-      <header className="sticky top-0 z-30 w-full border-b bg-background/90 backdrop-blur-sm">
+      <header className="sticky top-0 z-30 w-full border-b bg-background/95 backdrop-blur-sm">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-primary">
               <Brain className="h-7 w-7" /> AOLBEAM
             </Link>
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center space-x-6">
-              <Link href="/profile" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Profile</Link>
-              <Link href="/pricing" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Pricing</Link>
-              <Link href="/blog" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Blog</Link>
-              <Link href="/contact-us" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Contact Us</Link>
-              <Link href="/admin/blog" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Admin</Link>
+            
+            <nav className="hidden md:flex items-center space-x-1">
+              {navItems.map((item) => (
+                <Button key={item.label} variant="ghost" asChild>
+                  <Link href={item.href} className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors px-3 py-2">
+                     {item.label}
+                  </Link>
+                </Button>
+              ))}
             </nav>
-            {/* Right side: Theme Toggle, User Menu / Login */}
+            
             <div className="flex items-center gap-2">
               <ThemeToggle />
               {isLoadingProfile && currentUser && <Button variant="outline" size="sm" disabled><PageLoader className="mr-2 h-4 w-4 animate-spin" />Loading...</Button>}
@@ -637,7 +623,7 @@ export default function AOLBEAMPage() {
                       </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href="/profile">
-                        <UserCircle className="mr-2 h-4 w-4" /> Profile
+                        <ProfileIcon className="mr-2 h-4 w-4" /> Profile
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleSignOut}>
@@ -652,34 +638,33 @@ export default function AOLBEAMPage() {
                     </Button>
                  )
               )}
-              {/* Mobile Navigation Toggle */}
               <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileNavOpen(!mobileNavOpen)}>
                 <Menu className="h-6 w-6" />
                 <span className="sr-only">Toggle Menu</span>
               </Button>
             </div>
           </div>
-          {/* Mobile Navigation Menu */}
           {mobileNavOpen && (
             <div className="md:hidden border-t py-2">
-              <nav className="flex flex-col space-y-2">
-                <Link href="/profile" className="py-2 px-3 rounded-md text-sm font-medium text-muted-foreground hover:text-primary hover:bg-accent" onClick={()=>setMobileNavOpen(false)}>Profile</Link>
-                <Link href="/pricing" className="py-2 px-3 rounded-md text-sm font-medium text-muted-foreground hover:text-primary hover:bg-accent" onClick={()=>setMobileNavOpen(false)}>Pricing</Link>
-                <Link href="/blog" className="py-2 px-3 rounded-md text-sm font-medium text-muted-foreground hover:text-primary hover:bg-accent" onClick={()=>setMobileNavOpen(false)}>Blog</Link>
-                <Link href="/contact-us" className="py-2 px-3 rounded-md text-sm font-medium text-muted-foreground hover:text-primary hover:bg-accent" onClick={()=>setMobileNavOpen(false)}>Contact Us</Link>
-                <Link href="/admin/blog" className="py-2 px-3 rounded-md text-sm font-medium text-muted-foreground hover:text-primary hover:bg-accent" onClick={()=>setMobileNavOpen(false)}>Admin</Link>
+              <nav className="flex flex-col space-y-1">
+                {navItems.map((item) => (
+                   <Button key={item.label} variant="ghost" asChild className="justify-start">
+                    <Link href={item.href} className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full" onClick={()=>setMobileNavOpen(false)}>
+                       <item.icon className="mr-3 h-5 w-5" /> {item.label}
+                    </Link>
+                  </Button>
+                ))}
               </nav>
             </div>
           )}
         </div>
       </header>
       
-      {/* Hero Section */}
-      <section className="py-16 md:py-24 text-center bg-gradient-to-br from-primary/10 via-background to-background">
+      <section className="py-16 md:py-24 text-center bg-background"> {/* Removed hero gradient */}
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
-              AOLBEAM: <span className="text-primary">Access of Learning</span>
+             AOLBEAM: <span className="text-primary">Access of Learning</span>
             </h1>
             <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
               Beam into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
@@ -695,17 +680,14 @@ export default function AOLBEAMPage() {
       </section>
 
       <main ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16 flex-grow">
-        {/* Loading state for profile for logged-in users */}
         {isLoadingProfile && currentUser && (
             <div className="flex justify-center items-center h-64">
                 <PageLoader className="h-12 w-12 animate-spin text-primary" />
                 <p className="ml-4 text-lg text-muted-foreground">Loading your profile...</p>
             </div>
         )}
-        {/* Show content if profile is loaded OR if user is a guest */}
         {(!isLoadingProfile || !currentUser) && (
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8">
-              {/* Main Interaction Area */}
               <div className="lg:col-span-3 flex flex-col gap-6">
                 <ProblemGenerator
                   onGenerate={handleGenerateProblem}
@@ -716,7 +698,7 @@ export default function AOLBEAMPage() {
                 />
                 {currentProblem && (
                 <>
-                <div className="flex gap-2 mt-0"> {/* Adjusted margin */}
+                <div className="flex gap-2 mt-0"> 
                     <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1" disabled={isLoadingProblem || (currentUser && isLoadingProfile)}>
                         <RefreshCcw className="mr-2 h-4 w-4" /> Another (Same Topic)
                     </Button>
@@ -737,22 +719,21 @@ export default function AOLBEAMPage() {
                 {evaluationResult && <EvaluationResult evaluation={evaluationResult} />}
               </div>
 
-              {/* Sidebar-like Area (Revision & History) */}
               <div className="lg:col-span-2 flex flex-col gap-6">
                 <TopicRevision
-                  topic={currentProblem ? currentTopic : null} // Only pass topic if there's a problem
+                  topic={currentProblem ? currentTopic : null} 
                   details={topicDetails}
                   onFetchDetails={handleFetchTopicDetails}
                   isLoading={isLoadingDetails || (currentUser && isLoadingProfile)}
                 />
                 <HistoryView
-                    history={currentUser && userProfile ? [] : history} // For guests, show local history. For logged-in, history is on profile page.
+                    history={currentUser && userProfile ? [] : history} 
                 />
               </div>
             </div>
         )}
       </main>
-      <Footer /> {/* Replaced inline footer with component */}
+      <Footer /> 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 pb-4 text-center">
         <p className="text-xs text-muted-foreground">
             {isLoadingProfile && currentUser ? "Loading interactions count..." :

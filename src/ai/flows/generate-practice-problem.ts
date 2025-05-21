@@ -16,7 +16,7 @@ import {z} from 'genkit';
 
 const GeneratePracticeProblemInputSchema = z.object({
   topic: z.string().describe('The topic for which to generate a practice problem.'),
-  problemType: z.enum(['theory', 'practical']).describe('The type of problem to generate (theory or practical).'),
+  problemType: z.enum(['theory', 'practical', 'conceptual', 'numerical', 'diagram_based']).describe('The type of problem to generate.'),
   difficulty: z.enum(['easy', 'medium', 'hard']).optional().default('medium').describe('The desired difficulty level for the problem (easy, medium, hard).'),
 });
 export type GeneratePracticeProblemInput = z.infer<typeof GeneratePracticeProblemInputSchema>;
@@ -26,10 +26,10 @@ const GeneratePracticeProblemOutputSchema = z.object({
   answerFormat: z
     .string()
     .describe(
-      'For theory questions, this describes the expected content and structure (e.g., "Explain in 2-3 sentences..."). For practical questions, this provides an explanation for why the correct answer is correct or general guidance.'
+      'For theory-like questions (theory, conceptual, diagram-based if free-text): describes expected content/structure (e.g., "Explain in 2-3 sentences..."). For practical/MCQ questions (practical, or conceptual/numerical/diagram-based if MCQ): provides an explanation for why the correct answer is correct or general guidance/steps to solve.'
     ),
-  multipleChoiceOptions: z.array(z.string().describe('Multiple choice option. Should use LaTeX for math, Markdown for code, and describe/use Mermaid for diagrams if applicable.')).optional().describe('Multiple choice options for practical problems.'),
-  correctAnswer: z.string().describe('The correct answer. For practical problems, this is the exact string of the correct multiple-choice option. For theory problems, this is the ideal model answer or key points. Should use LaTeX for math, Markdown for code, and describe/use Mermaid for diagrams if applicable.'),
+  multipleChoiceOptions: z.array(z.string().describe('Multiple choice option. Should use LaTeX for math, Markdown for code, and describe/use Mermaid for diagrams if applicable.')).optional().describe('Multiple choice options. Primarily for "practical" type, but can be used for "conceptual", "numerical", or "diagram_based" if appropriate for an MCQ format.'),
+  correctAnswer: z.string().describe('The correct answer. For MCQ problems, this is the exact string of the correct multiple-choice option. For theory/free-text problems (theory, conceptual, numerical if not MCQ, diagram-based if free-text), this is the ideal model answer or key points/numerical value. Should use LaTeX for math, Markdown for code, and describe/use Mermaid for diagrams if applicable.'),
 });
 export type GeneratePracticeProblemOutput = z.infer<typeof GeneratePracticeProblemOutputSchema>;
 
@@ -54,24 +54,59 @@ Topic: {{{topic}}}
 Problem Type: {{{problemType}}}
 Difficulty: {{{difficulty}}}
 
-{
-  "problemStatement": "",
-  "answerFormat": "",
-  "multipleChoiceOptions": [],
-  "correctAnswer": ""
-}
+Instructions based on Problem Type:
 
-If the problem type is "theory":
-- Generate a problem that requires a written answer, matching the specified difficulty ({{{difficulty}}}).
-- The 'answerFormat' field should describe the expected content and structure of the answer (e.g., "Explain in 2-3 sentences including a key formula.").
-- The 'correctAnswer' field should contain a model or ideal answer.
-- Do not include 'multipleChoiceOptions' or ensure it's an empty array if the schema requires it.
+If Problem Type is "theory":
+- Generate a problem that requires a written, explanatory answer, matching the specified difficulty ({{{difficulty}}}).
+- 'problemStatement' should pose the question.
+- 'answerFormat' should describe the expected content and structure of the answer (e.g., "Explain in 2-3 sentences including a key formula.").
+- 'correctAnswer' should contain a model or ideal textual answer.
+- 'multipleChoiceOptions' should be an empty array or not provided.
 
-If the problem type is "practical":
+If Problem Type is "practical":
 - Generate a multiple-choice problem, matching the specified difficulty ({{{difficulty}}}).
-- Populate the 'multipleChoiceOptions' array with the choices.
-- The 'correctAnswer' field MUST be the exact string of one of the 'multipleChoiceOptions'.
-- The 'answerFormat' field should provide a brief explanation for *why* the 'correctAnswer' is correct, or general guidance on solving this type of practical problem.
+- 'problemStatement' should pose the question.
+- Populate 'multipleChoiceOptions' array with distinct choices.
+- 'correctAnswer' MUST be the exact string of one of the 'multipleChoiceOptions'.
+- 'answerFormat' should provide a brief explanation for *why* the 'correctAnswer' is correct, or general guidance on solving this type of practical problem.
+
+If Problem Type is "conceptual":
+- Generate a problem that tests deep understanding of concepts, matching the specified difficulty ({{{difficulty}}}).
+- This can be a theory-style question (requiring textual explanation) OR an MCQ.
+- If theory-style:
+    - 'answerFormat' should describe expected content/structure.
+    - 'correctAnswer' should be a model textual answer.
+    - 'multipleChoiceOptions' should be empty.
+- If MCQ-style:
+    - Populate 'multipleChoiceOptions'.
+    - 'correctAnswer' MUST be the exact string of one option.
+    - 'answerFormat' should explain why the chosen concept/option is correct.
+
+If Problem Type is "numerical":
+- Generate a problem that requires a numerical calculation or answer, matching the specified difficulty ({{{difficulty}}}).
+- 'problemStatement' should present the problem, possibly with data.
+- This can be free-text (expecting a number) OR an MCQ with numerical options.
+- If free-text:
+    - 'answerFormat' should guide on units or precision, and briefly outline solution steps.
+    - 'correctAnswer' should be the numerical answer (e.g., "42", "3.14 m/s^2").
+    - 'multipleChoiceOptions' should be empty.
+- If MCQ-style:
+    - Populate 'multipleChoiceOptions' with numerical choices.
+    - 'correctAnswer' MUST be the exact string of one numerical option.
+    - 'answerFormat' should explain the calculation steps leading to the correct option.
+
+If Problem Type is "diagram_based":
+- Generate a problem that requires interpretation, analysis, or creation related to a diagram, matching the specified difficulty ({{{difficulty}}}).
+- 'problemStatement' MUST include a diagram (using Mermaid.js syntax like \`\`\`mermaid\\n...\`\`\` if possible, otherwise a clear textual description).
+- This can be a theory-style question OR an MCQ.
+- If theory-style (e.g., "Explain the process shown in the diagram"):
+    - 'answerFormat' should describe expected content/structure of the explanation.
+    - 'correctAnswer' should be a model textual answer explaining the diagram.
+    - 'multipleChoiceOptions' should be empty.
+- If MCQ-style (e.g., "What does label X in the diagram represent?"):
+    - Populate 'multipleChoiceOptions'.
+    - 'correctAnswer' MUST be the exact string of one option.
+    - 'answerFormat' should explain why the chosen option is correct in relation to the diagram.
 
 Remember to apply the content formatting rules (LaTeX, Markdown for code, Mermaid/descriptions for diagrams) to all relevant fields.
 
@@ -90,4 +125,3 @@ const generatePracticeProblemFlow = ai.defineFlow(
     return output!;
   }
 );
-
