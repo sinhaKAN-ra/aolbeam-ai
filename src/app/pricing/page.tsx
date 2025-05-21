@@ -1,19 +1,15 @@
 // src/app/pricing/page.tsx
 "use client";
 
-import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription as PlanCardDescription } from '@/components/ui/card';
 import { ArrowLeft, Check, Info, Zap, CreditCard } from 'lucide-react';
 import type { SubscriptionPlan } from '@/types';
 
-// Note: Metadata export is fine in a Client Component at the page level.
-// Next.js will handle it appropriately.
-export const metadata: Metadata = {
-  title: 'Pricing Plans - AOLBEAM',
-  description: 'Choose a subscription plan that fits your needs and unlock unlimited access to AOLBEAM features.',
-};
+// Removed metadata export as it's not allowed in Client Components.
+// If specific metadata is needed for this page, it should be handled
+// in a parent Server Component (e.g., a layout.tsx for this route).
 
 const plans: SubscriptionPlan[] = [
   {
@@ -136,3 +132,4 @@ export default function PricingPage() {
     </div>
   );
 }
+
