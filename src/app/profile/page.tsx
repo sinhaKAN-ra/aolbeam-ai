@@ -14,7 +14,7 @@ import MathRenderer from '@/components/MathRenderer';
 import type { ProblemType } from '@/types';
 import Footer from '@/components/Footer';
 
-import { ArrowLeft, BarChart3, History, Lightbulb, UserCircle, Settings, Star, MessageSquareText, ListChecks, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, BarChart3, History, Lightbulb, UserCircle, Settings, Star, MessageSquareText, ListChecks, CheckCircle, XCircle, TimerIcon as TimerHistoryIcon } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Your Profile - AOLBEAM',
@@ -36,6 +36,7 @@ interface FetchedInteraction {
   evaluation_feedback?: string | null;
   is_topic_revised?: boolean | null;
   topic_details_content?: string | null;
+  time_taken_seconds?: number | null; // Added this field
 }
 
 interface DisplayHistoryItem {
@@ -57,7 +58,20 @@ interface DisplayHistoryItem {
   };
   isTopicRevised?: boolean;
   topicDetails?: string | null;
+  timeTakenSeconds?: number | null; // Added this field
 }
+
+const formatTimeTakenForDisplay = (totalSeconds?: number | null): string | null => {
+  if (totalSeconds === null || totalSeconds === undefined || totalSeconds < 0) {
+    return null;
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
+};
 
 
 export default async function ProfilePage() {
@@ -99,6 +113,7 @@ export default async function ProfilePage() {
           : undefined,
         isTopicRevised: item.is_topic_revised || false,
         topicDetails: item.topic_details_content || null,
+        timeTakenSeconds: item.time_taken_seconds, // Map the new field
       }));
     }
   } catch (e) {
@@ -295,7 +310,7 @@ export default async function ProfilePage() {
                             <span className="font-medium truncate max-w-[150px] sm:max-w-[250px] md:max-w-xs">{item.topic}</span>
                           </div>
                           {item.evaluation && (
-                             <Badge variant={item.evaluation.isCorrect ? "default" : "destructive"} className={`${item.evaluation.isCorrect ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'} text-white /* Ensure text is white for contrast */ ml-2`}>
+                             <Badge variant={item.evaluation.isCorrect ? "default" : "destructive"} className={`${item.evaluation.isCorrect ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'} text-white ml-2`}>
                               {item.evaluation.isCorrect ? <CheckCircle size={14}/> : <XCircle size={14}/>}
                               <span className="ml-1">{item.evaluation.isCorrect ? 'Correct' : 'Incorrect'}</span>
                             </Badge>
@@ -341,6 +356,14 @@ export default async function ProfilePage() {
                               <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.evaluation.feedback} /></div>
                             </div>
                           )}
+                          {item.timeTakenSeconds !== null && item.timeTakenSeconds !== undefined && (
+                            <div>
+                              <strong className="block text-muted-foreground mb-1 flex items-center gap-1">
+                                <TimerHistoryIcon size={14} /> Time Taken:
+                              </strong>
+                              <p className="p-2 rounded bg-muted/30">{formatTimeTakenForDisplay(item.timeTakenSeconds)}</p>
+                            </div>
+                          )}
                           {item.isTopicRevised && item.topicDetails && (
                             <div>
                               <strong className="block text-muted-foreground mb-1">Revised Details:</strong>
@@ -366,3 +389,5 @@ export default async function ProfilePage() {
     </div>
   );
 }
+
+    
