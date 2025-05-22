@@ -2,7 +2,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import Link from 'next/link'; // Keep Link for other uses if any
+// Link component is now in Header
+// import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
 import { useToast } from '@/hooks/use-toast';
@@ -40,8 +41,7 @@ const ALL_CONCRETE_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 
 
 export default function AOLBEAMPage() {
   const { toast } = useToast();
-  // Supabase client for page-specific logic (paywall, history saving)
-  // The global Header will manage its own client for auth display
+  
   const [supabase] = useState<SupabaseClient>(() => {
     console.log('Page: Initializing Supabase client...');
     return createClientComponentClient();
@@ -72,10 +72,11 @@ export default function AOLBEAMPage() {
     problemGeneratorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const fetchPageUserProfile = useCallback(async (user: User) => {
+  const fetchAndSetUserProfile = useCallback(async (user: User) => {
+    console.log(`Page: Attempting to fetch profile from user_profiles table for user: ${user.id}`);
     setIsLoadingPageProfile(true);
     setPageUserProfile(null); 
-    console.log(`Page: Attempting to fetch profile for user: ${user.id}`);
+
     try {
       let { data: profileData, error: fetchError } = await supabase
         .from('user_profiles')
@@ -129,7 +130,7 @@ export default function AOLBEAMPage() {
       setIsLoadingPageProfile(false);
       console.log(`Page: Profile fetching complete. isLoadingPageProfile: ${false}, pageUserProfile email: ${pageUserProfile?.email}`);
     }
-  }, [supabase, toast, pageUserProfile?.email]);
+  }, [supabase, toast]); // N.B. pageUserProfile?.email was removed from dep array to avoid re-fetch loops
 
 
   useEffect(() => {
@@ -139,7 +140,8 @@ export default function AOLBEAMPage() {
       setPageCurrentUser(user);
       
       if (user) {
-        await fetchPageUserProfile(user);
+        console.log('Page: User authenticated, fetching profile...');
+        await fetchAndSetUserProfile(user);
       } else {
         setPageUserProfile(null);
         setIsLoadingPageProfile(false); 
@@ -147,25 +149,38 @@ export default function AOLBEAMPage() {
     };
 
     const checkPageUser = async () => {
+      console.log('Page: Checking for existing session...');
       setIsLoadingPageProfile(true); 
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user ?? null;
       setPageCurrentUser(user); 
       if (user) {
-        await fetchPageUserProfile(user);
+        await fetchAndSetUserProfile(user);
       } else {
         setIsLoadingPageProfile(false); 
       }
     };
-
+    
+    console.log('Page: Setting up auth subscription...');
     const { data: { subscription } } = supabase.auth.onAuthStateChange(handlePageAuthChange);
     checkPageUser(); 
 
     return () => {
       subscription?.unsubscribe();
-      console.log("Page: Auth subscription cleaned up.");
+      console.log("Page: Cleaning up auth subscription");
     };
-  }, [supabase, fetchPageUserProfile]);
+  }, [supabase, fetchAndSetUserProfile]);
+
+  useEffect(() => {
+    console.log('Page: Profile state updated - isLoadingProfile:', isLoadingPageProfile, 'pageCurrentUser:', !!pageCurrentUser, 'pageUserProfile email:', pageUserProfile?.email);
+  }, [isLoadingPageProfile, pageCurrentUser, pageUserProfile]);
+
+  useEffect(() => {
+    console.log("Page: Cleaning up AOLBEAMPage component");
+    return () => {
+      // Any other cleanup logic for the component itself
+    };
+  }, []);
 
   const checkUsageLimit = useCallback((): boolean => {
     if (pageCurrentUser && pageUserProfile) {
@@ -182,10 +197,6 @@ export default function AOLBEAMPage() {
     }
     return false; 
   }, [pageCurrentUser, pageUserProfile, guestInteractionCount]);
-
-  useEffect(() => {
-    console.log('Page: Profile state updated - isLoadingPageProfile:', isLoadingPageProfile, 'pageCurrentUser:', !!pageCurrentUser, 'pageUserProfile email:', pageUserProfile?.email);
-  }, [isLoadingPageProfile, pageCurrentUser, pageUserProfile]);
 
 
   const incrementInteraction = useCallback(async () => {
@@ -231,7 +242,6 @@ export default function AOLBEAMPage() {
     setHistory(prevHistory => {
       const updatedHistory = [newHistoryItem, ...prevHistory].slice(0, 50);
       if (pageCurrentUser && itemToAdd.problem && itemToAdd.problem.problemStatement) {
-          // Try to save to Supabase if user is logged in
           const dbRecord: any = { 
               user_id: pageCurrentUser.id,
               topic: itemToAdd.topic,
@@ -241,7 +251,6 @@ export default function AOLBEAMPage() {
               answer_format: itemToAdd.problem.answerFormat,
               multiple_choice_options: itemToAdd.problem.multipleChoiceOptions,
               correct_answer: itemToAdd.problem.correctAnswer,
-              // other fields will be null initially
           };
           supabase.from('user_interactions').insert(dbRecord).select('id').single()
           .then(({ data: dbData, error: dbError }) => {
@@ -249,7 +258,6 @@ export default function AOLBEAMPage() {
                   console.error("Page: Error saving history to Supabase:", dbError);
                   toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account. " + dbError.message });
               } else if (dbData) {
-                  // Update local history item with supabase_id
                   setHistory(prev => prev.map(hItem => 
                       hItem.id === newHistoryItem.id ? { ...hItem, supabase_id: dbData.id } : hItem
                   ));
@@ -273,7 +281,7 @@ export default function AOLBEAMPage() {
       itemToUpdateSupabaseId = updatedItem.supabase_id;
       const newHistory = [updatedItem, ...prevHistory.slice(1)];
 
-      if (supabase && pageCurrentUser && pageUserProfile && itemToUpdateSupabaseId) { 
+      if (supabase && pageCurrentUser && itemToUpdateSupabaseId) { 
         const dbUpdatePayload: any = {};
         if (updates.userAnswer !== undefined) dbUpdatePayload.user_answer = updates.userAnswer;
         if (updates.selectedOption !== undefined) dbUpdatePayload.selected_option = updates.selectedOption;
@@ -297,11 +305,11 @@ export default function AOLBEAMPage() {
           });
         }
       } else if (supabase && pageCurrentUser && !itemToUpdateSupabaseId && prevHistory[0] && Object.keys(updates).length > 0) {
-          console.warn("Page: Attempted to update history in Supabase, but supabase_id was missing for the last item.");
+          console.warn("Page: Attempted to update history in Supabase, but supabase_id was missing for the last item:", prevHistory[0]);
       }
       return newHistory;
     });
-  }, [setHistory, supabase, pageCurrentUser, pageUserProfile, toast]); 
+  }, [setHistory, supabase, pageCurrentUser, toast]); // pageUserProfile removed from deps to avoid loops
 
 
   const handleGenerateProblem = async (topic: string, type: ProblemType, difficulty: DifficultyLevel) => {
@@ -460,16 +468,15 @@ export default function AOLBEAMPage() {
     }
   };
 
-  // Login/Logout are handled by global Header, but paywall needs to know if user is logged in
   const handleLoginForPaywall = async () => {
     // This function would be called by the PaywallModal's "Login/Register" button
     // The actual Google Sign-In is initiated by the global Header.
     // We just need to make sure the paywall closes or re-evaluates after login.
-    // For now, it's implicitly handled by the auth state change.
   };
 
 
   useEffect(() => {
+    // Load last interaction for guests from localStorage if no current problem is active
     if (!isLoadingPageProfile && !pageCurrentUser && history.length > 0 && !currentProblem && !isLoadingProblem) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
@@ -510,20 +517,19 @@ export default function AOLBEAMPage() {
             }
         }}
         onSubscribe={handleSubscribe}
-        onLoginRegister={handleLoginForPaywall} // Login is handled globally, this might just close modal or show spinner
+        onLoginRegister={handleLoginForPaywall}
         isMandatory={showPaywall && !!(pageCurrentUser && pageUserProfile && !pageUserProfile.is_subscribed && ((pageUserProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT)) }
       />
-
-      {/* Header is now global via layout.tsx */}
       
-      <section className="py-16 md:py-24 text-center bg-gradient-to-br from-primary/80 via-primary/50 to-amber-300/50">
+      {/* Hero Section */}
+      <section className="py-16 md:py-24 text-center bg-background"> {/* Removed hero gradient */}
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
-             AOLBEAM: Access of Learning
+             <span className="text-primary">Access of Learning</span>
             </h1>
             <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
-              Beam into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
+            <span className="text-primary">Beam</span> into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
               Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
             </p>
             <div className="mt-10">
@@ -538,7 +544,6 @@ export default function AOLBEAMPage() {
       <main ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16 flex-grow">
         {isLoadingPageProfile && pageCurrentUser && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-            {/* Placeholder for loading profile */}
             <p>Loading your profile...</p>
           </div>
         )}
