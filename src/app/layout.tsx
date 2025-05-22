@@ -5,7 +5,8 @@ import './globals.css';
 import 'katex/dist/katex.min.css'; // Import KaTeX CSS
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
-import { Analytics } from "@vercel/analytics/next"import Header from '@/components/Header'; // Import the new Header
+import { Analytics } from "@vercel/analytics/next";
+import Header from '@/components/Header'; // Import the new Header
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
