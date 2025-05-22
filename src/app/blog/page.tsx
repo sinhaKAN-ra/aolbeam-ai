@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, CalendarDays } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import Image from 'next/image';
 import Footer from '@/components/Footer';
 
@@ -47,17 +47,7 @@ const placeholderPosts = [
 export default function BlogListPage() {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="py-4 bg-card/50 border-b mb-8">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <Link href="/" className="text-3xl font-bold text-primary">AOLBEAM</Link>
-          <Button asChild variant="outline">
-            <Link href="/">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
-            </Link>
-          </Button>
-        </div>
-      </header>
-
+      {/* Header is now global */}
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-3 text-primary">AOLBEAM Blog</h1>
@@ -107,3 +97,5 @@ export default function BlogListPage() {
     </div>
   );
 }
+
+    

@@ -1,9 +1,9 @@
 
 // src/app/blog/[slug]/page.tsx
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import Link from 'next/link'; // Keep Link for internal navigation if any
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CalendarDays, UserCircle } from 'lucide-react';
+import { CalendarDays, UserCircle } from 'lucide-react';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import Footer from '@/components/Footer';
@@ -71,17 +71,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="py-4 bg-card/50 border-b mb-8">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <Link href="/" className="text-3xl font-bold text-primary">AOLBEAM</Link>
-          <Button asChild variant="outline">
-            <Link href="/blog">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Blog
-            </Link>
-          </Button>
-        </div>
-      </header>
-
+      {/* Header is now global */}
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
         <article className="max-w-3xl mx-auto bg-card p-6 sm:p-8 rounded-lg shadow-xl">
           <header className="mb-8">
@@ -118,3 +108,5 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
     </div>
   );
 }
+
+    

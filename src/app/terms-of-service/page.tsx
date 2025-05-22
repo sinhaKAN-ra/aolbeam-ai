@@ -2,8 +2,10 @@
 // src/app/terms-of-service/page.tsx
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+// Button removed as global header provides navigation
+// import { Button } from '@/components/ui/button';
+// ArrowLeft removed as global header provides navigation
+// import { ArrowLeft } from 'lucide-react';
 import Footer from '@/components/Footer';
 
 export const metadata: Metadata = {
@@ -14,16 +16,7 @@ export const metadata: Metadata = {
 export default function TermsOfServicePage() {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="py-4 bg-card/50 border-b mb-8">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <Link href="/" className="text-3xl font-bold text-primary">AOLBEAM</Link>
-           <Button asChild variant="outline">
-            <Link href="/">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
-            </Link>
-          </Button>
-        </div>
-      </header>
+      {/* Header is now global */}
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
         <div className="max-w-3xl mx-auto bg-card p-6 sm:p-8 rounded-lg shadow-lg">
           <h2 className="text-2xl font-semibold mb-6 text-center">Terms of Service</h2>
@@ -70,3 +63,5 @@ export default function TermsOfServicePage() {
     </div>
   );
 }
+
+    

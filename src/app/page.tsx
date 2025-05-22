@@ -2,15 +2,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import Link from 'next/link';
+import Link from 'next/link'; // Keep Link for other uses if any
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
+
 import { useToast } from '@/hooks/use-toast';
 import {
   generatePracticeProblem,
@@ -23,9 +17,8 @@ import {
 } from '@/ai/flows/evaluate-theory-answer';
 import {
   fetchTopicDetails,
-  type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, UserCircle, LogOut, Brain, Loader2 as PageLoader, Menu, ArrowRight, ShieldCheck, Settings, Home, Newspaper, Mail, User as ProfileIcon, BarChart3, Zap, Info } from 'lucide-react';
+import { RefreshCcw, FilePlus2, ArrowRight } from 'lucide-react';
 import { createClientComponentClient, type SupabaseClient } from '@supabase/auth-helpers-nextjs';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -36,7 +29,7 @@ import { EvaluationResult } from '@/components/EvaluationResult';
 import { TopicRevision } from '@/components/TopicRevision';
 import { HistoryView } from '@/components/HistoryView';
 import { PaywallModal } from '@/components/PaywallModal';
-import { ThemeToggle } from '@/components/ThemeToggle';
+// ThemeToggle removed as it's in the global Header
 import Footer from '@/components/Footer';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 
@@ -44,19 +37,19 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 const FREE_INTERACTION_LIMIT = 5;
 const ALL_CONCRETE_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
 
-const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
 
 export default function AOLBEAMPage() {
   const { toast } = useToast();
-  // Initialize Supabase client once and make it stable
+  // Supabase client for page-specific logic (paywall, history saving)
+  // The global Header will manage its own client for auth display
   const [supabase] = useState<SupabaseClient>(() => {
-    console.log('Initializing Supabase client...');
+    console.log('Page: Initializing Supabase client...');
     return createClientComponentClient();
   });
   
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(true); // Start true as we'll check session
+  const [pageCurrentUser, setPageCurrentUser] = useState<User | null>(null);
+  const [pageUserProfile, setPageUserProfile] = useState<UserProfile | null>(null);
+  const [isLoadingPageProfile, setIsLoadingPageProfile] = useState<boolean>(true);
 
   const [currentTopic, setCurrentTopic] = useState<string>('');
   const [currentProblemType, setCurrentProblemType] = useState<ProblemType>('theory');
@@ -79,46 +72,28 @@ export default function AOLBEAMPage() {
     problemGeneratorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const fetchAndSetUserProfile = useCallback(async (user: User) => {
-    setIsLoadingProfile(true);
-    setUserProfile(null); 
-
-    if (!supabase) {
-      console.error("Supabase client not available for profile fetch.");
-      toast({
-        variant: 'destructive',
-        title: 'Connection Error',
-        description: 'Failed to connect to the server. Please try again.'
-      });
-      setIsLoadingProfile(false);
-      return;
-    }
-    
+  const fetchPageUserProfile = useCallback(async (user: User) => {
+    setIsLoadingPageProfile(true);
+    setPageUserProfile(null); 
+    console.log(`Page: Attempting to fetch profile for user: ${user.id}`);
     try {
-      console.log(`Attempting to fetch profile from user_profiles table for user: ${user.id}`);
       let { data: profileData, error: fetchError } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
-      console.log('Profile fetch response - Data:', profileData, 'Error:', fetchError);
-
       if (profileData) {
-        console.log('Existing profile loaded:', profileData);
-        setUserProfile(profileData as UserProfile);
+        setPageUserProfile(profileData as UserProfile);
       } else if (fetchError && fetchError.code === 'PGRST116') { 
-        console.log('No profile found (PGRST116), attempting to create as fallback (trigger should ideally handle this)...');
-        
+        console.log('Page: No profile found (PGRST116), attempting to create as fallback...');
         const newProfilePayload: Omit<UserProfile, 'created_at' | 'updated_at'> = { 
           id: user.id,
           email: user.email!, 
           full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'New User',
           interaction_count: 0,
           is_subscribed: false,
-          // subscription_plan_id, subscription_started_at, subscription_ends_at will be null/undefined by default
         };
-
         const { data: insertedProfile, error: insertError } = await supabase
           .from('user_profiles')
           .insert(newProfilePayload)
@@ -126,162 +101,117 @@ export default function AOLBEAMPage() {
           .single();
         
         if (insertedProfile) {
-            console.log('New profile created successfully via direct insert:', insertedProfile);
-            setUserProfile(insertedProfile as UserProfile);
+            setPageUserProfile(insertedProfile as UserProfile);
         } else if (insertError && insertError.code === '23505') { 
-            console.log('Profile insert failed due to unique violation (profile likely created by trigger). Re-fetching...');
+            console.log('Page: Profile insert failed due to unique violation (profile likely created by trigger). Re-fetching...');
             const { data: refetchedData, error: refetchError } = await supabase
                 .from('user_profiles')
                 .select('*')
                 .eq('id', user.id)
                 .single();
-
-            if (refetchedData) {
-                console.log('Profile successfully re-fetched:', refetchedData);
-                setUserProfile(refetchedData as UserProfile);
-            } else {
-                console.error('Error re-fetching profile after unique violation:', refetchError);
-                toast({
-                    variant: 'destructive',
-                    title: 'Profile Sync Error',
-                    description: `Could not sync your profile: ${refetchError?.message || 'Unknown error'}`
-                });
+            if (refetchedData) setPageUserProfile(refetchedData as UserProfile);
+            else {
+                console.error('Page: Error re-fetching profile after unique violation:', refetchError);
+                toast({ variant: 'destructive', title: 'Profile Sync Error', description: `Could not sync your profile: ${refetchError?.message || 'Unknown error'}`});
             }
         } else { 
-            console.error('Error creating user profile during fallback insert:', insertError);
-            toast({
-                variant: 'destructive',
-                title: 'Profile Creation Failed',
-                description: `Could not create your profile: ${insertError?.message || 'Unknown error'}`
-            });
+            console.error('Page: Error creating user profile during fallback insert:', insertError);
+            toast({ variant: 'destructive', title: 'Profile Creation Failed', description: `Could not create your profile: ${insertError?.message || 'Unknown error'}`});
         }
       } else if (fetchError) { 
-        console.error('Database error fetching profile:', fetchError);
-        toast({ 
-          variant: 'destructive', 
-          title: 'Profile Error', 
-          description: `Could not load your profile: ${fetchError.message}`
-        });
+        console.error('Page: Database error fetching profile:', fetchError);
+        toast({ variant: 'destructive', title: 'Profile Error', description: `Could not load your profile: ${fetchError.message}`});
       }
     } catch (error) { 
-      console.error('Unexpected error during profile setup:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Profile Setup Error',
-        description: error instanceof Error ? error.message : 'An unknown error occurred.'
-      });
+      console.error('Page: Unexpected error during profile setup:', error);
+      toast({ variant: 'destructive', title: 'Profile Setup Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
     } finally {
-      console.log('Finished profile processing. Setting isLoadingProfile to false.');
-      setIsLoadingProfile(false);
+      setIsLoadingPageProfile(false);
+      console.log(`Page: Profile fetching complete. isLoadingPageProfile: ${false}, pageUserProfile email: ${pageUserProfile?.email}`);
     }
-  }, [toast, supabase]); // Depends on stable supabase client and toast
+  }, [supabase, toast, pageUserProfile?.email]);
 
 
   useEffect(() => {
-    // This effect sets up the auth state listener and initial user check.
-    // It depends on `supabase` (stable) and `fetchAndSetUserProfile` (stable callback).
-
-    const handleAuthChange = async (event: AuthChangeEvent, session: Session | null) => {
-      console.log('Auth state changed:', event, { user: session?.user?.email });
+    const handlePageAuthChange = async (event: AuthChangeEvent, session: Session | null) => {
+      console.log('Page: Auth state changed:', event, { user: session?.user?.email });
       const user = session?.user ?? null;
-      setCurrentUser(user);
+      setPageCurrentUser(user);
       
       if (user) {
-        console.log('User authenticated, fetching profile...');
-        await fetchAndSetUserProfile(user);
+        await fetchPageUserProfile(user);
       } else {
-        console.log('No user, resetting profile state');
-        setUserProfile(null);
-        setIsLoadingProfile(false); // Ensure loading is false if user signs out
+        setPageUserProfile(null);
+        setIsLoadingPageProfile(false); 
       }
     };
 
-    const checkUser = async () => {
-      setIsLoadingProfile(true); // Set loading true before checking session
-      try {
-        console.log('Checking for existing session...');
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Error getting session:', error);
-          // isLoadingProfile will be set to false in finally block of fetchAndSetUserProfile or here if no user
-        }
-        
-        const user = session?.user ?? null;
-        setCurrentUser(user); // Set current user based on session
-        console.log('Initial session check - user:', user?.email);
-        
-        if (user) {
-          await fetchAndSetUserProfile(user);
-        } else {
-          console.log('No active session found on initial check.');
-          setIsLoadingProfile(false); // No user, so profile loading is done
-        }
-      } catch (error) {
-        console.error('Error in checkUser:', error);
-        setIsLoadingProfile(false); // Error, so profile loading is done
+    const checkPageUser = async () => {
+      setIsLoadingPageProfile(true); 
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
+      setPageCurrentUser(user); 
+      if (user) {
+        await fetchPageUserProfile(user);
+      } else {
+        setIsLoadingPageProfile(false); 
       }
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
-    checkUser(); // Initial check for user session
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(handlePageAuthChange);
+    checkPageUser(); 
 
     return () => {
-      console.log('Cleaning up auth subscription');
       subscription?.unsubscribe();
-      console.log('Cleaning up AOLBEAMPage component'); // For observing unmounts
+      console.log("Page: Auth subscription cleaned up.");
     };
-  }, [supabase, fetchAndSetUserProfile]); // Dependencies are stable
+  }, [supabase, fetchPageUserProfile]);
 
   const checkUsageLimit = useCallback((): boolean => {
-    if (currentUser && userProfile) {
-      if (userProfile.is_subscribed) return false; 
-      if ((userProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT) {
+    if (pageCurrentUser && pageUserProfile) {
+      if (pageUserProfile.is_subscribed) return false; 
+      if ((pageUserProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT) {
         setShowPaywall(true);
         return true;
       }
-    } else if (!currentUser) { 
+    } else if (!pageCurrentUser) { 
       if (guestInteractionCount >= FREE_INTERACTION_LIMIT) {
         setShowPaywall(true);
         return true;
       }
     }
     return false; 
-  }, [currentUser, userProfile, guestInteractionCount]);
+  }, [pageCurrentUser, pageUserProfile, guestInteractionCount]);
 
   useEffect(() => {
-    console.log('Profile state updated - isLoadingProfile:', isLoadingProfile, 'currentUser:', !!currentUser, 'userProfile email:', userProfile?.email);
-  }, [isLoadingProfile, currentUser, userProfile]);
+    console.log('Page: Profile state updated - isLoadingPageProfile:', isLoadingPageProfile, 'pageCurrentUser:', !!pageCurrentUser, 'pageUserProfile email:', pageUserProfile?.email);
+  }, [isLoadingPageProfile, pageCurrentUser, pageUserProfile]);
 
 
   const incrementInteraction = useCallback(async () => {
-    if (currentUser && userProfile && !userProfile.is_subscribed) {
-        const newCount = (userProfile.interaction_count || 0) + 1;
-        
-        // Optimistically update UI
-        setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null); 
+    if (pageCurrentUser && pageUserProfile && !pageUserProfile.is_subscribed) {
+        const newCount = (pageUserProfile.interaction_count || 0) + 1;
+        setPageUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null); 
         
         try {
-            if (!supabase) throw new Error("Supabase client not ready for incrementInteraction");
             const { error } = await supabase
                 .from('user_profiles')
                 .update({ interaction_count: newCount })
-                .eq('id', currentUser.id);
+                .eq('id', pageCurrentUser.id);
             if (error) {
-                console.error("Error updating interaction count in Supabase:", error);
+                console.error("Page: Error updating interaction count in Supabase:", error);
                 toast({ variant: "destructive", title: "Sync Error", description: "Could not save interaction count. Reverting UI." });
-                // Revert optimistic update
-                setUserProfile(prev => prev ? { ...prev, interaction_count: newCount - 1 } : null);
+                setPageUserProfile(prev => prev ? { ...prev, interaction_count: newCount - 1 } : null);
             }
         } catch (error: any) {
-            console.error("Exception updating interaction count in Supabase:", error);
-            toast({ variant: "destructive", title: "Sync Error", description: "Could not save interaction count due to an exception. Reverting UI." });
-            setUserProfile(prev => prev ? { ...prev, interaction_count: newCount - 1 } : null); 
+            console.error("Page: Exception updating interaction count in Supabase:", error);
+            toast({ variant: "destructive", title: "Sync Error", description: "Could not save interaction count. Reverting UI." });
+            setPageUserProfile(prev => prev ? { ...prev, interaction_count: newCount - 1 } : null); 
         }
-    } else if (!currentUser) { 
+    } else if (!pageCurrentUser) { 
         setGuestInteractionCount(prev => prev + 1);
     }
-  }, [currentUser, userProfile, supabase, setGuestInteractionCount, toast]);
+  }, [pageCurrentUser, pageUserProfile, supabase, setGuestInteractionCount, toast]);
 
 
   const addToHistory = useCallback(async (itemToAdd: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'> & { actualProblemType: Exclude<ProblemType, 'random'> }) => {
@@ -298,67 +228,52 @@ export default function AOLBEAMPage() {
         problemType: itemToAdd.problemType, 
     };
 
-    setHistory(prevHistory => [newHistoryItem, ...prevHistory].slice(0, 50)); 
-
-    if (supabase && currentUser && userProfile) { 
-        const dbRecord: any = { 
-            user_id: currentUser.id,
-            topic: itemToAdd.topic,
-            problem_type: itemToAdd.actualProblemType, 
-            difficulty: itemToAdd.difficulty,
-            problem_statement: itemToAdd.problem.problemStatement,
-            answer_format: itemToAdd.problem.answerFormat,
-            multiple_choice_options: itemToAdd.problem.multipleChoiceOptions,
-            correct_answer: itemToAdd.problem.correctAnswer,
-            user_answer: null, 
-            selected_option: null, 
-            evaluation_is_correct: null, 
-            evaluation_feedback: null, 
-            is_topic_revised: false,
-            topic_details_content: null,
-            feedback_rating: null,
-            feedback_comment: null,
-            time_taken_seconds: null,
-        };
-        try {
-            const { data, error } = await supabase
-                .from('user_interactions')
-                .insert(dbRecord)
-                .select('id') // Only select id
-                .single();
-
-            if (error) {
-                throw error;
-            }
-            if (data) {
-                // Update the local history item with the supabase_id
-                setHistory(prevHistory => prevHistory.map(hItem => 
-                    hItem.id === newHistoryItem.id ? { ...hItem, supabase_id: data.id } : hItem
-                ));
-            }
-        } catch (error: any) {
-            console.error("Error saving history to Supabase:", error);
-            toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account. " + error.message });
-        }
-    }
-  }, [setHistory, supabase, currentUser, userProfile, toast]); 
+    setHistory(prevHistory => {
+      const updatedHistory = [newHistoryItem, ...prevHistory].slice(0, 50);
+      if (pageCurrentUser && itemToAdd.problem && itemToAdd.problem.problemStatement) {
+          // Try to save to Supabase if user is logged in
+          const dbRecord: any = { 
+              user_id: pageCurrentUser.id,
+              topic: itemToAdd.topic,
+              problem_type: itemToAdd.actualProblemType, 
+              difficulty: itemToAdd.difficulty,
+              problem_statement: itemToAdd.problem.problemStatement,
+              answer_format: itemToAdd.problem.answerFormat,
+              multiple_choice_options: itemToAdd.problem.multipleChoiceOptions,
+              correct_answer: itemToAdd.problem.correctAnswer,
+              // other fields will be null initially
+          };
+          supabase.from('user_interactions').insert(dbRecord).select('id').single()
+          .then(({ data: dbData, error: dbError }) => {
+              if (dbError) {
+                  console.error("Page: Error saving history to Supabase:", dbError);
+                  toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account. " + dbError.message });
+              } else if (dbData) {
+                  // Update local history item with supabase_id
+                  setHistory(prev => prev.map(hItem => 
+                      hItem.id === newHistoryItem.id ? { ...hItem, supabase_id: dbData.id } : hItem
+                  ));
+              }
+          });
+      }
+      return updatedHistory;
+    });
+  }, [setHistory, supabase, pageCurrentUser, toast]); 
 
   const updateLastHistoryItem = useCallback(async (updates: Partial<InteractionHistoryItem>) => {
     let itemToUpdateSupabaseId: string | undefined;
     
     setHistory(prevHistory => {
       if (prevHistory.length === 0) return prevHistory;
-      
       const updatedItem: InteractionHistoryItem = {
         ...prevHistory[0],
         ...updates,
         problem: updates.problem ? { ...prevHistory[0].problem!, ...updates.problem } : prevHistory[0].problem,
       };
-      itemToUpdateSupabaseId = updatedItem.supabase_id; // Get supabase_id from the potentially updated item
-      return [updatedItem, ...prevHistory.slice(1)];
-    });
+      itemToUpdateSupabaseId = updatedItem.supabase_id;
+      const newHistory = [updatedItem, ...prevHistory.slice(1)];
 
-    if (supabase && currentUser && userProfile && itemToUpdateSupabaseId) { 
+      if (supabase && pageCurrentUser && pageUserProfile && itemToUpdateSupabaseId) { 
         const dbUpdatePayload: any = {};
         if (updates.userAnswer !== undefined) dbUpdatePayload.user_answer = updates.userAnswer;
         if (updates.selectedOption !== undefined) dbUpdatePayload.selected_option = updates.selectedOption;
@@ -373,28 +288,24 @@ export default function AOLBEAMPage() {
         if (updates.timeTakenSeconds !== undefined) dbUpdatePayload.time_taken_seconds = updates.timeTakenSeconds;
         
         if (Object.keys(dbUpdatePayload).length > 0) {
-          try {
-            const { error } = await supabase
-              .from('user_interactions')
-              .update(dbUpdatePayload)
-              .eq('id', itemToUpdateSupabaseId)
-              .eq('user_id', currentUser.id); 
-            if (error) {
-              throw error;
+          supabase.from('user_interactions').update(dbUpdatePayload).eq('id', itemToUpdateSupabaseId).eq('user_id', pageCurrentUser.id)
+          .then(({ error: dbError }) => {
+            if (dbError) {
+              console.error("Page: Error updating history in Supabase:", dbError);
+              toast({ variant: "destructive", title: "Update Error", description: "Could not save updates to your account. " + dbError.message });
             }
-          } catch (error: any) {
-            console.error("Error updating history in Supabase:", error);
-            toast({ variant: "destructive", title: "Update Error", description: "Could not save updates to your account. " + error.message });
-          }
+          });
         }
-    } else if (supabase && currentUser && !itemToUpdateSupabaseId) {
-        console.warn("Attempted to update history in Supabase, but supabase_id was missing for the last item.");
-    }
-  }, [setHistory, supabase, currentUser, userProfile, toast]); 
+      } else if (supabase && pageCurrentUser && !itemToUpdateSupabaseId && prevHistory[0] && Object.keys(updates).length > 0) {
+          console.warn("Page: Attempted to update history in Supabase, but supabase_id was missing for the last item.");
+      }
+      return newHistory;
+    });
+  }, [setHistory, supabase, pageCurrentUser, pageUserProfile, toast]); 
 
 
   const handleGenerateProblem = async (topic: string, type: ProblemType, difficulty: DifficultyLevel) => {
-    if ((currentUser && isLoadingProfile) || checkUsageLimit()) return;
+    if ((pageCurrentUser && isLoadingPageProfile) || checkUsageLimit()) return;
 
     setIsLoadingProblem(true);
     setCurrentTopic(topic);
@@ -419,12 +330,12 @@ export default function AOLBEAMPage() {
         topic,
         problemType: type, 
         actualProblemType: actualProblemTypeForAI, 
-        difficulty: result.difficulty || difficulty, // Use difficulty from AI result if available
+        difficulty: result.difficulty || difficulty, 
         problem: result,
       });
       toast({ title: "Problem Generated!", description: `A new ${actualProblemTypeForAI} problem on "${topic}" (${result.difficulty || difficulty}) is ready.` });
     } catch (error) {
-      console.error("Error generating problem:", error);
+      console.error("Page: Error generating problem:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to generate problem. Please try again." });
     } finally {
       setIsLoadingProblem(false);
@@ -432,7 +343,7 @@ export default function AOLBEAMPage() {
   };
 
   const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) => {
-    if (!currentProblem || !currentTopic || (currentUser && isLoadingProfile)) return;
+    if (!currentProblem || !currentTopic || (pageCurrentUser && isLoadingPageProfile)) return;
 
     setIsLoadingEvaluation(true);
     setEvaluationResult(null);
@@ -440,12 +351,10 @@ export default function AOLBEAMPage() {
     try {
       let evalOutput: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string };
       const updatesForHistory: Partial<InteractionHistoryItem> = { timeTakenSeconds };
-
       const isMcqStyleProblem = currentProblem.multipleChoiceOptions && currentProblem.multipleChoiceOptions.length > 0;
 
       if (!isMcqStyleProblem) { 
         const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific topic details available for this evaluation.";
-
         evalOutput = await evaluateTheoryAnswer({
           question: currentProblem.problemStatement,
           studentAnswer: answer,
@@ -468,7 +377,7 @@ export default function AOLBEAMPage() {
       setEvaluationResult(evalOutput);
       toast({ title: "Answer Evaluated", description: evalOutput.isCorrect ? "Your answer is correct!" : "Your answer needs improvement." });
     } catch (error) {
-      console.error("Error evaluating answer:", error);
+      console.error("Page: Error evaluating answer:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to evaluate answer. Please try again." });
     } finally {
       setIsLoadingEvaluation(false);
@@ -476,7 +385,7 @@ export default function AOLBEAMPage() {
   };
 
   const handleFetchTopicDetails = async (topicToFetch: string) => {
-    if ((currentUser && isLoadingProfile) || checkUsageLimit()) return;
+    if ((pageCurrentUser && isLoadingPageProfile) || checkUsageLimit()) return;
 
     setIsLoadingDetails(true);
     try {
@@ -487,7 +396,7 @@ export default function AOLBEAMPage() {
       toast({ title: "Topic Details Fetched", description: `Details for "${topicToFetch}" are now available.` });
     } catch (error)
     {
-      console.error("Error fetching topic details:", error);
+      console.error("Page: Error fetching topic details:", error);
       toast({ variant: "destructive", title: "Error", description: "Failed to fetch topic details." });
       setTopicDetails("Failed to load details. Please try again."); 
     } finally {
@@ -496,11 +405,10 @@ export default function AOLBEAMPage() {
   };
 
   const handleProblemFeedback = async (rating: string, comment: string) => {
-    if (!currentProblem || (currentUser && isLoadingProfile)) {
+    if (!currentProblem || (pageCurrentUser && isLoadingPageProfile)) {
       toast({variant: "destructive", title: "Cannot Submit Feedback", description: "No active problem or profile still loading."});
       return;
     };
-
     await updateLastHistoryItem({ 
       feedbackRating: rating,
       feedbackComment: comment,
@@ -509,8 +417,7 @@ export default function AOLBEAMPage() {
 
   const handleNewProblemSameTopic = () => {
     if (currentTopic) {
-      const typeToRegenerate = currentProblem ? currentProblemType : (ALL_CONCRETE_PROBLEM_TYPES.includes(currentProblemType as Exclude<ProblemType, 'random'>) ? currentProblemType : 'random');
-      handleGenerateProblem(currentTopic, typeToRegenerate, currentDifficulty);
+      handleGenerateProblem(currentTopic, currentProblemType === 'random' ? 'random' : currentProblemType, currentDifficulty);
     } else {
       toast({ title: "No Topic", description: "Please generate a problem first to use this option.", variant: "default" });
     }
@@ -525,11 +432,10 @@ export default function AOLBEAMPage() {
   };
 
   const handleSubscribe = async (planId: string) => {
-    if (!supabase || !currentUser || !userProfile) { 
+    if (!supabase || !pageCurrentUser || !pageUserProfile) { 
       toast({ variant: "destructive", title: "Error", description: "Authentication service not ready or user not logged in."});
       return;
     }
-
     try {
         const { data, error } = await supabase
             .from('user_profiles')
@@ -539,73 +445,32 @@ export default function AOLBEAMPage() {
                 interaction_count: 0, 
                 subscription_started_at: new Date().toISOString()
             })
-            .eq('id', currentUser.id)
+            .eq('id', pageCurrentUser.id)
             .select() 
             .single();
-
         if (error) throw error;
-
         if (data) {
-            setUserProfile(data as UserProfile); 
+            setPageUserProfile(data as UserProfile); 
             setShowPaywall(false);
             toast({ title: "Subscription Activated!", description: "You now have unlimited access and your progress will be saved to your account." });
         }
     } catch (error: any) {
-        console.error("Error subscribing user:", error);
+        console.error("Page: Error subscribing user:", error);
         toast({ variant: "destructive", title: "Subscription Failed", description: "Could not activate your subscription. " + error.message });
     }
   };
 
-  const handleSignInWithGoogle = async () => {
-    if (!supabase) {
-      toast({ variant: "destructive", title: "Authentication Error", description: "Authentication service not ready. Please try again shortly." });
-      return;
-    }
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
-      },
-    });
-    if (error) {
-      toast({ variant: "destructive", title: "Login Error", description: error.message });
-    }
-  };
-
-  const handleSignOut = async () => {
-    if (!supabase) {
-        toast({ variant: "destructive", title: "Authentication Error", description: "Authentication service not ready." });
-        return;
-    }
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast({ variant: "destructive", title: "Logout Error", description: error.message });
-    } else {
-      setCurrentUser(null);
-      setUserProfile(null);
-      setShowPaywall(false); 
-      if (history.length > 0) {
-        const lastItem = history[0];
-        setCurrentTopic(lastItem.topic);
-        setCurrentProblemType(lastItem.problemType);
-        setCurrentDifficulty(lastItem.difficulty || 'medium');
-        setCurrentProblem(lastItem.problem);
-        if (lastItem.evaluation) setEvaluationResult(lastItem.evaluation);
-        if (lastItem.isTopicRevised && lastItem.topicDetails) {
-          setTopicDetails(lastItem.topicDetails);
-        } else {
-          setTopicDetails(null);
-        }
-      } else {
-        handleStartNew(); 
-      }
-      toast({ title: "Logged Out", description: "You have been successfully logged out." });
-    }
+  // Login/Logout are handled by global Header, but paywall needs to know if user is logged in
+  const handleLoginForPaywall = async () => {
+    // This function would be called by the PaywallModal's "Login/Register" button
+    // The actual Google Sign-In is initiated by the global Header.
+    // We just need to make sure the paywall closes or re-evaluates after login.
+    // For now, it's implicitly handled by the auth state change.
   };
 
 
   useEffect(() => {
-    if (!isLoadingProfile && !currentUser && history.length > 0 && !currentProblem && !isLoadingProblem) {
+    if (!isLoadingPageProfile && !pageCurrentUser && history.length > 0 && !currentProblem && !isLoadingProblem) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
       setCurrentProblemType(lastItem.problemType); 
@@ -618,29 +483,26 @@ export default function AOLBEAMPage() {
         setTopicDetails(null);
       }
     }
-  }, [currentUser, history, isLoadingProblem, currentProblem, isLoadingProfile]);
+  }, [pageCurrentUser, history, isLoadingProblem, currentProblem, isLoadingPageProfile]);
 
-
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const interactionsLeftText = () => {
-    if (isLoadingProfile && currentUser) return "Loading interactions...";
-    if (currentUser && userProfile) {
-        return userProfile.is_subscribed ? "You have unlimited interactions!" : `Free interactions remaining: ${Math.max(0, FREE_INTERACTION_LIMIT - (userProfile.interaction_count || 0))}`;
+    if (isLoadingPageProfile && pageCurrentUser) return "Loading interactions...";
+    if (pageCurrentUser && pageUserProfile) {
+        return pageUserProfile.is_subscribed ? "You have unlimited interactions!" : `Free interactions remaining: ${Math.max(0, FREE_INTERACTION_LIMIT - (pageUserProfile.interaction_count || 0))}`;
     }
-    if (!currentUser) {
+    if (!pageCurrentUser) {
         return `Free interactions remaining: ${Math.max(0, FREE_INTERACTION_LIMIT - guestInteractionCount)}`;
     }
     return "Interactions: N/A (Error loading profile)"; 
   };
-
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <PaywallModal
         isOpen={showPaywall}
         onClose={() => {
-            const isMandatoryPaywall = !!(currentUser && userProfile && !userProfile.is_subscribed && ((userProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT ));
+          const isMandatoryPaywall = !!(pageCurrentUser && pageUserProfile && !pageUserProfile.is_subscribed && ((pageUserProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT ));
             if (!isMandatoryPaywall) {
                 setShowPaywall(false);
             } else {
@@ -648,138 +510,20 @@ export default function AOLBEAMPage() {
             }
         }}
         onSubscribe={handleSubscribe}
-        onLoginRegister={handleSignInWithGoogle}
-        isMandatory={showPaywall && !!(currentUser && userProfile && !userProfile.is_subscribed && ((userProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT)) }
+        onLoginRegister={handleLoginForPaywall} // Login is handled globally, this might just close modal or show spinner
+        isMandatory={showPaywall && !!(pageCurrentUser && pageUserProfile && !pageUserProfile.is_subscribed && ((pageUserProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT)) }
       />
 
-      <header className="sticky top-0 z-30 w-full border-b bg-background/95 backdrop-blur-sm">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-primary">
-              <Brain className="h-7 w-7" /> AOLBEAM
-            </Link>
-            
-            <nav className="hidden md:flex items-center gap-1">
-                {/* Desktop Nav Links Removed */}
-            </nav>
-            
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              {isLoadingProfile && currentUser && <Button variant="outline" size="icon" disabled><PageLoader className="h-4 w-4 animate-spin" /></Button>}
-              {!isLoadingProfile && currentUser && userProfile ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <UserCircle className="h-6 w-6" />
-                       <span className="sr-only">User Menu</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                     <DropdownMenuItem disabled className="text-xs text-muted-foreground">
-                        {currentUser.email}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link href="/profile">
-                        <ProfileIcon className="mr-2 h-4 w-4" /> Profile
-                      </Link>
-                    </DropdownMenuItem>
-                    {currentUser.email === ADMIN_EMAIL && (
-                      <DropdownMenuItem asChild>
-                        <Link href="/admin/blog">
-                          <ShieldCheck className="mr-2 h-4 w-4" /> Admin
-                        </Link>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleSignOut}>
-                      <LogOut className="mr-2 h-4 w-4" /> Sign Out
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                 !isLoadingProfile && !currentUser && (
-                    <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={handleSignInWithGoogle} 
-                        disabled={!supabase || isLoadingProfile}
-                        className="min-w-[120px]"
-                      >
-                        {isLoadingProfile ? (
-                          <>
-                            <PageLoader className="mr-2 h-4 w-4 animate-spin" />
-                            Please wait...
-                          </>
-                        ) : (
-                          <>
-                            <UserCircle className="mr-2 h-4 w-4" />
-                            Login / Sign Up
-                          </>
-                        )}
-                      </Button>
-                 )
-              )}
-              <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileNavOpen(!mobileNavOpen)}>
-                <Menu className="h-6 w-6" />
-                <span className="sr-only">Toggle Menu</span>
-              </Button>
-            </div>
-          </div>
-          {mobileNavOpen && (
-            <div className="md:hidden border-t py-2">
-              <nav className="flex flex-col space-y-1">
-                 {currentUser?.email === ADMIN_EMAIL && (
-                    <Button variant="ghost" asChild className="justify-start" onClick={()=>setMobileNavOpen(false)}>
-                        <Link href="/admin/blog" className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full">
-                        <ShieldCheck className="mr-3 h-5 w-5" /> Admin
-                        </Link>
-                    </Button>
-                 )}
-                  <DropdownMenuSeparator />
-                  {!currentUser && (
-                    <Button 
-                        variant="default" 
-                        onClick={() => { handleSignInWithGoogle(); setMobileNavOpen(false);}} 
-                        disabled={!supabase || isLoadingProfile}
-                        className="w-full text-base py-3 mt-2"
-                      >
-                        {isLoadingProfile ? (
-                          <>
-                            <PageLoader className="mr-2 h-4 w-4 animate-spin" />
-                            Loading...
-                          </>
-                        ) : (
-                          <>
-                            <UserCircle className="mr-2 h-5 w-5" />
-                            Login / Sign Up
-                          </>
-                        )}
-                      </Button>
-                  )}
-                  {currentUser && (
-                     <Button 
-                        variant="outline" 
-                        onClick={() => { handleSignOut(); setMobileNavOpen(false);}}
-                        className="w-full text-base py-3 mt-2"
-                      >
-                        <LogOut className="mr-2 h-5 w-5" /> Sign Out
-                      </Button>
-                  )}
-              </nav>
-            </div>
-          )}
-        </div>
-      </header>
+      {/* Header is now global via layout.tsx */}
       
-      <section className="py-16 md:py-24 text-center bg-background"> {/* Removed hero gradient */}
+      <section className="py-16 md:py-24 text-center bg-gradient-to-br from-primary/80 via-primary/50 to-amber-300/50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
-             <span className="text-primary">Access of Learning</span>
+             AOLBEAM: Access of Learning
             </h1>
             <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
-            <span className="text-primary">Beam</span> into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
+              Beam into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
               Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
             </p>
             <div className="mt-10">
@@ -792,34 +536,18 @@ export default function AOLBEAMPage() {
       </section>
 
       <main ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16 flex-grow">
-        {isLoadingProfile && currentUser && (
+        {isLoadingPageProfile && pageCurrentUser && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-            <div className="space-y-6 max-w-md mx-auto">
-              <div className="relative">
-                <PageLoader className="h-16 w-16 text-primary mx-auto animate-spin" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="h-12 w-12 rounded-full bg-primary/10 animate-ping"></div>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-2xl font-bold tracking-tight">Welcome to AOLBEAM</h2>
-                <p className="text-muted-foreground">We're setting up your learning environment</p>
-                <div className="pt-4">
-                  <div className="inline-flex items-center space-x-2 text-sm text-muted-foreground">
-                    <span className="inline-flex h-2 w-2 rounded-full bg-primary/70 animate-pulse"></span>
-                    <span>Loading your profile...</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* Placeholder for loading profile */}
+            <p>Loading your profile...</p>
           </div>
         )}
-        {!isLoadingProfile && (
+        {!isLoadingPageProfile && (
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8">
               <div className="lg:col-span-3 flex flex-col gap-6">
                 <ProblemGenerator
                   onGenerate={handleGenerateProblem}
-                  isLoading={isLoadingProblem || (!!currentUser && isLoadingProfile)}
+                  isLoading={isLoadingProblem || (!!pageCurrentUser && isLoadingPageProfile)}
                   defaultTopic={currentTopic}
                   defaultProblemType={currentProblemType}
                   defaultDifficulty={currentDifficulty}
@@ -827,10 +555,10 @@ export default function AOLBEAMPage() {
                 {currentProblem && (
                 <>
                 <div className="flex gap-2 mt-0"> 
-                    <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (!!currentUser && isLoadingProfile))}>
+                    <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (!!pageCurrentUser && isLoadingPageProfile))}>
                         <RefreshCcw className="mr-2 h-4 w-4" /> Another (Same Topic)
                     </Button>
-                    <Button onClick={handleStartNew} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (!!currentUser && isLoadingProfile))}>
+                    <Button onClick={handleStartNew} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (!!pageCurrentUser && isLoadingPageProfile))}>
                         <FilePlus2 className="mr-2 h-4 w-4" /> Start New Topic
                     </Button>
                 </div>
@@ -839,7 +567,7 @@ export default function AOLBEAMPage() {
                     problemType={currentProblemType}
                     onSubmitAnswer={handleEvaluateAnswer}
                     onFeedbackSubmit={handleProblemFeedback} 
-                    isLoading={!!(isLoadingEvaluation || (!!currentUser && isLoadingProfile))}
+                    isLoading={!!(isLoadingEvaluation || (!!pageCurrentUser && isLoadingPageProfile))}
                     currentTopic={currentTopic}
                 />
                 </>
@@ -852,7 +580,7 @@ export default function AOLBEAMPage() {
                   topic={currentProblem ? currentTopic : null} 
                   details={topicDetails}
                   onFetchDetails={handleFetchTopicDetails}
-                  isLoading={!!(isLoadingDetails || (!!currentUser && isLoadingProfile))}
+                  isLoading={!!(isLoadingDetails || (!!pageCurrentUser && isLoadingPageProfile))}
                 />
                 <HistoryView
                     history={history} 
@@ -870,3 +598,5 @@ export default function AOLBEAMPage() {
     </div>
   );
 }
+
+    

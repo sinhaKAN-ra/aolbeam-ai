@@ -1,9 +1,11 @@
+
 import type {Metadata} from 'next';
 import {Geist, Geist_Mono} from 'next/font/google';
 import './globals.css';
 import 'katex/dist/katex.min.css'; // Import KaTeX CSS
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import Header from '@/components/Header'; // Import the new Header
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -34,6 +36,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <Header /> {/* Add Header here */}
           {children}
           <Toaster />
         </ThemeProvider>
@@ -41,3 +44,5 @@ export default function RootLayout({
     </html>
   );
 }
+
+    

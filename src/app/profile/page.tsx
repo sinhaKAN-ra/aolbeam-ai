@@ -4,17 +4,19 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+// Link removed as global header provides navigation
+// import Link from 'next/link';
+// Button removed as global header provides navigation
+// import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import MathRenderer from '@/components/MathRenderer';
-import type { ProblemType, DifficultyLevel } from '@/types'; 
+import type { ProblemType, DifficultyLevel, UserProfile as AppUserProfile } from '@/types'; 
 import Footer from '@/components/Footer';
 
-import { ArrowLeft, BarChart3, History, Lightbulb, UserCircle, Settings, Star, MessageSquareText, ListChecks, CheckCircle, XCircle, TimerIcon as TimerHistoryIcon, Brain as ConceptualIcon, Sigma as NumericalIcon, GitFork as DiagramIcon, Shuffle } from 'lucide-react';
+import { BarChart3, History, Lightbulb, UserCircle, Settings, Star, MessageSquareText, ListChecks, CheckCircle, XCircle, TimerIcon as TimerHistoryIcon, Brain as ConceptualIcon, Sigma as NumericalIcon, GitFork as DiagramIcon, Shuffle } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Your Profile - AOLBEAM',
@@ -25,7 +27,7 @@ interface FetchedInteraction {
   id: string;
   created_at: string;
   topic: string;
-  problem_type: ProblemType; // This will be the actual problem type from the DB
+  problem_type: ProblemType; 
   difficulty?: string | null; 
   problem_statement: string;
   answer_format: string;
@@ -44,7 +46,7 @@ interface DisplayHistoryItem {
   id: string;
   timestamp: string;
   topic: string;
-  problemType: ProblemType; // This will be the actual problem type from the DB
+  problemType: ProblemType; 
   difficulty?: DifficultyLevel | string | null; 
   problem: {
     problemStatement: string;
@@ -81,7 +83,7 @@ const problemTypeIcons: Record<ProblemType, React.ElementType> = {
   conceptual: ConceptualIcon,
   numerical: NumericalIcon,
   diagram_based: DiagramIcon,
-  random: Shuffle, // Adding random here for type completeness, though DB stores actual type
+  random: Shuffle, 
 };
 
 
@@ -95,15 +97,29 @@ export default async function ProfilePage() {
   }
 
   let userHistory: DisplayHistoryItem[] = [];
+  let userProfileData: AppUserProfile | null = null;
+
   try {
-    const { data: interactions, error } = await supabase
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) {
+      console.error("Error fetching user profile on profile page:", profileError);
+    } else {
+      userProfileData = profile as AppUserProfile;
+    }
+
+    const { data: interactions, error: historyError } = await supabase
       .from('user_interactions')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error("Error fetching user history:", error);
+    if (historyError) {
+      console.error("Error fetching user history:", historyError);
     }
 
     if (interactions) {
@@ -111,7 +127,7 @@ export default async function ProfilePage() {
         id: item.id,
         timestamp: item.created_at,
         topic: item.topic,
-        problemType: item.problem_type, // This is the actual type from the database
+        problemType: item.problem_type,
         difficulty: item.difficulty as DifficultyLevel | null, 
         problem: {
           problemStatement: item.problem_statement,
@@ -130,7 +146,7 @@ export default async function ProfilePage() {
       }));
     }
   } catch (e) {
-    console.error("Exception fetching user history:", e);
+    console.error("Exception fetching user data for profile page:", e);
   }
 
   const overallAccuracy = userHistory.length > 0 && userHistory.filter(item => item.evaluation).length > 0
@@ -156,7 +172,7 @@ export default async function ProfilePage() {
       }
       return acc;
     }, [] as { name: string; accuracy: number }[])
-    .slice(0, 3); // Show top 3 strengths
+    .slice(0, 3); 
 
 
   const focusAreas = userHistory
@@ -173,44 +189,36 @@ export default async function ProfilePage() {
       }
       return acc;
     }, [] as { name: string; accuracy: number, lastPracticed: string, problemType: ProblemType, difficulty?: DifficultyLevel | string | null }[])
-    .slice(0, 3); // Show top 3 focus areas
+    .slice(0, 3); 
 
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="py-4 bg-card/50 border-b mb-8">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <Link href="/" className="text-3xl font-bold text-primary">AOLBEAM</Link>
-          <Button asChild variant="outline">
-            <Link href="/">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Practice
-            </Link>
-          </Button>
-        </div>
-      </header>
-
+      {/* Header is now global */}
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
         <div className="max-w-4xl mx-auto">
           <Card className="mb-8 shadow-xl overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-primary/10 via-card to-card p-6 flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
               <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-2 border-primary shadow-md">
-                <AvatarImage src={user.user_metadata?.avatar_url} alt={user.email || 'User Avatar'} />
+                <AvatarImage src={user.user_metadata?.avatar_url} alt={userProfileData?.full_name || user.email || 'User Avatar'} />
                 <AvatarFallback className="text-2xl bg-primary/20 text-primary">
-                  {user.email ? user.email.charAt(0).toUpperCase() : <UserCircle size={48} />}
+                  {userProfileData?.full_name ? userProfileData.full_name.charAt(0).toUpperCase() : 
+                   (user.email ? user.email.charAt(0).toUpperCase() : <UserCircle size={48} />)}
                 </AvatarFallback>
               </Avatar>
               <div className="text-center sm:text-left">
                 <CardTitle className="text-2xl sm:text-3xl font-bold text-primary">
-                  Welcome, {user.user_metadata?.full_name || user.email?.split('@')[0] || 'AOLBEAM Learner'}!
+                  Welcome, {userProfileData?.full_name || user.email?.split('@')[0] || 'AOLBEAM Learner'}!
                 </CardTitle>
                 <CardDescription className="text-md text-muted-foreground mt-1">
                   This is your personal learning dashboard. Track your progress and conquer your exams.
                 </CardDescription>
                 <p className="text-xs text-muted-foreground mt-2">Joined: {new Date(user.created_at).toLocaleDateString()}</p>
+                {userProfileData?.is_subscribed && userProfileData.subscription_plan_id && (
+                  <Badge variant="secondary" className="mt-2">Plan: {userProfileData.subscription_plan_id.charAt(0).toUpperCase() + userProfileData.subscription_plan_id.slice(1)}</Badge>
+                )}
               </div>
-              <Button variant="outline" size="sm" className="mt-4 sm:mt-0 sm:ml-auto">
-                <Settings className="mr-2 h-4 w-4" /> Account Settings (Soon)
-              </Button>
+              {/* Account settings button removed for now as global header handles navigation */}
             </CardHeader>
           </Card>
 
@@ -289,9 +297,7 @@ export default async function ProfilePage() {
                       <li key={topic.name} className="p-3 bg-muted/30 rounded-md">
                         <span className="font-semibold text-foreground">{topic.name}</span>
                         <p className="text-xs text-muted-foreground">Current Accuracy: {Math.round(topic.accuracy*100)}% - Last practiced: {topic.lastPracticed}</p>
-                        <Button variant="link" size="sm" className="px-0 h-auto py-1 text-xs mt-1" asChild>
-                            <Link href={`/?topic=${encodeURIComponent(topic.name)}&type=${encodeURIComponent(topic.problemType)}&difficulty=${encodeURIComponent(topic.difficulty || 'medium')}`}>Practice {topic.name} &rarr;</Link>
-                        </Button>
+                        {/* Link for practice removed as navigation is global, direct practice from here is more complex */}
                       </li>
                     ))}
                   </ul>
@@ -368,7 +374,7 @@ export default async function ProfilePage() {
                                 </div>
                               </>
                             )}
-                            {!(item.problem.multipleChoiceOptions && item.problem.multipleChoiceOptions.length > 0) && item.evaluation && ( // For free-text problems with evaluation
+                            {!(item.problem.multipleChoiceOptions && item.problem.multipleChoiceOptions.length > 0) && item.evaluation && ( 
                               <div>
                                 <strong className="block text-muted-foreground mt-2 mb-1">Model Answer / Key Points:</strong>
                                 <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
@@ -409,8 +415,9 @@ export default async function ProfilePage() {
 
         </div>
       </main>
-
       <Footer />
     </div>
   );
 }
+
+    

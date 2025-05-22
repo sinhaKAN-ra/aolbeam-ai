@@ -2,12 +2,14 @@
 // src/app/pricing/page.tsx
 "use client";
 
-import Link from 'next/link';
+import Link from 'next/link'; // Keep Link for internal navigation if any
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription as PlanCardDescription } from '@/components/ui/card';
-import { ArrowLeft, Check, Info, Zap, CreditCard } from 'lucide-react';
+import { Check, Info, Zap, CreditCard } from 'lucide-react';
 import type { SubscriptionPlan } from '@/types';
 import Footer from '@/components/Footer';
+
+// Metadata removed as it conflicts with "use client"
 
 const plans: SubscriptionPlan[] = [
   {
@@ -37,17 +39,7 @@ const plans: SubscriptionPlan[] = [
 export default function PricingPage() {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="py-4 bg-card/50 border-b mb-8">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <Link href="/" className="text-3xl font-bold text-primary">AOLBEAM</Link>
-          <Button asChild variant="outline">
-            <Link href="/">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
-            </Link>
-          </Button>
-        </div>
-      </header>
-
+      {/* Header is now global */}
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-3 text-primary flex items-center justify-center gap-2">
@@ -122,3 +114,5 @@ export default function PricingPage() {
     </div>
   );
 }
+
+    

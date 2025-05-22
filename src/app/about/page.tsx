@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ArrowLeft, Lightbulb, Target, Rocket, Users } from 'lucide-react';
+import { Lightbulb, Target, Rocket, Users } from 'lucide-react';
 import Footer from '@/components/Footer';
 
 export const metadata: Metadata = {
@@ -15,16 +15,7 @@ export const metadata: Metadata = {
 export default function AboutUsPage() {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="py-4 bg-card/50 border-b mb-8">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <Link href="/" className="text-3xl font-bold text-primary">AOLBEAM</Link>
-           <Button asChild variant="outline">
-            <Link href="/">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
-            </Link>
-          </Button>
-        </div>
-      </header>
+      {/* Header is now global */}
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
         <div className="max-w-3xl mx-auto">
           <Card className="shadow-xl">
@@ -95,3 +86,5 @@ export default function AboutUsPage() {
     </div>
   );
 }
+
+    
