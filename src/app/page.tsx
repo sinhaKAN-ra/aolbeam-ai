@@ -67,20 +67,55 @@ export default function AOLBEAMPage() {
     problemGeneratorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const fetchAndSetUserProfile = useCallback(async (user: User) => {
+  const fetchAndSetUserProfile = useCallback(async (user: User | null) => {
+    if (!user) {
+      console.log('Page: No user provided to fetchAndSetUserProfile, skipping.');
+      setIsLoadingPageProfile(false);
+      setPageUserProfile(null);
+      return;
+    }
+
     console.log(`Page: fetchAndSetUserProfile called for user: ${user.id}`);
-    setIsLoadingPageProfile(true);
-    setPageUserProfile(null); 
+    console.log('Page: User object:', {
+      id: user.id,
+      email: user.email,
+      user_metadata: user.user_metadata,
+      app_metadata: user.app_metadata
+    });
+    
+    // Only update loading state if we're not already loading
+    if (!isLoadingPageProfile) {
+      setIsLoadingPageProfile(true);
+    }
 
     try {
       console.log(`Page: Attempting to query user_profiles for user ${user.id} (fetchAndSetUserProfile)...`);
-      let { data: profileData, error: fetchError, status: fetchStatus } = await supabase
+      
+      // Add a timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Query timeout after 10 seconds')), 10000)
+      );
+      
+      const queryPromise = supabase
         .from('user_profiles')
         .select('*')
         .eq('id', user.id)
         .single();
+      
+      let { data: profileData, error: fetchError, status: fetchStatus } = 
+        await Promise.race([queryPromise, timeoutPromise]) as any;
 
-      console.log(`Page: Query for user_profiles for ${user.id} completed. Status: ${fetchStatus}, Error:`, fetchError, "Data:", profileData);
+      console.log(`Page: Query for user_profiles for ${user.id} completed.`);
+      console.log('Page: Query status:', fetchStatus);
+      console.log('Page: Query error code:', fetchError?.code);
+      console.log('Page: Query error message:', fetchError?.message);
+      console.log('Page: Profile data exists:', !!profileData);
+      
+      // If we get here but profileData is null and no error, it means no profile exists
+      if (!profileData && !fetchError) {
+        console.log('Page: No profile found and no error, creating new profile...');
+        throw { code: 'PGRST116', message: 'No rows returned' };
+      }
       
       if (profileData) {
         console.log(`Page: Profile found for ${user.id}:`, profileData);
@@ -177,19 +212,48 @@ export default function AOLBEAMPage() {
 
   useEffect(() => {
     console.log('Page: Main useEffect for auth running. Supabase client available:', !!supabase);
+    let isMounted = true;
 
     const handleAuthChange = async (event: AuthChangeEvent, session: Session | null) => {
       console.log(`Page: Auth state changed: ${event}`, { user: session?.user?.email });
       const user = session?.user ?? null;
-      setPageCurrentUser(user); 
       
-      if (user) {
-        console.log('Page: User authenticated from onAuthStateChange, calling fetchAndSetUserProfile.');
-        await fetchAndSetUserProfile(user);
-      } else {
-        console.log('Page: No user from onAuthStateChange. Resetting profile and loading state.');
-        setPageUserProfile(null);
-        setIsLoadingPageProfile(false);
+      try {
+        // Only update state if the component is still mounted
+        if (!isMounted) return;
+        
+        // Only update if the user has actually changed
+        if (user?.id !== pageCurrentUser?.id) {
+          setPageCurrentUser(user);
+          
+          if (user) {
+            console.log('Page: User authenticated from onAuthStateChange, calling fetchAndSetUserProfile.');
+            try {
+              await fetchAndSetUserProfile(user);
+            } catch (error) {
+              console.error('Page: Error in fetchAndSetUserProfile:', error);
+              toast({
+                variant: 'destructive',
+                title: 'Profile Error',
+                description: 'Failed to load user profile. Please refresh the page.',
+              });
+              // Ensure we don't get stuck in loading state
+              if (isMounted) {
+                setIsLoadingPageProfile(false);
+              }
+              return;
+            }
+          } else {
+            console.log('Page: No user from onAuthStateChange. Resetting profile and loading state.');
+            setPageUserProfile(null);
+            setIsLoadingPageProfile(false);
+          }
+        }
+      } catch (error) {
+        console.error('Page: Unexpected error in handleAuthChange:', error);
+        if (isMounted) {
+          setIsLoadingPageProfile(false);
+        }
       }
     };
 
@@ -197,15 +261,29 @@ export default function AOLBEAMPage() {
     
     const checkUser = async () => {
       console.log('Page: checkUser called. Checking for existing session...');
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user ?? null;
-      setPageCurrentUser(user); 
-      if (user) {
-        console.log('Page: User found in checkUser, calling fetchAndSetUserProfile.');
-        await fetchAndSetUserProfile(user);
-      } else {
-        console.log('Page: No user found in checkUser. Setting isLoadingPageProfile to false.');
-        setIsLoadingPageProfile(false); 
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user ?? null;
+        
+        if (!isMounted) return;
+        
+        // Only update if the user has actually changed
+        if (user?.id !== pageCurrentUser?.id) {
+          setPageCurrentUser(user);
+          
+          if (user) {
+            console.log('Page: User found in checkUser, calling fetchAndSetUserProfile.');
+            await fetchAndSetUserProfile(user);
+          } else {
+            console.log('Page: No user found in checkUser. Setting isLoadingPageProfile to false.');
+            setIsLoadingPageProfile(false);
+          }
+        }
+      } catch (error) {
+        console.error('Page: Error checking user session:', error);
+        if (isMounted) {
+          setIsLoadingPageProfile(false);
+        }
       }
     };
     
@@ -213,9 +291,10 @@ export default function AOLBEAMPage() {
 
     return () => {
       console.log("Page: Cleaning up auth subscription from main useEffect.");
+      isMounted = false;
       subscription?.unsubscribe();
     };
-  }, [supabase, fetchAndSetUserProfile]);
+  }, [supabase, fetchAndSetUserProfile, pageCurrentUser?.id]);
 
   useEffect(() => {
     console.log(
