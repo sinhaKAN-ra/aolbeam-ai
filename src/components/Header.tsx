@@ -33,149 +33,21 @@ const GoogleIcon = ({ className }: { className?: string }) => (
 );
 
 
-export default function Header() {
+interface HeaderProps {
+  userProfile: UserProfile | null;
+  isLoadingProfile: boolean;
+  onSignOut: () => Promise<void>;
+}
+
+export default function Header({ userProfile, isLoadingProfile, onSignOut }: HeaderProps) {
   const { toast } = useToast();
   const [supabase] = useState<SupabaseClient>(() => {
     console.log('Header: Initializing Supabase client (once)...');
     return createClientComponentClient();
   });
   
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(true); 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  const fetchAndSetUserProfileHeader = useCallback(async (user: User) => {
-    console.log(`Header: Attempting to fetch profile for user: ${user.id}`);
-    setIsLoadingProfile(true);
-    setUserProfile(null);
-
-    try {
-      let { data: profileData, error: fetchError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (profileData) {
-        let needsClientSideUpdate = false;
-        const updatePayload: Partial<UserProfile> = {};
-
-        if (!profileData.email && user.email) {
-          updatePayload.email = user.email;
-          needsClientSideUpdate = true;
-        }
-        if (!profileData.full_name && user.user_metadata?.full_name) {
-          updatePayload.full_name = user.user_metadata.full_name;
-          needsClientSideUpdate = true;
-        } else if (!profileData.full_name && user.email && !user.user_metadata?.full_name) {
-          // Fallback for full_name if not in metadata but email exists
-          updatePayload.full_name = user.email.split('@')[0];
-          needsClientSideUpdate = true;
-        }
-
-
-        if (needsClientSideUpdate) {
-          console.log(`Header: Profile for ${user.id} missing details from DB, attempting client-side update...`, updatePayload);
-          const { data: updatedProfile, error: clientUpdateError } = await supabase
-            .from('user_profiles')
-            .update(updatePayload)
-            .eq('id', user.id)
-            .select()
-            .single();
-          
-          if (clientUpdateError) {
-            console.error(`Header: Error updating profile for ${user.id} with missing details via client:`, clientUpdateError);
-            // Continue with potentially incomplete profileData, or handle error more strictly
-          } else if (updatedProfile) {
-            profileData = updatedProfile as UserProfile; // Use the updated profile
-            console.log(`Header: Profile for ${user.id} updated successfully with missing details via client.`);
-          }
-        }
-        setUserProfile(profileData as UserProfile);
-
-      } else if (fetchError && fetchError.code === 'PGRST116') { // Profile does not exist
-        console.log('Header: No profile found (PGRST116), attempting to create as fallback (DB trigger might not have run/completed)...');
-        const newProfilePayload: Omit<UserProfile, 'created_at' | 'updated_at'> = { 
-          id: user.id,
-          email: user.email!, // Email should exist on the user object
-          full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'New User', // Extract full_name or fallback
-          interaction_count: 0,
-          is_subscribed: false,
-        };
-        const { data: insertedProfile, error: insertError } = await supabase
-          .from('user_profiles')
-          .insert(newProfilePayload)
-          .select()
-          .single();
-        
-        if (insertedProfile) {
-            setUserProfile(insertedProfile as UserProfile);
-            console.log('Header: Fallback profile created successfully on client-side request.');
-        } else if (insertError && insertError.code === '23505') { // Unique violation, likely trigger created it
-            console.log('Header: Profile insert failed due to unique violation (profile likely created by trigger). Re-fetching...');
-            const { data: refetchedData, error: refetchError } = await supabase
-                .from('user_profiles')
-                .select('*')
-                .eq('id', user.id)
-                .single();
-            if (refetchedData) setUserProfile(refetchedData as UserProfile);
-            else {
-                console.error('Header: Error re-fetching profile after unique violation:', refetchError);
-                toast({ variant: 'destructive', title: 'Profile Sync Error', description: `Could not sync your profile: ${refetchError?.message || 'Unknown error'}`});
-            }
-        } else { // Other insert error
-            console.error('Header: Error creating user profile during fallback insert:', insertError);
-            toast({ variant: 'destructive', title: 'Profile Creation Failed', description: `Could not create your profile: ${insertError?.message || 'Unknown error'}`});
-        }
-      } else if (fetchError) { // Other database error
-        console.error('Header: Database error fetching profile:', fetchError);
-        toast({ variant: 'destructive', title: 'Profile Error', description: `Could not load your profile: ${fetchError.message}`});
-      }
-    } catch (error) { // Catch-all for unexpected errors
-      console.error('Header: Unexpected error during profile setup:', error);
-      toast({ variant: 'destructive', title: 'Profile Setup Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
-    } finally {
-      setIsLoadingProfile(false);
-      console.log(`Header: Profile fetching complete. isLoading: ${false}, userProfile email: ${userProfile?.email}`);
-    }
-  }, [supabase, toast]); // Removed userProfile from dependencies as it's set inside
-
-  useEffect(() => {
-    const handleAuthChange = async (event: AuthChangeEvent, session: Session | null) => {
-      console.log('Header: Auth state changed:', event, { user: session?.user?.email });
-      const user = session?.user ?? null;
-      setCurrentUser(user);
-      
-      if (user) {
-        await fetchAndSetUserProfileHeader(user);
-      } else {
-        setUserProfile(null);
-        setIsLoadingProfile(false); // Ensure loading is false if user logs out
-      }
-    };
-
-    const checkUser = async () => {
-      setIsLoadingProfile(true); // Set loading true at the start of check
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user ?? null;
-      setCurrentUser(user); // Set current user first
-      if (user) {
-        await fetchAndSetUserProfileHeader(user);
-      } else {
-        setIsLoadingProfile(false); // Ensure loading is false if no user
-      }
-    };
-
-    console.log('Header: Setting up auth subscription...');
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
-    checkUser(); // Initial check for user session
-
-    return () => {
-      subscription?.unsubscribe();
-      console.log("Header: Auth subscription cleaned up.");
-    };
-  }, [supabase, fetchAndSetUserProfileHeader]); // `fetchAndSetUserProfileHeader` is now a dependency
+  const currentUser = userProfile ? { id: userProfile.id, email: userProfile.email } as User : null;
 
   const handleSignInWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -184,20 +56,14 @@ export default function Header() {
         redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
       },
     });
-    if (error) toast({ variant: "destructive", title: "Login Error", description: error.message });
+    if (error) {
+      toast({ variant: "destructive", title: "Login Error", description: error.message });
+    }
   };
 
   const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast({ variant: "destructive", title: "Logout Error", description: error.message });
-    } else {
-      setCurrentUser(null);
-      setUserProfile(null);
-      setMobileNavOpen(false); // Close mobile nav on logout
-      toast({ title: "Logged Out", description: "You have been successfully logged out." });
-      // Optionally redirect to home page or login page: router.push('/');
-    }
+    setMobileNavOpen(false);
+    await onSignOut();
   };
 
   const navItems = [

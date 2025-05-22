@@ -37,7 +37,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Header /> {/* Add Header here */}
+          {/* <Header /> Add Header here */}
           {children}
           <Toaster />
           <Analytics />

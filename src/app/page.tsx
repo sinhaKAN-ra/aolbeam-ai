@@ -17,6 +17,7 @@ import {
   fetchTopicDetails,
 } from '@/ai/flows/fetch-topic-details';
 import { RefreshCcw, FilePlus2, ArrowRight, Loader2 } from 'lucide-react';
+import Header from '@/components/Header';
 import { createClientComponentClient, type SupabaseClient } from '@supabase/auth-helpers-nextjs';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -42,6 +43,8 @@ export default function AOLBEAMPage() {
     return createClientComponentClient();
   });
   
+  // Use a ref to track if we've already fetched the profile
+  const hasFetchedProfile = useRef(false);
   const [pageCurrentUser, setPageCurrentUser] = useState<User | null>(null);
   const [pageUserProfile, setPageUserProfile] = useState<UserProfile | null>(null);
   const [isLoadingPageProfile, setIsLoadingPageProfile] = useState<boolean>(true);
@@ -75,18 +78,21 @@ export default function AOLBEAMPage() {
       return;
     }
 
+    // Skip if we've already fetched the profile for this user
+    if (hasFetchedProfile.current && pageUserProfile?.id === user.id) {
+      console.log('Page: Profile already fetched for user, skipping.');
+      return;
+    }
+
     console.log(`Page: fetchAndSetUserProfile called for user: ${user.id}`);
-    console.log('Page: User object:', {
-      id: user.id,
-      email: user.email,
-      user_metadata: user.user_metadata,
-      app_metadata: user.app_metadata
-    });
     
     // Only update loading state if we're not already loading
     if (!isLoadingPageProfile) {
       setIsLoadingPageProfile(true);
     }
+    
+    // Mark that we're fetching the profile
+    hasFetchedProfile.current = true;
 
     try {
       console.log(`Page: Attempting to query user_profiles for user ${user.id} (fetchAndSetUserProfile)...`);
@@ -210,9 +216,11 @@ export default function AOLBEAMPage() {
   }, [supabase, toast]); 
 
 
+  // Effect to handle auth state changes and initial session check
   useEffect(() => {
     console.log('Page: Main useEffect for auth running. Supabase client available:', !!supabase);
     let isMounted = true;
+    let authSubscription: { unsubscribe: () => void } | null = null;
 
     const handleAuthChange = async (event: AuthChangeEvent, session: Session | null) => {
       console.log(`Page: Auth state changed: ${event}`, { user: session?.user?.email });
@@ -222,32 +230,27 @@ export default function AOLBEAMPage() {
         // Only update state if the component is still mounted
         if (!isMounted) return;
         
-        // Only update if the user has actually changed
-        if (user?.id !== pageCurrentUser?.id) {
-          setPageCurrentUser(user);
-          
-          if (user) {
-            console.log('Page: User authenticated from onAuthStateChange, calling fetchAndSetUserProfile.');
-            try {
-              await fetchAndSetUserProfile(user);
-            } catch (error) {
-              console.error('Page: Error in fetchAndSetUserProfile:', error);
-              toast({
-                variant: 'destructive',
-                title: 'Profile Error',
-                description: 'Failed to load user profile. Please refresh the page.',
-              });
-              // Ensure we don't get stuck in loading state
-              if (isMounted) {
-                setIsLoadingPageProfile(false);
-              }
-              return;
+        // Skip if user hasn't changed
+        if (user?.id === pageCurrentUser?.id) return;
+        
+        console.log('Page: User state changed, updating...');
+        setPageCurrentUser(user);
+        
+        if (user) {
+          console.log('Page: User authenticated, fetching profile...');
+          try {
+            await fetchAndSetUserProfile(user);
+          } catch (error) {
+            console.error('Page: Error in fetchAndSetUserProfile:', error);
+            if (isMounted) {
+              setIsLoadingPageProfile(false);
             }
-          } else {
-            console.log('Page: No user from onAuthStateChange. Resetting profile and loading state.');
-            setPageUserProfile(null);
-            setIsLoadingPageProfile(false);
           }
+        } else {
+          console.log('Page: No user, resetting state.');
+          setPageUserProfile(null);
+          setIsLoadingPageProfile(false);
+          hasFetchedProfile.current = false;
         }
       } catch (error) {
         console.error('Page: Unexpected error in handleAuthChange:', error);
@@ -257,27 +260,38 @@ export default function AOLBEAMPage() {
       }
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
+    // Set up auth state change listener
+    try {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
+      authSubscription = { unsubscribe: () => subscription.unsubscribe() };
+    } catch (error) {
+      console.error('Page: Error setting up auth subscription:', error);
+      if (isMounted) {
+        setIsLoadingPageProfile(false);
+      }
+    }
     
+    // Check for existing session
     const checkUser = async () => {
-      console.log('Page: checkUser called. Checking for existing session...');
+      console.log('Page: Checking for existing session...');
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user ?? null;
         
         if (!isMounted) return;
         
-        // Only update if the user has actually changed
-        if (user?.id !== pageCurrentUser?.id) {
-          setPageCurrentUser(user);
-          
-          if (user) {
-            console.log('Page: User found in checkUser, calling fetchAndSetUserProfile.');
-            await fetchAndSetUserProfile(user);
-          } else {
-            console.log('Page: No user found in checkUser. Setting isLoadingPageProfile to false.');
-            setIsLoadingPageProfile(false);
-          }
+        // Skip if user hasn't changed
+        if (user?.id === pageCurrentUser?.id) return;
+        
+        console.log('Page: Session check complete, user:', user?.email || 'none');
+        setPageCurrentUser(user);
+        
+        if (user) {
+          console.log('Page: Existing session found, fetching profile...');
+          await fetchAndSetUserProfile(user);
+        } else {
+          console.log('Page: No existing session found.');
+          setIsLoadingPageProfile(false);
         }
       } catch (error) {
         console.error('Page: Error checking user session:', error);
@@ -287,14 +301,17 @@ export default function AOLBEAMPage() {
       }
     };
     
-    checkUser(); 
+    checkUser();
 
+    // Cleanup function
     return () => {
-      console.log("Page: Cleaning up auth subscription from main useEffect.");
+      console.log('Page: Cleaning up auth subscription and marking as unmounted.');
       isMounted = false;
-      subscription?.unsubscribe();
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+      }
     };
-  }, [supabase, fetchAndSetUserProfile, pageCurrentUser?.id]);
+  }, [supabase]);  // Removed dependencies to prevent unnecessary re-runs
 
   useEffect(() => {
     console.log(
@@ -630,50 +647,71 @@ export default function AOLBEAMPage() {
     return "Interactions: N/A (Error loading profile)"; 
   };
 
+  const handleSignOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      // The auth state change will be handled by the useEffect
+    } catch (error) {
+      console.error('Error signing out:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to sign out. Please try again.'
+      });
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <PaywallModal
-        isOpen={showPaywall}
-        onClose={() => {
-          const isMandatoryPaywall = !!(pageCurrentUser && pageUserProfile && !pageUserProfile.is_subscribed && ((pageUserProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT ));
-            if (!isMandatoryPaywall) {
-                setShowPaywall(false);
-            } else {
-                 toast({title: "Plan Selection Required", description: "Please select a plan to continue using AOLBEAM.", variant: "default"});
-            }
-        }}
-        onSubscribe={handleSubscribe}
-        onLoginRegister={handleLoginForPaywall}
-        isMandatory={showPaywall && !!(pageCurrentUser && pageUserProfile && !pageUserProfile.is_subscribed && ((pageUserProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT)) }
+    <div className="min-h-screen flex flex-col">
+      <Header 
+        userProfile={pageUserProfile} 
+        isLoadingProfile={isLoadingPageProfile} 
+        onSignOut={handleSignOut}
       />
-      
-      <section className="py-16 md:py-24 text-center bg-background">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl mx-auto">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
-             <span className="text-primary">Access of Learning</span>
-            </h1>
-            <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
-            <span className="text-primary">Beam</span> into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
-              Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
-            </p>
-            <div className="mt-10">
-              <Button size="lg" onClick={scrollToProblemGenerator} className="text-lg px-8 py-3 shadow-lg hover:shadow-primary/30 transition-shadow">
-                Generate Your First Problem <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
+      <main className="flex-grow bg-background text-foreground">
+        <PaywallModal
+          isOpen={showPaywall}
+          onClose={() => {
+            const isMandatoryPaywall = !!(pageCurrentUser && pageUserProfile && !pageUserProfile.is_subscribed && ((pageUserProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT));
+            if (!isMandatoryPaywall) {
+              setShowPaywall(false);
+            } else {
+              toast({title: "Plan Selection Required", description: "Please select a plan to continue using AOLBEAM.", variant: "default"});
+            }
+          }}
+          onSubscribe={handleSubscribe}
+          onLoginRegister={handleLoginForPaywall}
+          isMandatory={showPaywall && !!(pageCurrentUser && pageUserProfile && !pageUserProfile.is_subscribed && ((pageUserProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT))}
+        />
+        
+        <section className="py-16 md:py-24 text-center bg-background">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-3xl mx-auto">
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
+                <span className="text-primary">Access of Learning</span>
+              </h1>
+              <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
+                <span className="text-primary">Beam</span> into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
+                Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
+              </p>
+              <div className="mt-10">
+                <Button size="lg" onClick={scrollToProblemGenerator} className="text-lg px-8 py-3 shadow-lg hover:shadow-primary/30 transition-shadow">
+                  Generate Your First Problem <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <main ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16 flex-grow">
-        {isLoadingPageProfile && pageCurrentUser && (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground">Loading your profile...</p>
-          </div>
-        )}
-        {!isLoadingPageProfile && (
+        <section ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">
+          {isLoadingPageProfile && pageCurrentUser && (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+              <p className="text-muted-foreground">Loading your profile...</p>
+            </div>
+          )}
+          {!isLoadingPageProfile && (
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8">
               <div className="lg:col-span-3 flex flex-col gap-6">
                 <ProblemGenerator
@@ -684,24 +722,24 @@ export default function AOLBEAMPage() {
                   defaultDifficulty={currentDifficulty}
                 />
                 {currentProblem && (
-                <>
-                <div className="flex gap-2 mt-0"> 
-                    <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (!!pageCurrentUser && isLoadingPageProfile))}>
+                  <>
+                    <div className="flex gap-2 mt-0"> 
+                      <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (!!pageCurrentUser && isLoadingPageProfile))}>
                         <RefreshCcw className="mr-2 h-4 w-4" /> Another (Same Topic)
-                    </Button>
-                    <Button onClick={handleStartNew} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (!!pageCurrentUser && isLoadingPageProfile))}>
+                      </Button>
+                      <Button onClick={handleStartNew} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (!!pageCurrentUser && isLoadingPageProfile))}>
                         <FilePlus2 className="mr-2 h-4 w-4" /> Start New Topic
-                    </Button>
-                </div>
-                <ProblemDisplay
-                    problem={currentProblem}
-                    problemType={currentProblemType} 
-                    onSubmitAnswer={handleEvaluateAnswer}
-                    onFeedbackSubmit={handleProblemFeedback} 
-                    isLoading={!!(isLoadingEvaluation || (!!pageCurrentUser && isLoadingPageProfile))}
-                    currentTopic={currentTopic}
-                />
-                </>
+                      </Button>
+                    </div>
+                    <ProblemDisplay
+                      problem={currentProblem}
+                      problemType={currentProblemType} 
+                      onSubmitAnswer={handleEvaluateAnswer}
+                      onFeedbackSubmit={handleProblemFeedback} 
+                      isLoading={!!(isLoadingEvaluation || (!!pageCurrentUser && isLoadingPageProfile))}
+                      currentTopic={currentTopic}
+                    />
+                  </>
                 )}
                 {evaluationResult && <EvaluationResult evaluation={evaluationResult} />}
               </div>
@@ -713,20 +751,21 @@ export default function AOLBEAMPage() {
                   onFetchDetails={handleFetchTopicDetails}
                   isLoading={!!(isLoadingDetails || (!!pageCurrentUser && isLoadingPageProfile))}
                 />
-                <HistoryView
-                    history={history} 
-                />
+                <HistoryView history={history} />
               </div>
             </div>
-        )}
+          )}
+        </section>
       </main>
-      <Footer /> 
+
+    <main ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16 flex-grow">
+      </main>
+      <Footer />
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 pb-4 text-center">
         <p className="text-xs text-muted-foreground">
-            {interactionsLeftText()}
+          {interactionsLeftText()}
         </p>
       </div>
     </div>
   );
-}
-    
+};
