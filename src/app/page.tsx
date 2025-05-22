@@ -32,7 +32,7 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 
 const FREE_INTERACTION_LIMIT = 5;
-const ALL_CONCRETE_PROBLEM_TYPES: Exclude<ProblemType, 'random' | 'diagram'>[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
+const ALL_CONCRETE_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
 
 
 export default function AOLBEAMPage() {
@@ -44,10 +44,10 @@ export default function AOLBEAMPage() {
   
   const [pageCurrentUser, setPageCurrentUser] = useState<User | null>(null);
   const [pageUserProfile, setPageUserProfile] = useState<UserProfile | null>(null);
-  const [isLoadingPageProfile, setIsLoadingPageProfile] = useState<boolean>(true); // Start true
+  const [isLoadingPageProfile, setIsLoadingPageProfile] = useState<boolean>(true);
 
   const [currentTopic, setCurrentTopic] = useState<string>('');
-  const [currentProblemType, setCurrentProblemType] = useState<ProblemType>('theory');
+  const [currentProblemType, setCurrentProblemType] = useState<Exclude<ProblemType, 'random'>>('theory');
   const [currentDifficulty, setCurrentDifficulty] = useState<DifficultyLevel>('medium');
   const [currentProblem, setCurrentProblem] = useState<GeneratePracticeProblemOutput | null>(null);
   const [evaluationResult, setEvaluationResult] = useState<EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string } | null>(null);
@@ -68,37 +68,43 @@ export default function AOLBEAMPage() {
   };
 
   const fetchAndSetUserProfile = useCallback(async (user: User) => {
-    console.log(`Page: Attempting to fetch profile from user_profiles table for user: ${user.id}`);
+    console.log(`Page: fetchAndSetUserProfile called for user: ${user.id}`);
     setIsLoadingPageProfile(true);
     setPageUserProfile(null); 
 
     try {
-      let { data: profileData, error: fetchError } = await supabase
+      console.log(`Page: Attempting to query user_profiles for user ${user.id} (fetchAndSetUserProfile)...`);
+      let { data: profileData, error: fetchError, status: fetchStatus } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
+      console.log(`Page: Query for user_profiles for ${user.id} completed. Status: ${fetchStatus}, Error:`, fetchError, "Data:", profileData);
+      
       if (profileData) {
+        console.log(`Page: Profile found for ${user.id}:`, profileData);
         let needsClientSideUpdate = false;
         const updatePayload: Partial<UserProfile> = {};
 
         if (!profileData.email && user.email) {
+          console.log(`Page: Profile for ${user.id} missing email, will attempt update.`);
           updatePayload.email = user.email;
           needsClientSideUpdate = true;
         }
         if (!profileData.full_name && user.user_metadata?.full_name) {
+          console.log(`Page: Profile for ${user.id} missing full_name from metadata, will attempt update.`);
           updatePayload.full_name = user.user_metadata.full_name;
           needsClientSideUpdate = true;
         } else if (!profileData.full_name && user.email && !user.user_metadata?.full_name) {
-          // Fallback for full_name if not in metadata
+          console.log(`Page: Profile for ${user.id} missing full_name, will use email part for update.`);
           updatePayload.full_name = user.email.split('@')[0];
           needsClientSideUpdate = true;
         }
 
 
         if (needsClientSideUpdate) {
-          console.log(`Page: Profile for ${user.id} missing details from DB, attempting client-side update...`, updatePayload);
+          console.log(`Page: Attempting client-side update for profile ${user.id} with payload:`, updatePayload);
           const { data: updatedProfile, error: clientUpdateError } = await supabase
             .from('user_profiles')
             .update(updatePayload)
@@ -108,16 +114,16 @@ export default function AOLBEAMPage() {
           
           if (clientUpdateError) {
             console.error(`Page: Error updating profile for ${user.id} with missing details via client:`, clientUpdateError);
-            // Continue with potentially incomplete profileData, or handle error more strictly
           } else if (updatedProfile) {
-            profileData = updatedProfile as UserProfile; // Use the updated profile
-            console.log(`Page: Profile for ${user.id} updated successfully with missing details via client.`);
+            profileData = updatedProfile as UserProfile; 
+            console.log(`Page: Profile for ${user.id} updated successfully via client with details:`, profileData);
           }
         }
         setPageUserProfile(profileData as UserProfile);
+        console.log(`Page: pageUserProfile set for ${user.id}`);
 
       } else if (fetchError && fetchError.code === 'PGRST116') { 
-        console.log('Page: No profile found (PGRST116), attempting to create as fallback (trigger might not have run/completed)...');
+        console.log(`Page: No profile found for ${user.id} (PGRST116), attempting to create fallback profile...`);
         const newProfilePayload: Omit<UserProfile, 'created_at' | 'updated_at'> = { 
           id: user.id,
           email: user.email!, 
@@ -125,6 +131,7 @@ export default function AOLBEAMPage() {
           interaction_count: 0,
           is_subscribed: false,
         };
+        console.log(`Page: Fallback profile payload for ${user.id}:`, newProfilePayload);
         const { data: insertedProfile, error: insertError } = await supabase
           .from('user_profiles')
           .insert(newProfilePayload)
@@ -132,77 +139,88 @@ export default function AOLBEAMPage() {
           .single();
         
         if (insertedProfile) {
+            console.log(`Page: Fallback profile created and set for ${user.id}:`, insertedProfile);
             setPageUserProfile(insertedProfile as UserProfile);
         } else if (insertError && insertError.code === '23505') { 
-            console.log('Page: Profile insert failed due to unique violation (profile likely created by trigger). Re-fetching...');
+            console.log(`Page: Fallback profile insert for ${user.id} failed (unique violation - 23505). Re-fetching profile...`);
             const { data: refetchedData, error: refetchError } = await supabase
                 .from('user_profiles')
                 .select('*')
                 .eq('id', user.id)
                 .single();
-            if (refetchedData) setPageUserProfile(refetchedData as UserProfile);
-            else {
-                console.error('Page: Error re-fetching profile after unique violation:', refetchError);
+            if (refetchedData) {
+                console.log(`Page: Profile re-fetched successfully for ${user.id} after unique violation:`, refetchedData);
+                setPageUserProfile(refetchedData as UserProfile);
+            } else {
+                console.error(`Page: Error re-fetching profile for ${user.id} after unique violation:`, refetchError);
                 toast({ variant: 'destructive', title: 'Profile Sync Error', description: `Could not sync your profile: ${refetchError?.message || 'Unknown error'}`});
             }
         } else { 
-            console.error('Page: Error creating user profile during fallback insert:', insertError);
+            console.error(`Page: Error creating fallback user profile for ${user.id}:`, insertError);
             toast({ variant: 'destructive', title: 'Profile Creation Failed', description: `Could not create your profile: ${insertError?.message || 'Unknown error'}`});
         }
       } else if (fetchError) { 
-        console.error('Page: Database error fetching profile:', fetchError);
+        console.error(`Page: Database error fetching profile for ${user.id}:`, fetchError);
         toast({ variant: 'destructive', title: 'Profile Error', description: `Could not load your profile: ${fetchError.message}`});
+      } else {
+         console.warn(`Page: No profile data and no fetch error for ${user.id} (fetchAndSetUserProfile). This is unexpected.`);
       }
     } catch (error) { 
-      console.error('Page: Unexpected error during profile setup:', error);
+      console.error(`Page: Unexpected error during profile setup for ${user.id} (fetchAndSetUserProfile):`, error);
       toast({ variant: 'destructive', title: 'Profile Setup Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
     } finally {
+      console.log(`Page: fetchAndSetUserProfile for ${user.id} finished. Setting isLoadingPageProfile to false.`);
       setIsLoadingPageProfile(false);
-      console.log(`Page: Profile fetching complete. isLoadingPageProfile: ${false}, pageUserProfile email: ${pageUserProfile?.email}`);
     }
   }, [supabase, toast]); 
 
 
   useEffect(() => {
+    console.log('Page: Main useEffect for auth running. Supabase client available:', !!supabase);
+
     const handleAuthChange = async (event: AuthChangeEvent, session: Session | null) => {
-      console.log('Page: Auth state changed:', event, { user: session?.user?.email });
+      console.log(`Page: Auth state changed: ${event}`, { user: session?.user?.email });
       const user = session?.user ?? null;
-      setPageCurrentUser(user);
+      setPageCurrentUser(user); 
       
       if (user) {
-        console.log('Page: User authenticated, fetching profile...');
+        console.log('Page: User authenticated from onAuthStateChange, calling fetchAndSetUserProfile.');
         await fetchAndSetUserProfile(user);
       } else {
+        console.log('Page: No user from onAuthStateChange. Resetting profile and loading state.');
         setPageUserProfile(null);
-        setIsLoadingPageProfile(false); 
+        setIsLoadingPageProfile(false);
       }
     };
 
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
+    
     const checkUser = async () => {
-      console.log('Page: Checking for existing session...');
-      setIsLoadingPageProfile(true); 
+      console.log('Page: checkUser called. Checking for existing session...');
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user ?? null;
       setPageCurrentUser(user); 
       if (user) {
+        console.log('Page: User found in checkUser, calling fetchAndSetUserProfile.');
         await fetchAndSetUserProfile(user);
       } else {
+        console.log('Page: No user found in checkUser. Setting isLoadingPageProfile to false.');
         setIsLoadingPageProfile(false); 
       }
     };
     
-    console.log('Page: Setting up auth subscription...');
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
     checkUser(); 
 
     return () => {
+      console.log("Page: Cleaning up auth subscription from main useEffect.");
       subscription?.unsubscribe();
-      console.log("Page: Cleaning up auth subscription");
     };
   }, [supabase, fetchAndSetUserProfile]);
 
   useEffect(() => {
-    console.log('Page: Profile state updated - isLoadingProfile:', isLoadingPageProfile, 'pageCurrentUser:', !!pageCurrentUser, 'pageUserProfile email:', pageUserProfile?.email);
+    console.log(
+      `Page: Profile state updated - isLoadingProfile: ${isLoadingPageProfile} pageCurrentUser: ${!!pageCurrentUser} pageUserProfile email: ${pageUserProfile?.email}`
+    );
   }, [isLoadingPageProfile, pageCurrentUser, pageUserProfile]);
 
   useEffect(() => {
@@ -231,7 +249,6 @@ export default function AOLBEAMPage() {
   const incrementInteraction = useCallback(async () => {
     if (pageCurrentUser && pageUserProfile && !pageUserProfile.is_subscribed) {
         const newCount = (pageUserProfile.interaction_count || 0) + 1;
-        // Optimistically update UI
         setPageUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null); 
         
         try {
@@ -242,13 +259,11 @@ export default function AOLBEAMPage() {
             if (error) {
                 console.error("Page: Error updating interaction count in Supabase:", error);
                 toast({ variant: "destructive", title: "Sync Error", description: "Could not save interaction count. Reverting UI." });
-                // Revert optimistic update
                 setPageUserProfile(prev => prev ? { ...prev, interaction_count: newCount - 1 } : null);
             }
         } catch (error: any) {
             console.error("Page: Exception updating interaction count in Supabase:", error);
             toast({ variant: "destructive", title: "Sync Error", description: "Could not save interaction count. Reverting UI." });
-            // Revert optimistic update
             setPageUserProfile(prev => prev ? { ...prev, interaction_count: newCount - 1 } : null); 
         }
     } else if (!pageCurrentUser) { 
@@ -267,9 +282,8 @@ export default function AOLBEAMPage() {
         userAnswer: itemToAdd.userAnswer,
         selectedOption: itemToAdd.selectedOption,
         evaluation: itemToAdd.evaluation,
-        difficulty: itemToAdd.difficulty, // ensure this is set, from AI or default
-        problemType: itemToAdd.problemType, // User's selection, can be 'random'
-        // actualProblemType is not stored directly in local history item but used for DB
+        difficulty: itemToAdd.difficulty,
+        problemType: itemToAdd.problemType, 
     };
 
     setHistory(prevHistory => {
@@ -278,13 +292,12 @@ export default function AOLBEAMPage() {
           const dbRecord: any = { 
               user_id: pageCurrentUser.id,
               topic: itemToAdd.topic,
-              problem_type: itemToAdd.actualProblemType, // Store the concrete type
+              problem_type: itemToAdd.actualProblemType,
               difficulty: itemToAdd.difficulty,
               problem_statement: itemToAdd.problem.problemStatement,
               answer_format: itemToAdd.problem.answerFormat,
               multiple_choice_options: itemToAdd.problem.multipleChoiceOptions,
               correct_answer: itemToAdd.problem.correctAnswer,
-              // Other fields like user_answer, evaluation will be updated later
           };
           supabase.from('user_interactions').insert(dbRecord).select('id').single()
           .then(({ data: dbData, error: dbError }) => {
@@ -292,7 +305,6 @@ export default function AOLBEAMPage() {
                   console.error("Page: Error saving history to Supabase:", dbError);
                   toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account. " + dbError.message });
               } else if (dbData) {
-                // Update the local history item with the supabase_id
                 setHistory(prev => prev.map(hItem => 
                     hItem.id === newHistoryItem.id ? { ...hItem, supabase_id: dbData.id } : hItem
                 ));
@@ -311,10 +323,9 @@ export default function AOLBEAMPage() {
       const updatedItem: InteractionHistoryItem = {
         ...prevHistory[0],
         ...updates,
-        // Ensure problem object is spread correctly if updated, otherwise keep existing
         problem: updates.problem ? { ...prevHistory[0].problem!, ...updates.problem } : prevHistory[0].problem,
       };
-      itemToUpdateSupabaseId = updatedItem.supabase_id; // Get supabase_id from the potentially updated item
+      itemToUpdateSupabaseId = updatedItem.supabase_id;
       const newHistory = [updatedItem, ...prevHistory.slice(1)];
 
       if (supabase && pageCurrentUser && itemToUpdateSupabaseId) { 
@@ -324,7 +335,6 @@ export default function AOLBEAMPage() {
         if (updates.evaluation !== undefined) {
           dbUpdatePayload.evaluation_is_correct = updates.evaluation.isCorrect;
           dbUpdatePayload.evaluation_feedback = updates.evaluation.feedback;
-          // Add other evaluation fields if they exist and need to be saved
           if ('correctAnswer' in updates.evaluation && updates.evaluation.correctAnswer) dbUpdatePayload.evaluation_correct_answer_detail = updates.evaluation.correctAnswer;
           if ('explanation' in updates.evaluation && updates.evaluation.explanation) dbUpdatePayload.evaluation_explanation_detail = updates.evaluation.explanation;
 
@@ -345,9 +355,6 @@ export default function AOLBEAMPage() {
           });
         }
       } else if (supabase && pageCurrentUser && !itemToUpdateSupabaseId && prevHistory[0] && Object.keys(updates).length > 0) {
-          // This case means we are trying to update a local history item that hasn't been synced (no supabase_id)
-          // This might happen if the initial insert to Supabase failed or is pending.
-          // For now, we just log a warning. More robust handling could queue this update.
           console.warn("Page: Attempted to update history item in Supabase, but supabase_id was missing for the last item. Local history updated.", prevHistory[0]);
       }
       return newHistory;
@@ -376,14 +383,14 @@ export default function AOLBEAMPage() {
     try {
       await incrementInteraction();
       const result = await generatePracticeProblem({ topic, problemType: actualProblemTypeForAI, difficulty });
-      const problemDifficulty = result.difficulty || difficulty; // Use AI's difficulty if provided, else input
+      const problemDifficulty = result.difficulty || difficulty; 
       setCurrentProblem({...result, difficulty: problemDifficulty});
       await addToHistory({ 
         topic,
-        problemType: type, // User's selection (can be 'random')
-        actualProblemType: actualProblemTypeForAI, // The concrete type generated
+        problemType: type,
+        actualProblemType: actualProblemTypeForAI, 
         difficulty: problemDifficulty, 
-        problem: {...result, difficulty: problemDifficulty}, // Ensure problem in history also has difficulty
+        problem: {...result, difficulty: problemDifficulty}, 
       });
       toast({ title: "Problem Generated!", description: `A new ${actualProblemTypeForAI} problem on "${topic}" (${problemDifficulty}) is ready.` });
     } catch (error) {
@@ -406,7 +413,6 @@ export default function AOLBEAMPage() {
       const isMcqStyleProblem = currentProblem.multipleChoiceOptions && currentProblem.multipleChoiceOptions.length > 0;
 
       if (!isMcqStyleProblem) { 
-        // Ensure topicDetails for evaluation is available, fetch if needed (though ideally fetched before evaluation)
         const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific topic details available for this evaluation.";
         evalOutput = await evaluateTheoryAnswer({
           question: currentProblem.problemStatement,
@@ -416,12 +422,11 @@ export default function AOLBEAMPage() {
         });
         updatesForHistory.userAnswer = answer;
       } else { 
-        // For MCQ, simple check against correctAnswer
         const isCorrect = answer === currentProblem.correctAnswer;
         evalOutput = {
           isCorrect,
           feedback: isCorrect
-            ? `Correct! ${currentProblem.answerFormat}` // answerFormat here is the explanation for MCQ
+            ? `Correct! ${currentProblem.answerFormat}` 
             : `Incorrect. ${currentProblem.answerFormat} The correct option was: ${currentProblem.correctAnswer}`,
         };
         updatesForHistory.selectedOption = answer;
@@ -515,17 +520,14 @@ export default function AOLBEAMPage() {
   };
 
   const handleLoginForPaywall = async () => {
-    // This function would be called by the PaywallModal's "Login/Register" button
-    // The actual Google Sign-In is initiated by the global Header.
   };
 
 
   useEffect(() => {
-    // Load last interaction for guests from localStorage if no current problem is active
     if (!isLoadingPageProfile && !pageCurrentUser && history.length > 0 && !currentProblem && !isLoadingProblem) {
       const lastItem = history[0];
       setCurrentTopic(lastItem.topic);
-      setCurrentProblemType(lastItem.problemType); 
+      setCurrentProblemType(lastItem.problemType === 'random' ? 'theory' : lastItem.problemType as Exclude<ProblemType, 'random'>); 
       setCurrentDifficulty(lastItem.difficulty || 'medium');
       setCurrentProblem(lastItem.problem);
       if (lastItem.evaluation) setEvaluationResult(lastItem.evaluation);
@@ -566,7 +568,6 @@ export default function AOLBEAMPage() {
         isMandatory={showPaywall && !!(pageCurrentUser && pageUserProfile && !pageUserProfile.is_subscribed && ((pageUserProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT)) }
       />
       
-      {/* Hero Section */}
       <section className="py-16 md:py-24 text-center bg-background">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto">
@@ -615,7 +616,7 @@ export default function AOLBEAMPage() {
                 </div>
                 <ProblemDisplay
                     problem={currentProblem}
-                    problemType={currentProblemType} // The actual resolved problem type
+                    problemType={currentProblemType} 
                     onSubmitAnswer={handleEvaluateAnswer}
                     onFeedbackSubmit={handleProblemFeedback} 
                     isLoading={!!(isLoadingEvaluation || (!!pageCurrentUser && isLoadingPageProfile))}
