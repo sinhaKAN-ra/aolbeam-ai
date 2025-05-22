@@ -16,7 +16,7 @@ import {
 import {
   fetchTopicDetails,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, ArrowRight } from 'lucide-react';
+import { RefreshCcw, FilePlus2, ArrowRight, Loader2 } from 'lucide-react';
 import { createClientComponentClient, type SupabaseClient } from '@supabase/auth-helpers-nextjs';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
