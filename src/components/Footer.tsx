@@ -1,6 +1,11 @@
 
 // src/components/Footer.tsx
+"use client"; // Make it a client component to fetch user session
+
 import Link from 'next/link';
+import { useState, useEffect } from 'react';
+import type { User } from '@supabase/supabase-js';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Brain, FileText, ShieldCheck, DollarSign, Mail, Rss, Briefcase, Instagram, Linkedin as LinkedinIcon, InfoIcon as AboutIcon } from 'lucide-react';
 
 // SVG Icon for Discord
@@ -27,8 +32,27 @@ const XIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
 
 export default function Footer() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const supabase = createClientComponentClient();
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setCurrentUser(session?.user ?? null);
+    });
+
+    // Initial check
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setCurrentUser(user);
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, [supabase]);
+
   return (
     <footer className="mt-auto py-8 border-t bg-card/50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -58,9 +82,11 @@ export default function Footer() {
           <Link href="/blog" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
             <Rss size={16} /> Blog
           </Link>
-          <Link href="/admin/blog" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-            <Briefcase size={16} /> Admin
-          </Link>
+          {currentUser && currentUser.email === ADMIN_EMAIL && (
+            <Link href="/admin/blog" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+              <Briefcase size={16} /> Admin
+            </Link>
+          )}
         </div>
         <div className="flex justify-center gap-x-6 gap-y-2 mt-6 mb-4 flex-wrap">
           <Link href="#" target="_blank" rel="noopener noreferrer" aria-label="Discord" className="text-muted-foreground hover:text-primary transition-colors">
