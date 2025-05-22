@@ -19,15 +19,18 @@ import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types';
 import { Brain, Menu, UserCircle, LogOut, ShieldCheck, Home, User as ProfileIcon, Newspaper, Mail as ContactIcon, Info as AboutIcon, DollarSign, Settings } from 'lucide-react';
 
-const ADMIN_EMAIL = "sinhakaran01235@gmail.com"; // Define ADMIN_EMAIL or import if from a shared constants file
+const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
 
 export default function Header() {
   const { toast } = useToast();
-  const [supabase] = useState<SupabaseClient>(() => createClientComponentClient());
+  const [supabase] = useState<SupabaseClient>(() => {
+    console.log('Header: Initializing Supabase client...');
+    return createClientComponentClient();
+  });
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(true);
+  const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(true); // Start true
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const fetchAndSetUserProfile = useCallback(async (user: User) => {
@@ -63,29 +66,35 @@ export default function Header() {
           setUserProfile(insertedProfile as UserProfile);
         } else if (insertError && insertError.code === '23505') {
           console.log('Header: Profile insert failed (unique violation), re-fetching...');
+          // Profile was likely created by the trigger, try fetching again
           const { data: refetchedData, error: refetchError } = await supabase
             .from('user_profiles')
             .select('*')
             .eq('id', user.id)
             .single();
           if (refetchedData) setUserProfile(refetchedData as UserProfile);
-          else console.error('Header: Error re-fetching profile:', refetchError);
+          else {
+             console.error('Header: Error re-fetching profile after unique violation:', refetchError);
+             toast({ variant: 'destructive', title: 'Profile Sync Error', description: `Could not sync your profile: ${refetchError?.message || 'Unknown error'}`});
+          }
         } else {
-          console.error('Header: Error creating profile:', insertError);
+          console.error('Header: Error creating profile during fallback insert:', insertError);
+          toast({ variant: 'destructive', title: 'Profile Creation Failed', description: `Could not create your profile: ${insertError?.message || 'Unknown error'}`});
         }
       } else if (fetchError) {
         console.error('Header: Database error fetching profile:', fetchError);
+        toast({ variant: 'destructive', title: 'Profile Error', description: `Could not load your profile: ${fetchError.message}`});
       }
     } catch (error) {
       console.error('Header: Unexpected error during profile setup:', error);
+      toast({ variant: 'destructive', title: 'Profile Setup Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
     } finally {
       setIsLoadingProfile(false);
-      console.log(`Header: Profile fetching complete. isLoading: ${false}, userProfile: ${!!userProfile}`);
+      console.log(`Header: Profile fetching complete. isLoading: ${false}, userProfile email: ${userProfile?.email}`);
     }
-  }, [supabase, toast]);
+  }, [supabase, toast, userProfile?.email]); // Added userProfile?.email to potentially re-run if email changes, though unlikely.
 
   useEffect(() => {
-    console.log("Header: Supabase client initialized.");
     const handleAuthChange = async (event: AuthChangeEvent, session: Session | null) => {
       console.log('Header: Auth state changed:', event, { user: session?.user?.email });
       const user = session?.user ?? null;
@@ -95,30 +104,30 @@ export default function Header() {
         await fetchAndSetUserProfile(user);
       } else {
         setUserProfile(null);
-        setIsLoadingProfile(false);
+        setIsLoadingProfile(false); // Clear loading if user logs out
       }
     };
 
     const checkUser = async () => {
-      setIsLoadingProfile(true);
+      setIsLoadingProfile(true); // Set loading true at the start of checking
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user ?? null;
-      setCurrentUser(user);
+      setCurrentUser(user); // Set current user based on session
       if (user) {
         await fetchAndSetUserProfile(user);
       } else {
-        setIsLoadingProfile(false);
+        setIsLoadingProfile(false); // No user, so profile loading is done (nothing to load)
       }
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
-    checkUser();
+    checkUser(); // Initial check
 
     return () => {
       subscription?.unsubscribe();
       console.log("Header: Auth subscription cleaned up.");
     };
-  }, [supabase, fetchAndSetUserProfile]);
+  }, [supabase, fetchAndSetUserProfile]); // Dependencies for the main auth effect
 
   const handleSignInWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -137,11 +146,13 @@ export default function Header() {
     } else {
       setCurrentUser(null);
       setUserProfile(null);
+      setMobileNavOpen(false); // Close mobile nav on logout
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
     }
   };
 
   const navItems = [
+    { href: "/", label: "Home", icon: Home }, // Added Home for mobile
     { href: "/profile", label: "Profile", icon: ProfileIcon },
     { href: "/pricing", label: "Pricing", icon: DollarSign },
     { href: "/blog", label: "Blog", icon: Newspaper },
@@ -157,17 +168,15 @@ export default function Header() {
             <Brain className="h-7 w-7" /> AOLBEAM
           </Link>
           
+          {/* Desktop navigation removed as per request - links are in footer */}
           <nav className="hidden md:flex items-center gap-1">
-            {navItems.map(item => (
-              <Button key={item.label} variant="ghost" asChild>
-                <Link href={item.href}>{item.label}</Link>
-              </Button>
-            ))}
+            {/* Intentionally empty for desktop header nav links */}
           </nav>
           
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            {isLoadingProfile && currentUser && <Button variant="outline" size="icon" disabled><Settings className="h-4 w-4 animate-spin" /></Button>}
+            {isLoadingProfile && currentUser && <Button variant="ghost" size="icon" disabled><Settings className="h-5 w-5 animate-spin" /></Button>}
+            
             {!isLoadingProfile && currentUser && userProfile ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -181,13 +190,13 @@ export default function Header() {
                     {currentUser.email}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
+                  <DropdownMenuItem asChild onClick={() => setMobileNavOpen(false)}>
                     <Link href="/profile">
                       <ProfileIcon className="mr-2 h-4 w-4" /> Profile
                     </Link>
                   </DropdownMenuItem>
                   {currentUser.email === ADMIN_EMAIL && (
-                    <DropdownMenuItem asChild>
+                    <DropdownMenuItem asChild onClick={() => setMobileNavOpen(false)}>
                       <Link href="/admin/blog">
                         <ShieldCheck className="mr-2 h-4 w-4" /> Admin
                       </Link>
@@ -201,11 +210,12 @@ export default function Header() {
               </DropdownMenu>
             ) : (
                !isLoadingProfile && !currentUser && (
+                  // This button is now only visible on desktop
                   <Button 
                       variant="outline" 
                       size="sm" 
                       onClick={handleSignInWithGoogle} 
-                      className="min-w-[120px]"
+                      className="min-w-[120px] hidden md:inline-flex" 
                     >
                       <UserCircle className="mr-2 h-4 w-4" />
                       Login / Sign Up
@@ -249,7 +259,7 @@ export default function Header() {
               {currentUser && (
                  <Button 
                     variant="outline" 
-                    onClick={() => { handleSignOut(); setMobileNavOpen(false);}}
+                    onClick={() => { handleSignOut(); setMobileNavOpen(false);}} // Sign out also closes mobile nav
                     className="w-full text-base py-3 mt-2"
                   >
                     <LogOut className="mr-2 h-5 w-5" /> Sign Out
@@ -262,5 +272,3 @@ export default function Header() {
     </header>
   );
 }
-
-    
