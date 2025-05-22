@@ -32,7 +32,7 @@ const XIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
+const ADMIN_EMAIL = "aolbeam@outlook.com"; // Updated Admin Email
 
 export default function Footer() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);

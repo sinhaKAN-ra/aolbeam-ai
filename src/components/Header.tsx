@@ -19,7 +19,7 @@ import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types';
 import { Brain, Menu, UserCircle, LogOut, ShieldCheck, Home, User as ProfileIcon, Newspaper, Mail as ContactIcon, Info as AboutIcon, DollarSign, Settings } from 'lucide-react';
 
-const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
+const ADMIN_EMAIL = "aolbeam@outlook.com"; // Updated Admin Email
 
 export default function Header() {
   const { toast } = useToast();
@@ -92,7 +92,7 @@ export default function Header() {
       setIsLoadingProfile(false);
       console.log(`Header: Profile fetching complete. isLoading: ${false}, userProfile email: ${userProfile?.email}`);
     }
-  }, [supabase, toast, userProfile?.email]); // Added userProfile?.email to potentially re-run if email changes, though unlikely.
+  }, [supabase, toast]);
 
   useEffect(() => {
     const handleAuthChange = async (event: AuthChangeEvent, session: Session | null) => {
@@ -127,7 +127,7 @@ export default function Header() {
       subscription?.unsubscribe();
       console.log("Header: Auth subscription cleaned up.");
     };
-  }, [supabase, fetchAndSetUserProfile]); // Dependencies for the main auth effect
+  }, [supabase, fetchAndSetUserProfile]); 
 
   const handleSignInWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -152,7 +152,7 @@ export default function Header() {
   };
 
   const navItems = [
-    { href: "/", label: "Home", icon: Home }, // Added Home for mobile
+    { href: "/", label: "Home", icon: Home },
     { href: "/profile", label: "Profile", icon: ProfileIcon },
     { href: "/pricing", label: "Pricing", icon: DollarSign },
     { href: "/blog", label: "Blog", icon: Newspaper },
@@ -168,9 +168,8 @@ export default function Header() {
             <Brain className="h-7 w-7" /> AOLBEAM
           </Link>
           
-          {/* Desktop navigation removed as per request - links are in footer */}
           <nav className="hidden md:flex items-center gap-1">
-            {/* Intentionally empty for desktop header nav links */}
+            {/* Desktop navigation links are intentionally removed from here. Footer serves as primary nav for these. */}
           </nav>
           
           <div className="flex items-center gap-2">
@@ -210,7 +209,6 @@ export default function Header() {
               </DropdownMenu>
             ) : (
                !isLoadingProfile && !currentUser && (
-                  // This button is now only visible on desktop
                   <Button 
                       variant="outline" 
                       size="sm" 
@@ -259,7 +257,7 @@ export default function Header() {
               {currentUser && (
                  <Button 
                     variant="outline" 
-                    onClick={() => { handleSignOut(); setMobileNavOpen(false);}} // Sign out also closes mobile nav
+                    onClick={() => { handleSignOut(); setMobileNavOpen(false);}}
                     className="w-full text-base py-3 mt-2"
                   >
                     <LogOut className="mr-2 h-5 w-5" /> Sign Out
