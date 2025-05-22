@@ -19,7 +19,7 @@ import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types';
 import { Brain, Menu, UserCircle, LogOut, ShieldCheck, Home, User as ProfileIcon, Newspaper, Mail as ContactIcon, Info as AboutIcon, DollarSign, Settings } from 'lucide-react';
 
-const ADMIN_EMAIL = "aolbeam@outlook.com"; // Updated Admin Email
+const ADMIN_EMAIL = "sinhakaran01235@gmail.com"; // Reverted Admin Email
 
 export default function Header() {
   const { toast } = useToast();

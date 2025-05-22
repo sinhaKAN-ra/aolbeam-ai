@@ -37,6 +37,8 @@ const XIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const CONTACT_EMAIL = "aolbeam@outlook.com";
+const INSTITUTE_EMAIL = "aolbeam@outlook.com"; // Consolidated for now, or keep institutes@aolbeam.com if preferred
 
 export default function ContactUsPage() {
   return (
@@ -57,7 +59,7 @@ export default function ContactUsPage() {
                 For any questions, support requests, or feedback, please email us at:
               </p>
               <Button variant="link" asChild className="px-0 text-lg">
-                <a href="mailto:support@aolbeam.com">support@aolbeam.com</a>
+                <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
               </Button>
             </div>
             <Separator />
@@ -69,7 +71,7 @@ export default function ContactUsPage() {
                 If you are an educational institution interested in custom test series or bulk packages, please reach out to our dedicated team:
               </p>
               <Button variant="link" asChild className="px-0 text-lg">
-                <a href="mailto:institutes@aolbeam.com?subject=Institute Inquiry">institutes@aolbeam.com</a>
+                <a href={`mailto:${INSTITUTE_EMAIL}?subject=Institute Inquiry`}>{INSTITUTE_EMAIL}</a>
               </Button>
                <p className="text-sm text-muted-foreground mt-2">
                 (This is the same contact method provided in the paywall for institute inquiries.)
@@ -104,5 +106,3 @@ export default function ContactUsPage() {
     </div>
   );
 }
-
-    

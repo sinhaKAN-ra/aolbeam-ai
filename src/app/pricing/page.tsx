@@ -36,6 +36,8 @@ const plans: SubscriptionPlan[] = [
   },
 ];
 
+const INSTITUTE_CONTACT_EMAIL = "aolbeam@outlook.com";
+
 export default function PricingPage() {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -98,7 +100,7 @@ export default function PricingPage() {
                         <Link href="/contact-us">Contact Institute Sales</Link>
                     </Button>
                      <p className="text-xs text-muted-foreground mt-3">
-                        (You can also reach us directly at <a href="mailto:institutes@aolbeam.com?subject=Institute Inquiry" className="text-primary hover:underline">institutes@aolbeam.com</a>)
+                        (You can also reach us directly at <a href={`mailto:${INSTITUTE_CONTACT_EMAIL}?subject=Institute Inquiry`} className="text-primary hover:underline">{INSTITUTE_CONTACT_EMAIL}</a>)
                     </p>
                 </CardContent>
             </Card>
@@ -114,5 +116,3 @@ export default function PricingPage() {
     </div>
   );
 }
-
-    

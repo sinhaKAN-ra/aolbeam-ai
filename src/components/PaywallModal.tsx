@@ -48,6 +48,8 @@ const plans: SubscriptionPlan[] = [
   },
 ];
 
+const INSTITUTE_CONTACT_EMAIL = "aolbeam@outlook.com";
+
 export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister, isMandatory }: PaywallModalProps) {
   if (!isOpen) return null;
 
@@ -89,7 +91,7 @@ export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister, is
               </CardContent>
               <DialogFooter className="p-4 pt-2 mt-auto">
                  <Button
-                    onClick={() => onSubscribe(plan.id)} // This will simulate subscription for now
+                    onClick={() => onSubscribe(plan.id)} 
                     className={`w-full ${plan.highlight ? '' : 'bg-accent text-accent-foreground hover:bg-accent/90'}`}
                   >
                     <CreditCard className="mr-2 h-4 w-4" /> Choose {plan.name}
@@ -119,7 +121,7 @@ export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister, is
                     <p className="text-sm text-muted-foreground mb-3">
                         We offer custom test series and tailored packages for educational institutions.
                     </p>
-                    <Button variant="outline" onClick={() => window.location.href = 'mailto:institutes@aolbeam.com?subject=Institute Inquiry'}>
+                    <Button variant="outline" onClick={() => window.location.href = `mailto:${INSTITUTE_CONTACT_EMAIL}?subject=Institute Inquiry`}>
                         Contact Us For Institutes
                     </Button>
                 </CardContent>
