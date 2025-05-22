@@ -17,23 +17,23 @@ import { useToast } from '@/hooks/use-toast';
 import { createClientComponentClient, type SupabaseClient } from '@supabase/auth-helpers-nextjs';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types';
-import { Brain, Menu, UserCircle, LogOut, ShieldCheck, Home, User as ProfileIcon, Newspaper, Mail as ContactIcon, Info as AboutIcon, DollarSign, Settings } from 'lucide-react';
+import { Brain, Menu, UserCircle, LogOut, ShieldCheck, Home, User as ProfileIcon, Newspaper, Mail as ContactIcon, Info as AboutIcon, DollarSign, Settings, Loader2 } from 'lucide-react';
 
-const ADMIN_EMAIL = "sinhakaran01235@gmail.com"; // Reverted Admin Email
+const ADMIN_EMAIL = "sinhakaran01235@gmail.com"; 
 
 export default function Header() {
   const { toast } = useToast();
   const [supabase] = useState<SupabaseClient>(() => {
-    console.log('Header: Initializing Supabase client...');
+    console.log('Header: Initializing Supabase client (once)...');
     return createClientComponentClient();
   });
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(true); // Start true
+  const [isLoadingProfile, setIsLoadingProfile] = useState<boolean>(true); 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const fetchAndSetUserProfile = useCallback(async (user: User) => {
+  const fetchAndSetUserProfileHeader = useCallback(async (user: User) => {
     console.log(`Header: Attempting to fetch profile for user: ${user.id}`);
     setIsLoadingProfile(true);
     setUserProfile(null);
@@ -46,7 +46,39 @@ export default function Header() {
         .single();
 
       if (profileData) {
+        let needsClientSideUpdate = false;
+        const updatePayload: Partial<UserProfile> = {};
+
+        if (!profileData.email && user.email) {
+          updatePayload.email = user.email;
+          needsClientSideUpdate = true;
+        }
+        if (!profileData.full_name && user.user_metadata?.full_name) {
+          updatePayload.full_name = user.user_metadata.full_name;
+          needsClientSideUpdate = true;
+        } else if (!profileData.full_name && user.email && !user.user_metadata?.full_name) {
+          updatePayload.full_name = user.email.split('@')[0];
+          needsClientSideUpdate = true;
+        }
+
+        if (needsClientSideUpdate) {
+          console.log(`Header: Profile for ${user.id} missing details from DB, attempting client-side update...`, updatePayload);
+          const { data: updatedProfile, error: clientUpdateError } = await supabase
+            .from('user_profiles')
+            .update(updatePayload)
+            .eq('id', user.id)
+            .select()
+            .single();
+          
+          if (clientUpdateError) {
+            console.error(`Header: Error updating profile for ${user.id} with missing details via client:`, clientUpdateError);
+          } else if (updatedProfile) {
+            profileData = updatedProfile as UserProfile;
+            console.log(`Header: Profile for ${user.id} updated successfully with missing details via client.`);
+          }
+        }
         setUserProfile(profileData as UserProfile);
+
       } else if (fetchError && fetchError.code === 'PGRST116') {
         console.log('Header: No profile found (PGRST116), attempting to create as fallback...');
         const newProfilePayload: Omit<UserProfile, 'created_at' | 'updated_at'> = {
@@ -66,7 +98,6 @@ export default function Header() {
           setUserProfile(insertedProfile as UserProfile);
         } else if (insertError && insertError.code === '23505') {
           console.log('Header: Profile insert failed (unique violation), re-fetching...');
-          // Profile was likely created by the trigger, try fetching again
           const { data: refetchedData, error: refetchError } = await supabase
             .from('user_profiles')
             .select('*')
@@ -101,33 +132,33 @@ export default function Header() {
       setCurrentUser(user);
       
       if (user) {
-        await fetchAndSetUserProfile(user);
+        await fetchAndSetUserProfileHeader(user);
       } else {
         setUserProfile(null);
-        setIsLoadingProfile(false); // Clear loading if user logs out
+        setIsLoadingProfile(false); 
       }
     };
 
     const checkUser = async () => {
-      setIsLoadingProfile(true); // Set loading true at the start of checking
+      setIsLoadingProfile(true); 
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user ?? null;
-      setCurrentUser(user); // Set current user based on session
+      setCurrentUser(user); 
       if (user) {
-        await fetchAndSetUserProfile(user);
+        await fetchAndSetUserProfileHeader(user);
       } else {
-        setIsLoadingProfile(false); // No user, so profile loading is done (nothing to load)
+        setIsLoadingProfile(false); 
       }
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
-    checkUser(); // Initial check
+    checkUser(); 
 
     return () => {
       subscription?.unsubscribe();
       console.log("Header: Auth subscription cleaned up.");
     };
-  }, [supabase, fetchAndSetUserProfile]); 
+  }, [supabase, fetchAndSetUserProfileHeader]); 
 
   const handleSignInWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -146,7 +177,7 @@ export default function Header() {
     } else {
       setCurrentUser(null);
       setUserProfile(null);
-      setMobileNavOpen(false); // Close mobile nav on logout
+      setMobileNavOpen(false); 
       toast({ title: "Logged Out", description: "You have been successfully logged out." });
     }
   };
@@ -169,12 +200,12 @@ export default function Header() {
           </Link>
           
           <nav className="hidden md:flex items-center gap-1">
-            {/* Desktop navigation links are intentionally removed from here. Footer serves as primary nav for these. */}
+            {/* Desktop navigation links intentionally removed from here. Footer serves as primary nav for these. */}
           </nav>
           
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            {isLoadingProfile && currentUser && <Button variant="ghost" size="icon" disabled><Settings className="h-5 w-5 animate-spin" /></Button>}
+            {isLoadingProfile && currentUser && <Button variant="ghost" size="icon" disabled><Loader2 className="h-5 w-5 animate-spin" /></Button>}
             
             {!isLoadingProfile && currentUser && userProfile ? (
               <DropdownMenu>
@@ -270,3 +301,4 @@ export default function Header() {
     </header>
   );
 }
+
