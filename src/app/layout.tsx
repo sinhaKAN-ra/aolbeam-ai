@@ -6,10 +6,8 @@ import 'katex/dist/katex.min.css'; // Import KaTeX CSS
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { Analytics } from "@vercel/analytics/next";
-import dynamic from 'next/dynamic';
-
-// Import the client-side HeaderWrapper component
 import HeaderWrapper from '@/components/HeaderWrapper';
+import Footer from '@/components/Footer'; // Import the Footer
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -40,8 +38,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <HeaderWrapper />
-          {children}
+          <div className="flex flex-col min-h-screen">
+            <HeaderWrapper />
+            <main className="flex-grow">{children}</main>
+            <Footer /> {/* Add Footer here */}
+          </div>
           <Toaster />
           <Analytics />
         </ThemeProvider>
@@ -49,5 +50,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-    

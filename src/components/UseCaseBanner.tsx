@@ -1,5 +1,5 @@
 // src/components/UseCaseBanner.tsx
-import { Target, Lightbulb, Settings, Briefcase, BookOpen } from 'lucide-react';
+import { Target, Lightbulb, Settings, Briefcase, BookOpen, Puzzle } from 'lucide-react';
 import type * as React from 'react';
 
 interface UseCase {
@@ -34,14 +34,18 @@ const useCases: UseCase[] = [
     title: "Deepen Understanding",
     description: "Solidify core concepts with tailored questions and insights.",
   },
+  {
+    icon: Puzzle, // New Icon
+    title: "Strategic Revision", // New Use Case
+    description: "Focus on weak areas and reinforce learning efficiently.",
+  },
 ];
 
 export function UseCaseBanner() {
   return (
     <section className="py-10 md:py-12 bg-background border-t border-b">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Title and description removed for subtlety */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           {useCases.map((useCase, index) => (
             <div
               key={index}

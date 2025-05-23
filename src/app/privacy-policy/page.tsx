@@ -2,11 +2,7 @@
 // src/app/privacy-policy/page.tsx
 import type { Metadata } from 'next';
 import Link from 'next/link';
-// Button removed as global header provides navigation
-// import { Button } from '@/components/ui/button';
-// ArrowLeft removed as global header provides navigation
-// import { ArrowLeft } from 'lucide-react';
-import Footer from '@/components/Footer';
+// Footer is now global
 
 export const metadata: Metadata = {
   title: 'Privacy Policy - AOLBEAM',
@@ -15,9 +11,8 @@ export const metadata: Metadata = {
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Header is now global */}
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
+    <>
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="max-w-3xl mx-auto bg-card p-6 sm:p-8 rounded-lg shadow-lg">
           <h2 className="text-2xl font-semibold mb-6 text-center">Privacy Policy</h2>
           
@@ -64,10 +59,7 @@ export default function PrivacyPolicyPage() {
             <p>If you have any questions about this Privacy Policy, please <Link href="/contact-us" className="text-primary hover:underline">contact us</Link>.</p>
           </div>
         </div>
-      </main>
-       <Footer />
-    </div>
+      </div>
+    </>
   );
 }
-
-    

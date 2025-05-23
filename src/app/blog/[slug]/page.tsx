@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { CalendarDays, UserCircle } from 'lucide-react';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
-import Footer from '@/components/Footer';
+// Footer is now global
 
 // This is a placeholder. In a real app, you'd fetch this data based on the slug.
 const getPostData = async (slug: string) => {
@@ -70,9 +70,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   const post = await getPostData(params.slug);
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Header is now global */}
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
+    <>
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <article className="max-w-3xl mx-auto bg-card p-6 sm:p-8 rounded-lg shadow-xl">
           <header className="mb-8">
             <div className="relative w-full h-64 sm:h-80 md:h-96 rounded-lg overflow-hidden mb-6">
@@ -103,10 +102,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
           />
 
         </article>
-      </main>
-      <Footer />
-    </div>
+      </div>
+    </>
   );
 }
-
-    

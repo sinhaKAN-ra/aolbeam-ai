@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Mail, Building, Share2, Instagram, Twitter, Linkedin } from 'lucide-react';
-import Footer from '@/components/Footer';
+// Footer is now global
 
 export const metadata: Metadata = {
   title: 'Contact Us - AOLBEAM',
@@ -38,13 +38,12 @@ const XIcon = ({ className }: { className?: string }) => (
 );
 
 const CONTACT_EMAIL = "aolbeam@outlook.com";
-const INSTITUTE_EMAIL = "aolbeam@outlook.com"; // Consolidated for now, or keep institutes@aolbeam.com if preferred
+const INSTITUTE_EMAIL = "aolbeam@outlook.com"; 
 
 export default function ContactUsPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Header is now global */}
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex justify-center flex-grow">
+    <>
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex justify-center">
         <Card className="w-full max-w-lg shadow-lg">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-semibold">Contact Us</CardTitle>
@@ -101,8 +100,7 @@ export default function ContactUsPage() {
             </div>
           </CardContent>
         </Card>
-      </main>
-       <Footer />
-    </div>
+      </div>
+    </>
   );
 }

@@ -19,7 +19,7 @@ import {
   type FetchTopicDetailsInput,
   type FetchTopicDetailsOutput,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCw, FilePlus2, ArrowRight, Loader2, Brain, Home, User as ProfileIcon, Newspaper, Mail as ContactIcon, Info as AboutIcon, DollarSign, Settings as AdminIcon, ShieldCheck, Menu, UserCircle, LogOut, Sigma, ListChecks, GitFork, Shuffle, Lightbulb, Target, Briefcase, BookOpen } from 'lucide-react';
+import { RefreshCw, FilePlus2, ArrowRight, Loader2 } from 'lucide-react';
 
 import { createClientComponentClient, type SupabaseClient } from '@supabase/auth-helpers-nextjs';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
@@ -31,21 +31,16 @@ import { EvaluationResult } from '@/components/EvaluationResult';
 import { TopicRevision } from '@/components/TopicRevision';
 import { HistoryView } from '@/components/HistoryView';
 import { PaywallModal } from '@/components/PaywallModal';
-// Footer is now global
-import { UseCaseBanner } from '@/components/UseCaseBanner'; // Import the new banner
+import { UseCaseBanner } from '@/components/UseCaseBanner';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-// ThemeToggle is now in global Header
-// import Link from 'next/link';
-// DropdownMenu components are now in global Header
+
 
 const FREE_INTERACTION_LIMIT = 5;
 const ALL_CONCRETE_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
-// ADMIN_EMAIL is now in global Header
 
 
 export default function AOLBEAMPage() {
   const { toast } = useToast();
-  // Supabase client is initialized once and its reference is stable.
   const [supabase] = useState<SupabaseClient>(() => {
     console.log('Page: Initializing Supabase client (once)...');
     return createClientComponentClient();
@@ -53,7 +48,7 @@ export default function AOLBEAMPage() {
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isLoadingPageProfile, setIsLoadingPageProfile] = useState<boolean>(true); // Start true if checking session
+  const [isLoadingPageProfile, setIsLoadingPageProfile] = useState<boolean>(true);
 
   const [currentTopic, setCurrentTopic] = useState<string>('');
   const [currentProblemType, setCurrentProblemType] = useState<ProblemType>('theory');
@@ -76,23 +71,22 @@ export default function AOLBEAMPage() {
     problemGeneratorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   
-  const fetchAndSetUserProfile = useCallback(async (user: User) => {
-    console.log(`Page: fetchAndSetUserProfile called for user: ${user.id}`);
+  const fetchAndSetUserProfileHeader = useCallback(async (user: User) => {
+    // This function is similar to fetchAndSetUserProfile in Header.tsx
+    // It's duplicated here for page-specific logic if needed, or could be a shared hook
+    console.log(`Page: fetchAndSetUserProfile (Placeholder for page-specific logic if any) for user: ${user.id}`);
     setIsLoadingPageProfile(true);
-    setUserProfile(null); 
+    setUserProfile(null);
 
     try {
-      console.log(`Page: Attempting to query user_profiles for user ${user.id} (fetchAndSetUserProfile)...`);
-      let { data: profileData, error: fetchError, status: fetchStatus } = await supabase
+      let { data: profileData, error: fetchError } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
-      console.log(`Page: Profile query for ${user.id} completed. Status: ${fetchStatus}, Error: ${JSON.stringify(fetchError)}, Data:`, profileData);
-      
-      if (fetchError && fetchError.code === 'PGRST116') { // Profile not found
-        console.log(`Page: Profile not found for user ${user.id}, attempting to create one.`);
+      if (fetchError && fetchError.code === 'PGRST116') {
+        console.log(`Page: Profile not found for ${user.id}, attempting to create one.`);
         const newProfilePayload = {
           id: user.id,
           email: user.email || '',
@@ -108,29 +102,29 @@ export default function AOLBEAMPage() {
 
         if (createError) {
           console.error(`Page: Error creating new profile for ${user.id}:`, createError);
-          if (createError.code === '23505') { 
-             console.log(`Page: Profile creation failed due to unique constraint (likely trigger ran), attempting re-fetch for ${user.id}.`);
-             const { data: refetchedProfile, error: refetchError } = await supabase
+          if (createError.code === '23505') {
+            console.log(`Page: Profile creation failed due to unique constraint (likely trigger ran), re-fetching for ${user.id}.`);
+            const { data: refetchedProfile, error: refetchError } = await supabase
               .from('user_profiles')
               .select('*')
               .eq('id', user.id)
               .single();
             if (refetchError) {
-               console.error(`Page: Error re-fetching profile for ${user.id} after unique constraint violation:`, refetchError);
+              console.error(`Page: Error re-fetching profile for ${user.id}:`, refetchError);
             } else {
-              console.log(`Page: Successfully re-fetched profile for ${user.id}:`, refetchedProfile);
               profileData = refetchedProfile;
             }
           } else {
-            fetchError = createError; // Set error to the creation error
+            // Fallback to original error if not a unique constraint violation
+             toast({ variant: "destructive", title: "Profile Error", description: createError.message });
           }
         } else {
           console.log(`Page: Successfully created new profile for ${user.id}:`, createdProfile);
           profileData = createdProfile;
-          fetchError = null; 
         }
       } else if (fetchError) {
         console.error(`Page: Error fetching profile for ${user.id}:`, fetchError);
+        toast({ variant: "destructive", title: "Profile Error", description: fetchError.message });
       } else if (profileData) {
          console.log(`Page: Successfully fetched existing profile for ${user.id}:`, profileData);
          const updates: Partial<UserProfile> = {};
@@ -154,12 +148,11 @@ export default function AOLBEAMPage() {
             if (updateError) {
               console.error(`Page: Error updating profile for ${user.id} with missing fields:`, updateError);
             } else {
-              console.log(`Page: Successfully updated profile for ${user.id} with missing fields:`, updatedProfileData);
               profileData = updatedProfileData;
             }
          }
       }
-      setUserProfile(profileData);
+      setUserProfile(profileData as UserProfile | null);
     } catch (error) {
       console.error(`Page: Unexpected error in fetchAndSetUserProfile for ${user.id}:`, error);
       toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile." });
@@ -167,7 +160,7 @@ export default function AOLBEAMPage() {
       console.log(`Page: fetchAndSetUserProfile for ${user.id} finished. isLoadingPageProfile will be set to false.`);
       setIsLoadingPageProfile(false);
     }
-  }, [supabase, toast]); // supabase and toast are stable
+  }, [supabase, toast]);
 
   useEffect(() => {
     console.log('Page: Main useEffect for auth running. Supabase client available:', !!supabase);
@@ -178,8 +171,8 @@ export default function AOLBEAMPage() {
       setCurrentUser(user);
       
       if (user) {
-        console.log(`Page: User authenticated from onAuthStateChange, calling fetchAndSetUserProfile.`);
-        await fetchAndSetUserProfile(user);
+        console.log(`Page: User authenticated from onAuthStateChange, calling fetchAndSetUserProfileHeader.`);
+        await fetchAndSetUserProfileHeader(user); // Use the page-specific or shared fetcher
       } else {
         setUserProfile(null); 
         setIsLoadingPageProfile(false); 
@@ -188,11 +181,6 @@ export default function AOLBEAMPage() {
 
     const checkUser = async () => {
       console.log('Page: checkUser called. Checking for existing session...');
-      if (!supabase) {
-        console.log("Page: Supabase client not ready in checkUser, returning.");
-        setIsLoadingPageProfile(false);
-        return;
-      }
       setIsLoadingPageProfile(true);
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -203,8 +191,8 @@ export default function AOLBEAMPage() {
         setCurrentUser(user);
 
         if (user) {
-          console.log('Page: Existing session found in checkUser, calling fetchAndSetUserProfile.');
-          await fetchAndSetUserProfile(user);
+          console.log('Page: Existing session found in checkUser, calling fetchAndSetUserProfileHeader.');
+          await fetchAndSetUserProfileHeader(user); // Use the page-specific or shared fetcher
         } else {
           console.log('Page: No existing session found in checkUser.');
           setUserProfile(null);
@@ -225,7 +213,7 @@ export default function AOLBEAMPage() {
       console.log('Page: Cleaning up auth subscription.');
       subscription?.unsubscribe();
     };
-  }, [supabase, fetchAndSetUserProfile]); // fetchAndSetUserProfile is memoized
+  }, [supabase, fetchAndSetUserProfileHeader]);
 
   useEffect(() => {
     console.log(
@@ -293,7 +281,7 @@ export default function AOLBEAMPage() {
         selectedOption: itemToAdd.selectedOption,
         evaluation: itemToAdd.evaluation,
         difficulty: itemToAdd.difficulty, 
-        problemType: itemToAdd.problemType, 
+        problemType: itemToAdd.problemType,
     };
 
     setHistory(prevHistory => [newHistoryItem, ...prevHistory].slice(0, 50));
@@ -336,7 +324,7 @@ export default function AOLBEAMPage() {
         ...updates,
         problem: updates.problem ? { ...prevHistory[0].problem!, ...updates.problem } : prevHistory[0].problem,
       };
-      itemToUpdateSupabaseId = updatedItem.supabase_id; // Get ID after constructing item
+      itemToUpdateSupabaseId = updatedItem.supabase_id;
       const newHistory = [updatedItem, ...prevHistory.slice(1)];
 
       if (supabase && currentUser && itemToUpdateSupabaseId) { 
@@ -573,92 +561,89 @@ export default function AOLBEAMPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      {/* Global Header is now in layout.tsx */}
-      <main className="flex-grow">
-       <section className="py-16 md:py-24 text-center bg-background">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="max-w-3xl mx-auto">
-              <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
-                Access of Learning
-              </h1>
-              <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
-              <span className="text-primary">Beam</span> into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
-                Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
-              </p>
-              <div className="mt-10">
-                <Button size="lg" onClick={scrollToProblemGenerator} className="text-lg px-8 py-3 shadow-lg hover:shadow-primary/30 transition-shadow">
-                  Generate Your First Problem <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-              </div>
+    <>
+      <section className="py-16 md:py-24 text-center bg-background">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-3xl mx-auto">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
+             <span className="text-primary">Access of Learning</span>
+            </h1>
+            <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
+            <span className="text-primary">Beam</span> into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
+              Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
+            </p>
+            <div className="mt-10">
+              <Button size="lg" onClick={scrollToProblemGenerator} className="text-lg px-8 py-3 shadow-lg hover:shadow-primary/30 transition-shadow">
+                Generate Your First Problem <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
             </div>
           </div>
-        </section>
-        
-        <UseCaseBanner />
-
-        <div ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">
-          {isLoadingPageProfile && currentUser ? (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-              <p className="text-muted-foreground">Loading your profile...</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8">
-              <div className="lg:col-span-3 flex flex-col gap-6">
-                <ProblemGenerator
-                  onGenerate={handleGenerateProblem}
-                  isLoading={isLoadingProblem || (!!currentUser && isLoadingPageProfile)}
-                  defaultTopic={currentTopic}
-                  defaultProblemType={currentProblemType}
-                  defaultDifficulty={currentDifficulty}
-                />
-                {currentProblem && (
-                  <>
-                    <div className="flex gap-2 mt-0"> 
-                      <Button 
-                        onClick={handleNewProblemSameTopic} 
-                        variant="outline" 
-                        className="flex-1" 
-                        disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
-                      >
-                        <RefreshCw className="mr-2 h-4 w-4" /> Another (Same Topic)
-                      </Button>
-                      <Button 
-                        onClick={handleStartNew} 
-                        variant="outline" 
-                        className="flex-1" 
-                        disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
-                      >
-                        <FilePlus2 className="mr-2 h-4 w-4" /> Start New Topic
-                      </Button>
-                    </div>
-                    <ProblemDisplay
-                      problem={currentProblem}
-                      problemType={currentProblemType} 
-                      onSubmitAnswer={handleEvaluateAnswer}
-                      onFeedbackSubmit={handleProblemFeedback} 
-                      isLoading={!!(isLoadingEvaluation || (!!currentUser && isLoadingPageProfile))}
-                      currentTopic={currentTopic} 
-                    />
-                  </>
-                )}
-                {evaluationResult && <EvaluationResult evaluation={evaluationResult} />}
-              </div>
-
-              <div className="lg:col-span-2 flex flex-col gap-6">
-                <TopicRevision
-                  topic={currentProblem ? currentTopic : null} 
-                  details={topicDetails}
-                  onFetchDetails={handleFetchTopicDetails}
-                  isLoading={!!(isLoadingDetails || (!!currentUser && isLoadingPageProfile))}
-                />
-                <HistoryView history={history} />
-              </div>
-            </div>
-          )}
         </div>
-      </main>
+      </section>
+      
+      <UseCaseBanner />
+
+      <div ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">
+        {isLoadingPageProfile && currentUser ? (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Loading your profile...</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8">
+            <div className="lg:col-span-3 flex flex-col gap-6">
+              <ProblemGenerator
+                onGenerate={handleGenerateProblem}
+                isLoading={isLoadingProblem || (!!currentUser && isLoadingPageProfile)}
+                defaultTopic={currentTopic}
+                defaultProblemType={currentProblemType}
+                defaultDifficulty={currentDifficulty}
+              />
+              {currentProblem && (
+                <>
+                  <div className="flex gap-2 mt-0"> 
+                    <Button 
+                      onClick={handleNewProblemSameTopic} 
+                      variant="outline" 
+                      className="flex-1" 
+                      disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" /> Another (Same Topic)
+                    </Button>
+                    <Button 
+                      onClick={handleStartNew} 
+                      variant="outline" 
+                      className="flex-1" 
+                      disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
+                    >
+                      <FilePlus2 className="mr-2 h-4 w-4" /> Start New Topic
+                    </Button>
+                  </div>
+                  <ProblemDisplay
+                    problem={currentProblem}
+                    problemType={currentProblemType} 
+                    onSubmitAnswer={handleEvaluateAnswer}
+                    onFeedbackSubmit={handleProblemFeedback} 
+                    isLoading={!!(isLoadingEvaluation || (!!currentUser && isLoadingPageProfile))}
+                    currentTopic={currentTopic} 
+                  />
+                </>
+              )}
+              {evaluationResult && <EvaluationResult evaluation={evaluationResult} />}
+            </div>
+
+            <div className="lg:col-span-2 flex flex-col gap-6">
+              <TopicRevision
+                topic={currentProblem ? currentTopic : null} 
+                details={topicDetails}
+                onFetchDetails={handleFetchTopicDetails}
+                isLoading={!!(isLoadingDetails || (!!currentUser && isLoadingPageProfile))}
+              />
+              <HistoryView history={history} />
+            </div>
+          </div>
+        )}
+      </div>
 
       <PaywallModal
         isOpen={showPaywall}
@@ -680,7 +665,6 @@ export default function AOLBEAMPage() {
           {interactionsLeftText()}
         </p>
       </div>
-    </div>
+    </>
   );
 }
-

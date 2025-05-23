@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription as PlanCardDescription } from '@/components/ui/card';
 import { Check, Info, Zap, CreditCard } from 'lucide-react';
 import type { SubscriptionPlan } from '@/types';
-import Footer from '@/components/Footer';
+// Footer is now global
 
 // Metadata removed as it conflicts with "use client"
 
@@ -40,9 +40,8 @@ const INSTITUTE_CONTACT_EMAIL = "aolbeam@outlook.com";
 
 export default function PricingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Header is now global */}
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
+    <>
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-3 text-primary flex items-center justify-center gap-2">
             <Zap className="w-10 h-10" /> AOLBEAM Pricing Plans
@@ -113,9 +112,7 @@ export default function PricingPage() {
                 (Other payment options may be added in the future).
             </p>
         </div>
-
-      </main>
-      <Footer />
-    </div>
+      </div>
+    </>
   );
 }

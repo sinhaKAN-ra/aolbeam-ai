@@ -13,7 +13,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Badge } from '@/components/ui/badge';
 import MathRenderer from '@/components/MathRenderer';
 import type { ProblemType, DifficultyLevel, UserProfile as AppUserProfile } from '@/types'; 
-import Footer from '@/components/Footer';
+// Footer is now global
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 
@@ -147,7 +147,7 @@ export default function ProfilePage() {
         authSubscription.unsubscribe();
       }
     };
-  }, [router, supabase.auth]);
+  }, [router, supabase.auth, authSubscription]); // Added authSubscription
 
   // Second effect: Load profile data when user is available
   useEffect(() => {
@@ -277,231 +277,222 @@ export default function ProfilePage() {
 
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Header is now global */}
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
-        <div className="max-w-4xl mx-auto">
-          <Card className="mb-8 shadow-xl overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-primary/10 via-card to-card p-6 flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
-              <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-2 border-primary shadow-md">
-                <AvatarImage src={user.user_metadata?.avatar_url} alt={userProfileData?.full_name || user.email || 'User Avatar'} />
-                <AvatarFallback className="text-2xl bg-primary/20 text-primary">
-                  {userProfileData?.full_name ? userProfileData.full_name.charAt(0).toUpperCase() : 
-                   (user.email ? user.email.charAt(0).toUpperCase() : <UserCircle size={48} />)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="text-center sm:text-left">
-                <CardTitle className="text-2xl sm:text-3xl font-bold text-primary">
-                  Welcome, {userProfileData?.full_name || user.email?.split('@')[0] || 'AOLBEAM Learner'}!
-                </CardTitle>
-                <CardDescription className="text-md text-muted-foreground mt-1">
-                  This is your personal learning dashboard. Track your progress and conquer your exams.
-                </CardDescription>
-                <p className="text-xs text-muted-foreground mt-2">Joined: {new Date(user.created_at).toLocaleDateString()}</p>
-                {userProfileData?.is_subscribed && userProfileData.subscription_plan_id && (
-                  <Badge variant="secondary" className="mt-2">Plan: {userProfileData.subscription_plan_id.charAt(0).toUpperCase() + userProfileData.subscription_plan_id.slice(1)}</Badge>
-                )}
-              </div>
-              {/* Account settings button removed for now as global header handles navigation */}
-            </CardHeader>
-          </Card>
+    <>
+      <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <Card className="mb-8 shadow-xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-primary/10 via-card to-card p-6 flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+            <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-2 border-primary shadow-md">
+              <AvatarImage src={user.user_metadata?.avatar_url} alt={userProfileData?.full_name || user.email || 'User Avatar'} />
+              <AvatarFallback className="text-2xl bg-primary/20 text-primary">
+                {userProfileData?.full_name ? userProfileData.full_name.charAt(0).toUpperCase() : 
+                 (user.email ? user.email.charAt(0).toUpperCase() : <UserCircle size={48} />)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="text-center sm:text-left">
+              <CardTitle className="text-2xl sm:text-3xl font-bold text-primary">
+                Welcome, {userProfileData?.full_name || user.email?.split('@')[0] || 'AOLBEAM Learner'}!
+              </CardTitle>
+              <CardDescription className="text-md text-muted-foreground mt-1">
+                This is your personal learning dashboard. Track your progress and conquer your exams.
+              </CardDescription>
+              <p className="text-xs text-muted-foreground mt-2">Joined: {new Date(user.created_at).toLocaleDateString()}</p>
+              {userProfileData?.is_subscribed && userProfileData.subscription_plan_id && (
+                <Badge variant="secondary" className="mt-2">Plan: {userProfileData.subscription_plan_id.charAt(0).toUpperCase() + userProfileData.subscription_plan_id.slice(1)}</Badge>
+              )}
+            </div>
+          </CardHeader>
+        </Card>
 
-          <div className="grid md:grid-cols-3 gap-6 mb-8">
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center text-lg gap-2">
-                  <BarChart3 className="text-primary" /> Overall Accuracy
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-center">
-                {totalQuestionsAttempted > 0 && userHistory.filter(item => item.evaluation).length > 0 ? (
-                  <>
-                    <p className="text-5xl font-bold text-primary mb-1">
-                      {Math.round(overallAccuracy * 100)}%
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Based on {uniqueTopicsPracticedCount} topic(s)
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-muted-foreground py-4">Start practicing to see your stats!</p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center text-lg gap-2">
-                  <History className="text-accent" /> Questions Attempted
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-center">
-                 <p className="text-5xl font-bold text-accent mb-1">
-                  {totalQuestionsAttempted}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Avg. {averageQuestionsPerTopic} per topic
-                </p>
-              </CardContent>
-            </Card>
-            
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center text-lg gap-2">
-                  <Star className="text-yellow-500" /> Strengths
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                 {strengths.length > 0 ? (
-                  <ul className="space-y-1 text-sm">
-                    {strengths.map(topic => (
-                      <li key={topic.name} className="text-muted-foreground flex items-center">
-                         <Star size={14} className="text-yellow-500 mr-2"/> {topic.name} ({Math.round(topic.accuracy*100)}%)
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                   <p className="text-muted-foreground text-sm">Keep practicing to identify strengths!</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-          
-           <Card className="mb-8 shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Lightbulb className="text-orange-500" /> Focus Areas
-                </CardTitle>
-                <CardDescription>Topics where you might want to spend a bit more time.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {focusAreas.length > 0 ? (
-                  <ul className="space-y-2">
-                    {focusAreas.map(topic => (
-                      <li key={topic.name} className="p-3 bg-muted/30 rounded-md">
-                        <span className="font-semibold text-foreground">{topic.name}</span>
-                        <p className="text-xs text-muted-foreground">Current Accuracy: {Math.round(topic.accuracy*100)}% - Last practiced: {topic.lastPracticed}</p>
-                        {/* Link for practice removed as navigation is global, direct practice from here is more complex */}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                   <p className="text-muted-foreground">No specific focus areas identified, or you're doing great! Practice more topics to get detailed insights.</p>
-                )}
-              </CardContent>
-            </Card>
-
+        <div className="grid md:grid-cols-3 gap-6 mb-8">
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <History className="text-primary" /> Recent History
+              <CardTitle className="flex items-center text-lg gap-2">
+                <BarChart3 className="text-primary" /> Overall Accuracy
               </CardTitle>
-              <CardDescription>
-                Review your past practice sessions.
-              </CardDescription>
             </CardHeader>
-            <CardContent>
-              {userHistory.length === 0 ? (
-                <p className="text-muted-foreground text-center py-6">Your practice history will appear here once you start solving problems.</p>
+            <CardContent className="text-center">
+              {totalQuestionsAttempted > 0 && userHistory.filter(item => item.evaluation).length > 0 ? (
+                <>
+                  <p className="text-5xl font-bold text-primary mb-1">
+                    {Math.round(overallAccuracy * 100)}%
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Based on {uniqueTopicsPracticedCount} topic(s)
+                  </p>
+                </>
               ) : (
-                <Accordion type="single" collapsible className="w-full space-y-2">
-                  {userHistory.map((item) => {
-                    const ProblemIcon = problemTypeIcons[item.problemType] || MessageSquareText;
-                    return (
-                      <AccordionItem value={item.id} key={item.id} className="bg-card border rounded-md shadow-sm">
-                        <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                           <div className="flex justify-between items-center w-full gap-2">
-                            <div className="flex items-center gap-2 min-w-0 flex-grow text-left">
-                              <ProblemIcon className="w-5 h-5 text-primary flex-shrink-0" />
-                              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 min-w-0">
-                                <span className="font-medium truncate">{item.topic}</span>
-                                <div className="flex gap-1 text-xs">
-                                    <Badge variant="outline" className="hidden sm:inline-flex">{item.problemType}</Badge>
-                                    <Badge variant="outline">{item.difficulty || 'N/A'}</Badge>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {item.evaluation && (
-                                <Badge variant={item.evaluation.isCorrect ? "default" : "destructive"} className={`${item.evaluation.isCorrect ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'} text-white`}>
-                                  {item.evaluation.isCorrect ? <CheckCircle size={14}/> : <XCircle size={14}/>}
-                                  <span className="ml-1">{item.evaluation.isCorrect ? 'Correct' : 'Incorrect'}</span>
-                                </Badge>
-                              )}
-                              <span className="text-xs text-muted-foreground hidden sm:inline">
-                                {new Date(item.timestamp).toLocaleDateString()}
-                              </span>
-                            </div>
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="px-4 pb-3 pt-1 text-sm">
-                          <div className="space-y-3 prose prose-sm dark:prose-invert max-w-none">
-                            <div>
-                              <strong className="block text-muted-foreground mb-1">Problem:</strong>
-                              <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.problemStatement} /></div>
-                            </div>
-                            {item.userAnswer && !item.selectedOption && (
-                              <div>
-                                <strong className="block text-muted-foreground mb-1">Your Answer:</strong>
-                                <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.userAnswer} /></div>
-                              </div>
-                            )}
-                            {item.problem.multipleChoiceOptions && item.problem.multipleChoiceOptions.length > 0 && item.selectedOption && (
-                              <>
-                                <div>
-                                  <strong className="block text-muted-foreground mb-1">Your Choice:</strong>
-                                  <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.selectedOption} /></div>
-                                </div>
-                                <div>
-                                  <strong className="block text-muted-foreground mt-2 mb-1">Correct Answer:</strong>
-                                  <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
-                                </div>
-                              </>
-                            )}
-                            {!(item.problem.multipleChoiceOptions && item.problem.multipleChoiceOptions.length > 0) && item.evaluation && ( 
-                              <div>
-                                <strong className="block text-muted-foreground mt-2 mb-1">Model Answer / Key Points:</strong>
-                                <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
-                              </div>
-                            )}
-                            {item.evaluation?.feedback && (
-                              <div>
-                                <strong className="block text-muted-foreground mb-1">Feedback:</strong>
-                                <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.evaluation.feedback} /></div>
-                              </div>
-                            )}
-                            {item.timeTakenSeconds !== null && item.timeTakenSeconds !== undefined && item.timeTakenSeconds >= 0 && (
-                              <div>
-                                <strong className="block text-muted-foreground mb-1 flex items-center gap-1">
-                                  <TimerHistoryIcon size={14} /> Time Taken:
-                                </strong>
-                                <p className="p-2 rounded bg-muted/30">{formatTimeTakenForDisplay(item.timeTakenSeconds)}</p>
-                              </div>
-                            )}
-                            {item.isTopicRevised && item.topicDetails && (
-                              <div>
-                                <strong className="block text-muted-foreground mb-1">Revised Details:</strong>
-                                <div className="p-2 rounded bg-muted/30 max-h-32 overflow-y-auto"><MathRenderer content={item.topicDetails} /></div>
-                              </div>
-                            )}
-                            {!item.evaluation && (
-                              <p className="text-muted-foreground italic">This problem was generated but not answered.</p>
-                            )}
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    );
-                  })}
-                </Accordion>
+                <p className="text-muted-foreground py-4">Start practicing to see your stats!</p>
               )}
             </CardContent>
           </Card>
 
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center text-lg gap-2">
+                <History className="text-accent" /> Questions Attempted
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-center">
+               <p className="text-5xl font-bold text-accent mb-1">
+                {totalQuestionsAttempted}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Avg. {averageQuestionsPerTopic} per topic
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center text-lg gap-2">
+                <Star className="text-yellow-500" /> Strengths
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+               {strengths.length > 0 ? (
+                <ul className="space-y-1 text-sm">
+                  {strengths.map(topic => (
+                    <li key={topic.name} className="text-muted-foreground flex items-center">
+                       <Star size={14} className="text-yellow-500 mr-2"/> {topic.name} ({Math.round(topic.accuracy*100)}%)
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                 <p className="text-muted-foreground text-sm">Keep practicing to identify strengths!</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
-      </main>
-      <Footer />
-    </div>
+        
+         <Card className="mb-8 shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lightbulb className="text-orange-500" /> Focus Areas
+              </CardTitle>
+              <CardDescription>Topics where you might want to spend a bit more time.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {focusAreas.length > 0 ? (
+                <ul className="space-y-2">
+                  {focusAreas.map(topic => (
+                    <li key={topic.name} className="p-3 bg-muted/30 rounded-md">
+                      <span className="font-semibold text-foreground">{topic.name}</span>
+                      <p className="text-xs text-muted-foreground">Current Accuracy: {Math.round(topic.accuracy*100)}% - Last practiced: {topic.lastPracticed}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                 <p className="text-muted-foreground">No specific focus areas identified, or you're doing great! Practice more topics to get detailed insights.</p>
+              )}
+            </CardContent>
+          </Card>
+
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="text-primary" /> Recent History
+            </CardTitle>
+            <CardDescription>
+              Review your past practice sessions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {userHistory.length === 0 ? (
+              <p className="text-muted-foreground text-center py-6">Your practice history will appear here once you start solving problems.</p>
+            ) : (
+              <Accordion type="single" collapsible className="w-full space-y-2">
+                {userHistory.map((item) => {
+                  const ProblemIcon = problemTypeIcons[item.problemType] || MessageSquareText;
+                  return (
+                    <AccordionItem value={item.id} key={item.id} className="bg-card border rounded-md shadow-sm">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                         <div className="flex justify-between items-center w-full gap-2">
+                          <div className="flex items-center gap-2 min-w-0 flex-grow text-left">
+                            <ProblemIcon className="w-5 h-5 text-primary flex-shrink-0" />
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 min-w-0">
+                              <span className="font-medium truncate">{item.topic}</span>
+                              <div className="flex gap-1 text-xs">
+                                  <Badge variant="outline" className="hidden sm:inline-flex">{item.problemType}</Badge>
+                                  <Badge variant="outline">{item.difficulty || 'N/A'}</Badge>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {item.evaluation && (
+                              <Badge variant={item.evaluation.isCorrect ? "default" : "destructive"} className={`${item.evaluation.isCorrect ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'} text-white`}>
+                                {item.evaluation.isCorrect ? <CheckCircle size={14}/> : <XCircle size={14}/>}
+                                <span className="ml-1">{item.evaluation.isCorrect ? 'Correct' : 'Incorrect'}</span>
+                              </Badge>
+                            )}
+                            <span className="text-xs text-muted-foreground hidden sm:inline">
+                              {new Date(item.timestamp).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-3 pt-1 text-sm">
+                        <div className="space-y-3 prose prose-sm dark:prose-invert max-w-none">
+                          <div>
+                            <strong className="block text-muted-foreground mb-1">Problem:</strong>
+                            <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.problemStatement} /></div>
+                          </div>
+                          {item.userAnswer && !item.selectedOption && (
+                            <div>
+                              <strong className="block text-muted-foreground mb-1">Your Answer:</strong>
+                              <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.userAnswer} /></div>
+                            </div>
+                          )}
+                          {item.problem.multipleChoiceOptions && item.problem.multipleChoiceOptions.length > 0 && item.selectedOption && (
+                            <>
+                              <div>
+                                <strong className="block text-muted-foreground mb-1">Your Choice:</strong>
+                                <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.selectedOption} /></div>
+                              </div>
+                              <div>
+                                <strong className="block text-muted-foreground mt-2 mb-1">Correct Answer:</strong>
+                                <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
+                              </div>
+                            </>
+                          )}
+                          {!(item.problem.multipleChoiceOptions && item.problem.multipleChoiceOptions.length > 0) && item.evaluation && ( 
+                            <div>
+                              <strong className="block text-muted-foreground mt-2 mb-1">Model Answer / Key Points:</strong>
+                              <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
+                            </div>
+                          )}
+                          {item.evaluation?.feedback && (
+                            <div>
+                              <strong className="block text-muted-foreground mb-1">Feedback:</strong>
+                              <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.evaluation.feedback} /></div>
+                            </div>
+                          )}
+                          {item.timeTakenSeconds !== null && item.timeTakenSeconds !== undefined && item.timeTakenSeconds >= 0 && (
+                            <div>
+                              <strong className="block text-muted-foreground mb-1 flex items-center gap-1">
+                                <TimerHistoryIcon size={14} /> Time Taken:
+                              </strong>
+                              <p className="p-2 rounded bg-muted/30">{formatTimeTakenForDisplay(item.timeTakenSeconds)}</p>
+                            </div>
+                          )}
+                          {item.isTopicRevised && item.topicDetails && (
+                            <div>
+                              <strong className="block text-muted-foreground mb-1">Revised Details:</strong>
+                              <div className="p-2 rounded bg-muted/30 max-h-32 overflow-y-auto"><MathRenderer content={item.topicDetails} /></div>
+                            </div>
+                          )}
+                          {!item.evaluation && (
+                            <p className="text-muted-foreground italic">This problem was generated but not answered.</p>
+                          )}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
+              </Accordion>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </>
   );
 }
-
-    

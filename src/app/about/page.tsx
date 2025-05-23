@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Lightbulb, Target, Rocket, Users } from 'lucide-react';
-import Footer from '@/components/Footer';
+// Footer is now global
 
 export const metadata: Metadata = {
   title: 'About AOLBEAM - Our Mission & Vision',
@@ -14,9 +14,8 @@ export const metadata: Metadata = {
 
 export default function AboutUsPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Header is now global */}
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
+    <>
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="max-w-3xl mx-auto">
           <Card className="shadow-xl">
             <CardHeader className="text-center">
@@ -81,10 +80,7 @@ export default function AboutUsPage() {
             </CardContent>
           </Card>
         </div>
-      </main>
-       <Footer />
-    </div>
+      </div>
+    </>
   );
 }
-
-    

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { CalendarDays } from 'lucide-react';
 import Image from 'next/image';
-import Footer from '@/components/Footer';
+// Footer is now global
 
 export const metadata: Metadata = {
   title: 'AOLBEAM Blog - Insights & Motivation',
@@ -46,9 +46,8 @@ const placeholderPosts = [
 
 export default function BlogListPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Header is now global */}
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
+    <>
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold mb-3 text-primary">AOLBEAM Blog</h1>
           <p className="text-xl text-muted-foreground">Insights, motivation, and learning strategies to help you succeed.</p>
@@ -92,10 +91,7 @@ export default function BlogListPage() {
             </Card>
           ))}
         </div>
-      </main>
-      <Footer />
-    </div>
+      </div>
+    </>
   );
 }
-
-    
