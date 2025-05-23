@@ -61,9 +61,31 @@ export default function Header({ userProfile, isLoadingProfile, onSignOut }: Hea
     }
   };
 
-  const handleSignOut = async () => {
-    setMobileNavOpen(false);
-    await onSignOut();
+  const handleSignOut = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('Header: Sign out button clicked');
+    try {
+      console.log('Header: Calling onSignOut prop');
+      await onSignOut();
+      
+      console.log('Header: onSignOut completed, showing success toast');
+      toast({
+        title: 'Signed out',
+        description: 'You have been successfully signed out.',
+      });
+    } catch (error) {
+      console.error('Header: Error in handleSignOut:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to sign out. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      console.log('Header: Closing mobile nav');
+      setMobileNavOpen(false);
+    }
   };
 
   const navItems = [
@@ -117,8 +139,10 @@ export default function Header({ userProfile, isLoadingProfile, onSignOut }: Hea
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSignOut}>
-                    <LogOut className="mr-2 h-4 w-4" /> Sign Out
+                  <DropdownMenuItem asChild>
+                    <button onClick={(e) => handleSignOut(e)} className="w-full flex items-center">
+                      <LogOut className="mr-2 h-4 w-4" /> Sign Out
+                    </button>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -172,7 +196,7 @@ export default function Header({ userProfile, isLoadingProfile, onSignOut }: Hea
               {currentUser && (
                  <Button 
                     variant="outline" 
-                    onClick={() => { handleSignOut(); setMobileNavOpen(false);}}
+                    onClick={(e) => { handleSignOut(e); setMobileNavOpen(false);}}
                     className="w-full text-base py-3 mt-2"
                   >
                     <LogOut className="mr-2 h-5 w-5" /> Sign Out

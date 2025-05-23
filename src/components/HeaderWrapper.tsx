@@ -50,14 +50,24 @@ export default function HeaderWrapper() {
   const router = useRouter();
 
   const handleSignOut = useCallback(async () => {
+    console.log('HeaderWrapper: Sign out initiated');
     try {
-      await supabase.auth.signOut();
+      console.log('HeaderWrapper: Attempting to sign out from Supabase');
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      console.log('HeaderWrapper: Supabase sign out successful, updating local state');
       setUser(null);
       setUserProfile(null);
-      // Redirect to homepage after successful sign out
+      
+      console.log('HeaderWrapper: Redirecting to home page');
       router.push('/');
+      router.refresh(); // Force a refresh to ensure the UI updates
+      
+      console.log('HeaderWrapper: Sign out flow completed');
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('HeaderWrapper: Error during sign out:', error);
+      throw error; // Re-throw to be caught by the Header component
     }
   }, [supabase, router]);
 
