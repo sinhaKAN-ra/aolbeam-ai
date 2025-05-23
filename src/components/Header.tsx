@@ -14,8 +14,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useToast } from '@/hooks/use-toast';
-import { createClientComponentClient, type SupabaseClient } from '@supabase/auth-helpers-nextjs';
-import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { useSupabase } from '../hooks/useSupabase';
+import type { User } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types';
 import { Brain, Menu, UserCircle, LogOut, ShieldCheck, Home, User as ProfileIcon, Newspaper, Mail as ContactIcon, Info as AboutIcon, DollarSign, Settings, Loader2 } from 'lucide-react';
 
@@ -41,49 +41,87 @@ interface HeaderProps {
 
 export default function Header({ userProfile, isLoadingProfile, onSignOut }: HeaderProps) {
   const { toast } = useToast();
-  const [supabase] = useState<SupabaseClient>(() => {
-    console.log('Header: Initializing Supabase client (once)...');
-    return createClientComponentClient();
-  });
-  
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const currentUser = userProfile ? { id: userProfile.id, email: userProfile.email } as User : null;
+  
+  // Get Supabase client instance
+  const supabase = useSupabase();
+  
+  // Derive currentUser from userProfile if it exists
+  const currentUser = userProfile 
+    ? { 
+        id: userProfile.id, 
+        email: userProfile.email || ''
+      } as User 
+    : null;
+    
+  // Debug log to track profile and loading state
+  useEffect(() => {
+    console.log('Header - Profile updated:', { 
+      hasUserProfile: !!userProfile, 
+      isLoadingProfile,
+      currentUser: currentUser?.email
+    });
+  }, [userProfile, isLoadingProfile, currentUser]);
 
   const handleSignInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
-      },
-    });
-    if (error) {
-      toast({ variant: "destructive", title: "Login Error", description: error.message });
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+        },
+      });
+      if (error) {
+        console.error('Google sign-in error:', error);
+        toast({ 
+          variant: "destructive", 
+          title: "Login Error", 
+          description: error.message || 'Failed to sign in with Google' 
+        });
+      }
+    } catch (error) {
+      console.error('Unexpected error during Google sign-in:', error);
+      toast({
+        variant: "destructive",
+        title: "Unexpected Error",
+        description: "An unexpected error occurred during sign-in.",
+      });
     }
   };
+
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const handleSignOut = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
-    console.log('Header: Sign out button clicked');
+    if (isSigningOut) return; // Prevent multiple clicks
+    
+    setIsSigningOut(true);
+    
     try {
-      console.log('Header: Calling onSignOut prop');
+      console.log('Header: Starting sign out process...');
       await onSignOut();
+      console.log('Header: Sign out successful');
       
-      console.log('Header: onSignOut completed, showing success toast');
-      toast({
-        title: 'Signed out',
-        description: 'You have been successfully signed out.',
+      toast({ 
+        title: 'Signed out successfully',
+        description: 'You have been signed out of your account.'
       });
     } catch (error) {
-      console.error('Header: Error in handleSignOut:', error);
+      console.error('Header: Sign out error:', error);
+      
       toast({
-        title: 'Error',
-        description: 'Failed to sign out. Please try again.',
         variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to sign out. Please try again.',
       });
+      
+      // Re-throw the error so the parent component can handle it if needed
+      throw error;
     } finally {
-      console.log('Header: Closing mobile nav');
+      console.log('Header: Sign out process completed');
+      setIsSigningOut(false);
       setMobileNavOpen(false);
     }
   };
@@ -140,8 +178,22 @@ export default function Header({ userProfile, isLoadingProfile, onSignOut }: Hea
                   )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <button onClick={(e) => handleSignOut(e)} className="w-full flex items-center">
-                      <LogOut className="mr-2 h-4 w-4" /> Sign Out
+                    <button 
+                      onClick={(e) => handleSignOut(e)} 
+                      className="w-full flex items-center"
+                      disabled={isSigningOut}
+                    >
+                      {isSigningOut ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Signing out...
+                        </>
+                      ) : (
+                        <>
+                          <LogOut className="mr-2 h-4 w-4" />
+                          Sign Out
+                        </>
+                      )}
                     </button>
                   </DropdownMenuItem>
                 </DropdownMenuContent>

@@ -27,28 +27,32 @@ const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
   useEffect(() => {
     if (typeof window !== 'undefined' && content) {
       const selector = `.math-renderer-content[data-renderer-id="${componentId}"] .mermaid`;
-      const mermaidElements = document.querySelectorAll(selector);
+      const mermaidElements = document.querySelectorAll<HTMLElement>(selector);
 
       if (mermaidElements.length > 0) {
-        mermaidElements.forEach(el => {
+        // Convert NodeList to array of HTMLElement for better type safety
+        const elements = Array.from(mermaidElements) as HTMLElement[];
+        
+        elements.forEach(el => {
           const container = el.parentElement;
           if (container) {
             const existingSvg = container.querySelector('svg');
             if (existingSvg) {
               existingSvg.remove();
             }
-            if (el.dataset.mermaidCode && el.innerHTML !== el.dataset.mermaidCode) {
-                 el.innerHTML = el.dataset.mermaidCode;
+            const mermaidCode = el.getAttribute('data-mermaid-code');
+            if (mermaidCode && el.innerHTML !== mermaidCode) {
+                 el.innerHTML = mermaidCode;
             }
           }
         });
         
-        mermaid.run({ nodes: Array.from(mermaidElements) }).catch(e => {
+        mermaid.run({ nodes: elements }).catch(e => {
           console.error("Mermaid.run() error:", e);
-          mermaidElements.forEach(node => {
+          elements.forEach(node => {
             // Check if it was already replaced with an error message or if it's still the original code
             if (!node.querySelector('svg') && !node.querySelector('pre.mermaid-error-fallback')) { 
-              const code = node.dataset.mermaidCode || node.textContent || "Error: Mermaid code unavailable";
+              const code = node.getAttribute('data-mermaid-code') || node.textContent || "Error: Mermaid code unavailable";
               // Sanitize code for display to prevent XSS if it contains HTML-like structures by mistake
               const textNode = document.createTextNode(`Error rendering diagram:\n${code}`);
               const pre = document.createElement('pre');

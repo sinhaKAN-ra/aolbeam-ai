@@ -1,20 +1,16 @@
-import { createBrowserClient } from '@supabase/ssr';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
-export function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          // Handle server-side rendering
-          if (typeof document === 'undefined') return null;
-          const cookie = document.cookie
-            .split('; ')
-            .find((row) => row.startsWith(`${name}=`));
-          return cookie ? cookie.split('=')[1] : null;
-        },
-      },
-    }
-  );
-}
+// Create and export a single supabase client for interacting with your database
+const supabase = createSupabaseClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+  }
+);
+
+export default supabase;
