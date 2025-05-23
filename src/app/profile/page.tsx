@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSupabase } from '@/hooks/useSupabase';
+import { useSupabase, useSession } from '@/hooks/useSupabase';
 import type { User, Session } from '@supabase/supabase-js';
 
 // UI Components
@@ -86,95 +86,52 @@ const problemTypeIcons: Record<ProblemType, React.ElementType> = {
 
 // This is a Client Component that will handle the authenticated session
 export default function ProfilePage() {
-  // All hooks must be called at the top level
   const router = useRouter();
   const supabase = useSupabase();
+  const { session, loading: authLoading } = useSession();
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [authSubscription, setAuthSubscription] = useState<{ unsubscribe: () => void } | null>(null);
   const [userProfileData, setUserProfileData] = useState<AppUserProfile | null>(null);
   const [userHistory, setUserHistory] = useState<DisplayHistoryItem[]>([]);
   const [profileLoading, setProfileLoading] = useState(true);
 
-  // First effect: Handle authentication
+  // Handle auth state changes
   useEffect(() => {
-    // Check for existing session
-    const checkSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setUser(session.user);
-        } else {
-          // Try to get the current user directly
-          const { data: { user: currentUser } } = await supabase.auth.getUser();
-          if (currentUser) {
-            setUser(currentUser);
-          } else {
-            router.push('/');
-            return;
-          }
-        }
-      } catch (error) {
-        console.error('Error checking session:', error);
-        router.push('/');
-      } finally {
-        setLoading(false);
-        setAuthChecked(true);
-      }
-    };
+    if (session?.user) {
+      setUser(session.user);
+    } else if (!authLoading) {
+      // Only redirect if we're not still loading the session
+      router.push('/');
+    }
+  }, [session, authLoading, router]);
 
-    // Set up auth state change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state changed in profile:', event, session?.user?.email);
-      if (event === 'SIGNED_IN' && session?.user) {
-        setUser(session.user);
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        router.push('/');
-      }
-    });
-    
-    // Store the subscription for cleanup
-    setAuthSubscription(subscription);
-
-    // Initial session check
-    checkSession();
-
-    // Cleanup subscription
-    return () => {
-      if (authSubscription) {
-        authSubscription.unsubscribe();
-      }
-    };
-  }, [router, supabase.auth, authSubscription]); // Added authSubscription
-
-  // Second effect: Load profile data when user is available
+  // Load profile data when user is available
   useEffect(() => {
     const fetchProfileData = async () => {
       if (!user) return;
       
       setProfileLoading(true);
       try {
-        // Fetch user profile
-        const { data: profile, error: profileError } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
+        // Fetch user profile and interactions in parallel
+        const [
+          { data: profile, error: profileError },
+          { data: interactions, error: historyError }
+        ] = await Promise.all([
+          supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single(),
+          supabase
+            .from('user_interactions')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+        ]);
 
         if (profileError) throw profileError;
+        if (historyError) throw historyError;
         
         setUserProfileData(profile as AppUserProfile);
-
-        // Fetch user interactions
-        const { data: interactions, error: historyError } = await supabase
-          .from('user_interactions')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (historyError) throw historyError;
 
         if (interactions) {
           const formattedInteractions = interactions.map((item: FetchedInteraction): DisplayHistoryItem => ({
@@ -217,20 +174,15 @@ export default function ProfilePage() {
   }, [user, supabase]);
 
   // Show loading state while checking auth
-  if (loading || !authChecked) {
+  if (authLoading || !user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <Loader2 className="h-12 w-12 text-primary animate-spin" />
           <p>Loading profile...</p>
         </div>
       </div>
     );
-  }
-
-  // If no user after auth check, show unauthorized (will be redirected by effect)
-  if (!user) {
-    return null;
   }
 
   const overallAccuracy = userHistory.length > 0 && userHistory.filter(item => item.evaluation).length > 0
