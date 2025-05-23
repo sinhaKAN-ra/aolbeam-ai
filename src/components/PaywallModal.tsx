@@ -114,10 +114,10 @@ export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister, is
 
         <div className="px-6 text-center">
             <p className="text-xs text-muted-foreground">
-                Secure payments will be processed via Lemon Squeezy, Paddle, Cashfree, or PayPal.
+                Secure payments will be processed via Cashfree. Details at checkout.
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-                (Payment provider selection coming soon)
+                (Other payment options like PayPal, Paddle, or Lemon Squeezy may be added in the future).
             </p>
         </div>
         

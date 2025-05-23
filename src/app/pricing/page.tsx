@@ -74,7 +74,7 @@ export default function PricingPage() {
               <div className="p-6 pt-4 mt-auto">
                  <Button
                     onClick={() => {
-                      alert(`Subscribing to ${plan.name} (Placeholder). Full integration coming soon!`);
+                      alert(`Subscribing to ${plan.name} via Cashfree (Placeholder). Full integration coming soon!`);
                     }}
                     className={`w-full text-lg py-3 ${plan.highlight ? '' : 'bg-accent text-accent-foreground hover:bg-accent/90'}`}
                   >
@@ -107,7 +107,10 @@ export default function PricingPage() {
         </div>
          <div className="mt-12 text-center">
             <p className="text-sm text-muted-foreground">
-                All payments are processed securely. For details on payment providers like PayPal, Cashfree, Lemon Squeezy, or Paddle, please refer to the checkout process.
+                Payments are processed securely via Cashfree. For details, please refer to the checkout process.
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+                (Other payment options may be added in the future).
             </p>
         </div>
 
