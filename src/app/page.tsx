@@ -198,10 +198,9 @@ export default function AOLBEAMPage() {
         // Only update state if the component is still mounted
         if (!isMounted) return;
         
-        // Skip if user hasn't changed
-        if (user?.id === pageCurrentUser?.id) return;
-        
         console.log('Page: User state changed, updating...');
+        
+        // Always update the current user to ensure we have the latest state
         setPageCurrentUser(user);
         
         if (user) {
@@ -230,8 +229,10 @@ export default function AOLBEAMPage() {
 
     // Set up auth state change listener
     try {
+      console.log('Page: Setting up auth state change listener');
       const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
       authSubscription = { unsubscribe: () => subscription.unsubscribe() };
+      console.log('Page: Auth state change listener set up');
     } catch (error) {
       console.error('Page: Error setting up auth subscription:', error);
       if (isMounted) {
@@ -243,13 +244,34 @@ export default function AOLBEAMPage() {
     const checkUser = async () => {
       console.log('Page: Checking for existing session...');
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user ?? null;
+        // First try to get the current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('Page: Error getting session:', sessionError);
+          throw sessionError;
+        }
+        
+        let user = session?.user ?? null;
+        
+        // If no session, try to get the current user directly
+        if (!user) {
+          console.log('Page: No session found, trying to get current user...');
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          user = currentUser ?? null;
+        }
+        
+        console.log('Page: Current user:', user?.email);
         
         if (!isMounted) return;
         
-        // Skip if user hasn't changed
-        if (user?.id === pageCurrentUser?.id) return;
+        // Update the user state which will trigger the profile fetch via handleAuthChange
+        if (user) {
+          setPageCurrentUser(user);
+        } else {
+          console.log('Page: No user found, setting loading to false');
+          setIsLoadingPageProfile(false);
+        }
         
         console.log('Page: Session check complete, user:', user?.email || 'none');
         setPageCurrentUser(user);
