@@ -1,13 +1,12 @@
 
-// src/app/profile/page.tsx
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
-import type { Metadata } from 'next';
-// Link removed as global header provides navigation
-// import Link from 'next/link';
-// Button removed as global header provides navigation
-// import { Button } from '@/components/ui/button';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSupabase } from '@/hooks/useSupabase';
+import type { User, Session } from '@supabase/supabase-js';
+
+// UI Components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -15,13 +14,11 @@ import { Badge } from '@/components/ui/badge';
 import MathRenderer from '@/components/MathRenderer';
 import type { ProblemType, DifficultyLevel, UserProfile as AppUserProfile } from '@/types'; 
 import Footer from '@/components/Footer';
+import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
 
+// Icons
 import { BarChart3, History, Lightbulb, UserCircle, Settings, Star, MessageSquareText, ListChecks, CheckCircle, XCircle, TimerIcon as TimerHistoryIcon, Brain as ConceptualIcon, Sigma as NumericalIcon, GitFork as DiagramIcon, Shuffle } from 'lucide-react';
-
-export const metadata: Metadata = {
-  title: 'Your Profile - AOLBEAM',
-  description: 'Review your learning progress, track statistics, and manage your account on AOLBEAM.',
-};
 
 interface FetchedInteraction {
   id: string;
@@ -87,66 +84,153 @@ const problemTypeIcons: Record<ProblemType, React.ElementType> = {
 };
 
 
-export default async function ProfilePage() {
-  const cookieStore = cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
-  const { data: { user } } = await supabase.auth.getUser();
+// This is a Client Component that will handle the authenticated session
+export default function ProfilePage() {
+  // All hooks must be called at the top level
+  const router = useRouter();
+  const supabase = useSupabase();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authSubscription, setAuthSubscription] = useState<{ unsubscribe: () => void } | null>(null);
+  const [userProfileData, setUserProfileData] = useState<AppUserProfile | null>(null);
+  const [userHistory, setUserHistory] = useState<DisplayHistoryItem[]>([]);
+  const [profileLoading, setProfileLoading] = useState(true);
 
-  if (!user) {
-    redirect('/'); 
+  // First effect: Handle authentication
+  useEffect(() => {
+    // Check for existing session
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setUser(session.user);
+        } else {
+          // Try to get the current user directly
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          if (currentUser) {
+            setUser(currentUser);
+          } else {
+            router.push('/');
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Error checking session:', error);
+        router.push('/');
+      } finally {
+        setLoading(false);
+        setAuthChecked(true);
+      }
+    };
+
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state changed in profile:', event, session?.user?.email);
+      if (event === 'SIGNED_IN' && session?.user) {
+        setUser(session.user);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        router.push('/');
+      }
+    });
+    
+    // Store the subscription for cleanup
+    setAuthSubscription(subscription);
+
+    // Initial session check
+    checkSession();
+
+    // Cleanup subscription
+    return () => {
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+      }
+    };
+  }, [router, supabase.auth]);
+
+  // Second effect: Load profile data when user is available
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      if (!user) return;
+      
+      setProfileLoading(true);
+      try {
+        // Fetch user profile
+        const { data: profile, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (profileError) throw profileError;
+        
+        setUserProfileData(profile as AppUserProfile);
+
+        // Fetch user interactions
+        const { data: interactions, error: historyError } = await supabase
+          .from('user_interactions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (historyError) throw historyError;
+
+        if (interactions) {
+          const formattedInteractions = interactions.map((item: FetchedInteraction): DisplayHistoryItem => ({
+            id: item.id,
+            timestamp: item.created_at,
+            topic: item.topic,
+            problemType: item.problem_type,
+            difficulty: item.difficulty as DifficultyLevel | null,
+            problem: {
+              problemStatement: item.problem_statement,
+              answerFormat: item.answer_format,
+              multipleChoiceOptions: item.multiple_choice_options || undefined,
+              correctAnswer: item.correct_answer,
+            },
+            userAnswer: item.user_answer || undefined,
+            selectedOption: item.selected_option || undefined,
+            evaluation: (item.evaluation_is_correct !== null && 
+                       item.evaluation_is_correct !== undefined && 
+                       item.evaluation_feedback)
+              ? { 
+                  isCorrect: item.evaluation_is_correct, 
+                  feedback: item.evaluation_feedback 
+                }
+              : undefined,
+            isTopicRevised: item.is_topic_revised || false,
+            topicDetails: item.topic_details_content || null,
+            timeTakenSeconds: item.time_taken_seconds,
+          }));
+          
+          setUserHistory(formattedInteractions);
+        }
+      } catch (error) {
+        console.error('Error fetching profile data:', error);
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+
+    fetchProfileData();
+  }, [user, supabase]);
+
+  // Show loading state while checking auth
+  if (loading || !authChecked) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <p>Loading profile...</p>
+        </div>
+      </div>
+    );
   }
 
-  let userHistory: DisplayHistoryItem[] = [];
-  let userProfileData: AppUserProfile | null = null;
-
-  try {
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError) {
-      console.error("Error fetching user profile on profile page:", profileError);
-    } else {
-      userProfileData = profile as AppUserProfile;
-    }
-
-    const { data: interactions, error: historyError } = await supabase
-      .from('user_interactions')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (historyError) {
-      console.error("Error fetching user history:", historyError);
-    }
-
-    if (interactions) {
-      userHistory = interactions.map((item: FetchedInteraction): DisplayHistoryItem => ({
-        id: item.id,
-        timestamp: item.created_at,
-        topic: item.topic,
-        problemType: item.problem_type,
-        difficulty: item.difficulty as DifficultyLevel | null, 
-        problem: {
-          problemStatement: item.problem_statement,
-          answerFormat: item.answer_format,
-          multipleChoiceOptions: item.multiple_choice_options || undefined,
-          correctAnswer: item.correct_answer,
-        },
-        userAnswer: item.user_answer || undefined,
-        selectedOption: item.selected_option || undefined,
-        evaluation: (item.evaluation_is_correct !== null && item.evaluation_is_correct !== undefined && item.evaluation_feedback)
-          ? { isCorrect: item.evaluation_is_correct, feedback: item.evaluation_feedback }
-          : undefined,
-        isTopicRevised: item.is_topic_revised || false,
-        topicDetails: item.topic_details_content || null,
-        timeTakenSeconds: item.time_taken_seconds,
-      }));
-    }
-  } catch (e) {
-    console.error("Exception fetching user data for profile page:", e);
+  // If no user after auth check, show unauthorized (will be redirected by effect)
+  if (!user) {
+    return null;
   }
 
   const overallAccuracy = userHistory.length > 0 && userHistory.filter(item => item.evaluation).length > 0

@@ -164,14 +164,14 @@ export default function Header({ userProfile, isLoadingProfile, onSignOut }: Hea
                     {currentUser.email}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild onClick={() => setMobileNavOpen(false)}>
-                    <Link href="/profile">
+                  <DropdownMenuItem asChild>
+                    <Link href="/profile" onClick={() => setMobileNavOpen(false)}>
                       <ProfileIcon className="mr-2 h-4 w-4" /> Profile
                     </Link>
                   </DropdownMenuItem>
                   {currentUser.email === ADMIN_EMAIL && (
-                    <DropdownMenuItem asChild onClick={() => setMobileNavOpen(false)}>
-                      <Link href="/admin/blog">
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin/blog" onClick={() => setMobileNavOpen(false)}>
                         <ShieldCheck className="mr-2 h-4 w-4" /> Admin
                       </Link>
                     </DropdownMenuItem>
@@ -220,13 +220,19 @@ export default function Header({ userProfile, isLoadingProfile, onSignOut }: Hea
         {mobileNavOpen && (
           <div className="md:hidden border-t py-2">
             <nav className="flex flex-col space-y-1">
-              {navItems.map(item => (
-                 <Button key={item.label} variant="ghost" asChild className="justify-start" onClick={()=>setMobileNavOpen(false)}>
+              {navItems.map(item => {
+                // Skip rendering the Profile link if user is not authenticated
+                if (item.href === '/profile' && !currentUser) {
+                  return null;
+                }
+                return (
+                  <Button key={item.label} variant="ghost" asChild className="justify-start" onClick={()=>setMobileNavOpen(false)}>
                     <Link href={item.href} className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full">
-                       <item.icon className="mr-3 h-5 w-5" /> {item.label}
+                      <item.icon className="mr-3 h-5 w-5" /> {item.label}
                     </Link>
-                 </Button>
-              ))}
+                  </Button>
+                );
+              })}
               {currentUser?.email === ADMIN_EMAIL && (
                   <Button variant="ghost" asChild className="justify-start" onClick={()=>setMobileNavOpen(false)}>
                       <Link href="/admin/blog" className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full">
