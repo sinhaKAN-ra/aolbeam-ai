@@ -128,7 +128,7 @@ export default function Header({ userProfile, isLoadingProfile, onSignOut }: Hea
 
   const navItems = [
     { href: "/", label: "Home", icon: Home },
-    { href: "/profile", label: "Profile", icon: ProfileIcon },
+    ...(currentUser ? [{ href: "/profile", label: "Profile", icon: ProfileIcon }] : []),
     { href: "/pricing", label: "Pricing", icon: DollarSign },
     { href: "/blog", label: "Blog", icon: Newspaper },
     { href: "/about", label: "About Us", icon: AboutIcon },
