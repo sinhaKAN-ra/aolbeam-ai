@@ -12,8 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import MathRenderer from '@/components/MathRenderer';
-import type { ProblemType, DifficultyLevel, UserProfile as AppUserProfile } from '@/types'; 
-// Footer is now global
+import type { ProblemType, DifficultyLevel, UserProfile as AppUserProfile } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 
@@ -24,8 +23,8 @@ interface FetchedInteraction {
   id: string;
   created_at: string;
   topic: string;
-  problem_type: ProblemType; 
-  difficulty?: string | null; 
+  problem_type: ProblemType; // This is the resolved concrete type from DB
+  difficulty?: DifficultyLevel | null; // This is the selected difficulty from DB
   problem_statement: string;
   answer_format: string;
   multiple_choice_options?: string[] | null;
@@ -34,8 +33,8 @@ interface FetchedInteraction {
   selected_option?: string | null;
   evaluation_is_correct?: boolean | null;
   evaluation_feedback?: string | null;
-  is_topic_revised?: boolean | null;
-  topic_details_content?: string | null;
+  is_topic_revised?: boolean | null; // True if insights were fetched
+  topic_details_content?: string | null; // The insights content
   time_taken_seconds?: number | null;
 }
 
@@ -43,8 +42,8 @@ interface DisplayHistoryItem {
   id: string;
   timestamp: string;
   topic: string;
-  problemType: ProblemType; 
-  difficulty?: DifficultyLevel | string | null; 
+  problemType: ProblemType; // Resolved concrete type
+  difficulty?: DifficultyLevel | null;
   problem: {
     problemStatement: string;
     answerFormat: string;
@@ -58,7 +57,7 @@ interface DisplayHistoryItem {
     feedback: string;
   };
   isTopicRevised?: boolean;
-  topicDetails?: string | null;
+  topicDetails?: string | null; // This stores problem-specific insights
   timeTakenSeconds?: number | null;
 }
 
@@ -80,13 +79,11 @@ const problemTypeIcons: Record<ProblemType, React.ElementType> = {
   conceptual: ConceptualIcon,
   numerical: NumericalIcon,
   diagram_based: DiagramIcon,
-  random: Shuffle, 
+  random: Shuffle, // 'random' won't be in DB, but for type completeness
 };
 
 
-// This is a Client Component that will handle the authenticated session
 export default function ProfilePage() {
-  // All hooks must be called at the top level
   const router = useRouter();
   const supabase = useSupabase();
   const [user, setUser] = useState<User | null>(null);
@@ -97,16 +94,13 @@ export default function ProfilePage() {
   const [userHistory, setUserHistory] = useState<DisplayHistoryItem[]>([]);
   const [profileLoading, setProfileLoading] = useState(true);
 
-  // First effect: Handle authentication
   useEffect(() => {
-    // Check for existing session
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           setUser(session.user);
         } else {
-          // Try to get the current user directly
           const { data: { user: currentUser } } = await supabase.auth.getUser();
           if (currentUser) {
             setUser(currentUser);
@@ -124,7 +118,6 @@ export default function ProfilePage() {
       }
     };
 
-    // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('Auth state changed in profile:', event, session?.user?.email);
       if (event === 'SIGNED_IN' && session?.user) {
@@ -134,29 +127,23 @@ export default function ProfilePage() {
         router.push('/');
       }
     });
-    
-    // Store the subscription for cleanup
-    setAuthSubscription(subscription);
 
-    // Initial session check
+    setAuthSubscription(subscription);
     checkSession();
 
-    // Cleanup subscription
     return () => {
       if (authSubscription) {
         authSubscription.unsubscribe();
       }
     };
-  }, [router, supabase.auth, authSubscription]); // Added authSubscription
+  }, [router, supabase, authSubscription]); // Added authSubscription
 
-  // Second effect: Load profile data when user is available
   useEffect(() => {
     const fetchProfileData = async () => {
       if (!user) return;
-      
+
       setProfileLoading(true);
       try {
-        // Fetch user profile
         const { data: profile, error: profileError } = await supabase
           .from('user_profiles')
           .select('*')
@@ -164,10 +151,8 @@ export default function ProfilePage() {
           .single();
 
         if (profileError) throw profileError;
-        
         setUserProfileData(profile as AppUserProfile);
 
-        // Fetch user interactions
         const { data: interactions, error: historyError } = await supabase
           .from('user_interactions')
           .select('*')
@@ -181,8 +166,8 @@ export default function ProfilePage() {
             id: item.id,
             timestamp: item.created_at,
             topic: item.topic,
-            problemType: item.problem_type,
-            difficulty: item.difficulty as DifficultyLevel | null,
+            problemType: item.problem_type, // This is the resolved concrete type from DB
+            difficulty: item.difficulty,    // This is the selected difficulty from DB
             problem: {
               problemStatement: item.problem_statement,
               answerFormat: item.answer_format,
@@ -191,19 +176,18 @@ export default function ProfilePage() {
             },
             userAnswer: item.user_answer || undefined,
             selectedOption: item.selected_option || undefined,
-            evaluation: (item.evaluation_is_correct !== null && 
-                       item.evaluation_is_correct !== undefined && 
-                       item.evaluation_feedback)
-              ? { 
-                  isCorrect: item.evaluation_is_correct, 
-                  feedback: item.evaluation_feedback 
+            evaluation: (item.evaluation_is_correct !== null &&
+                           item.evaluation_is_correct !== undefined &&
+                           item.evaluation_feedback)
+              ? {
+                  isCorrect: item.evaluation_is_correct,
+                  feedback: item.evaluation_feedback
                 }
               : undefined,
             isTopicRevised: item.is_topic_revised || false,
-            topicDetails: item.topic_details_content || null,
+            topicDetails: item.topic_details_content || null, // This is problem-specific insights
             timeTakenSeconds: item.time_taken_seconds,
           }));
-          
           setUserHistory(formattedInteractions);
         }
       } catch (error) {
@@ -216,7 +200,6 @@ export default function ProfilePage() {
     fetchProfileData();
   }, [user, supabase]);
 
-  // Show loading state while checking auth
   if (loading || !authChecked) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -228,53 +211,46 @@ export default function ProfilePage() {
     );
   }
 
-  // If no user after auth check, show unauthorized (will be redirected by effect)
   if (!user) {
-    return null;
+    return null; // Will be redirected by the first useEffect
   }
 
-  const overallAccuracy = userHistory.length > 0 && userHistory.filter(item => item.evaluation).length > 0
-    ? userHistory.filter(item => item.evaluation).reduce((acc, item) => acc + (item.evaluation?.isCorrect ? 1 : 0), 0) / userHistory.filter(item => item.evaluation).length
-    : 0;
+  // Calculate dynamic statistics
+  const evaluatedHistory = userHistory.filter(item => item.evaluation);
   const totalQuestionsAttempted = userHistory.length;
+  const correctAnswersCount = evaluatedHistory.filter(item => item.evaluation?.isCorrect).length;
+  const overallAccuracy = evaluatedHistory.length > 0 ? (correctAnswersCount / evaluatedHistory.length) : 0;
   
-  const uniqueTopicsPracticedCount = new Set(userHistory.map(item => item.topic)).size;
-
+  const uniqueTopics = [...new Set(userHistory.map(item => item.topic))];
+  const uniqueTopicsPracticedCount = uniqueTopics.length;
   const averageQuestionsPerTopic = uniqueTopicsPracticedCount > 0 ? Math.round(totalQuestionsAttempted / uniqueTopicsPracticedCount) : 0;
-  
 
-  const strengths = userHistory
-    .filter(item => item.evaluation?.isCorrect)
-    .reduce((acc, item) => {
-      if (!acc.find(t => t.name === item.topic)) {
-        const topicItems = userHistory.filter(h => h.topic === item.topic && h.evaluation);
-        const correctCount = topicItems.filter(t => t.evaluation?.isCorrect).length;
-        const accuracy = topicItems.length > 0 ? correctCount / topicItems.length : 0;
-        if (accuracy >= 0.85) { 
-          acc.push({ name: item.topic, accuracy });
-        }
-      }
-      return acc;
-    }, [] as { name: string; accuracy: number }[])
-    .slice(0, 3); 
+  const topicStats = uniqueTopics.map(topic => {
+    const topicItems = userHistory.filter(item => item.topic === topic && item.evaluation);
+    const topicCorrectCount = topicItems.filter(item => item.evaluation?.isCorrect).length;
+    const topicAccuracy = topicItems.length > 0 ? topicCorrectCount / topicItems.length : 0;
+    const lastPracticedItem = userHistory
+      .filter(item => item.topic === topic)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+    return {
+      name: topic,
+      accuracy: topicAccuracy,
+      count: topicItems.length,
+      lastPracticed: lastPracticedItem ? new Date(lastPracticedItem.timestamp).toLocaleDateString() : 'N/A',
+      problemType: lastPracticedItem ? lastPracticedItem.problemType : 'N/A',
+      difficulty: lastPracticedItem ? lastPracticedItem.difficulty : 'N/A',
+    };
+  });
 
+  const strengths = topicStats
+    .filter(topic => topic.accuracy >= 0.80 && topic.count > 0) // Adjusted threshold for strengths
+    .sort((a, b) => b.accuracy - a.accuracy || b.count - a.count)
+    .slice(0, 3);
 
-  const focusAreas = userHistory
-    .filter(item => item.evaluation && !item.evaluation.isCorrect)
-    .reduce((acc, item) => {
-      if (!acc.find(t => t.name === item.topic)) {
-        const topicItems = userHistory.filter(h => h.topic === item.topic && h.evaluation);
-        const correctCount = topicItems.filter(t => t.evaluation?.isCorrect).length;
-        const accuracy = topicItems.length > 0 ? correctCount / topicItems.length : 0;
-         const lastPracticed = new Date(topicItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0].timestamp).toLocaleDateString();
-        if (accuracy < 0.70) { 
-          acc.push({ name: item.topic, accuracy, lastPracticed, problemType: item.problemType, difficulty: item.difficulty });
-        }
-      }
-      return acc;
-    }, [] as { name: string; accuracy: number, lastPracticed: string, problemType: ProblemType, difficulty?: DifficultyLevel | string | null }[])
-    .slice(0, 3); 
-
+  const focusAreas = topicStats
+    .filter(topic => topic.accuracy < 0.70 && topic.count > 0)
+    .sort((a, b) => a.accuracy - b.accuracy || b.count - a.count)
+    .slice(0, 3);
 
   return (
     <>
@@ -284,7 +260,7 @@ export default function ProfilePage() {
             <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-2 border-primary shadow-md">
               <AvatarImage src={user.user_metadata?.avatar_url} alt={userProfileData?.full_name || user.email || 'User Avatar'} />
               <AvatarFallback className="text-2xl bg-primary/20 text-primary">
-                {userProfileData?.full_name ? userProfileData.full_name.charAt(0).toUpperCase() : 
+                {userProfileData?.full_name ? userProfileData.full_name.charAt(0).toUpperCase() :
                  (user.email ? user.email.charAt(0).toUpperCase() : <UserCircle size={48} />)}
               </AvatarFallback>
             </Avatar>
@@ -303,89 +279,106 @@ export default function ProfilePage() {
           </CardHeader>
         </Card>
 
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center text-lg gap-2">
-                <BarChart3 className="text-primary" /> Overall Accuracy
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-center">
-              {totalQuestionsAttempted > 0 && userHistory.filter(item => item.evaluation).length > 0 ? (
-                <>
-                  <p className="text-5xl font-bold text-primary mb-1">
-                    {Math.round(overallAccuracy * 100)}%
+        {profileLoading ? (
+          <div className="flex justify-center items-center py-10">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="ml-2 text-muted-foreground">Loading your stats...</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid md:grid-cols-3 gap-6 mb-8">
+              <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg gap-2">
+                    <BarChart3 className="text-primary" /> Overall Accuracy
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="text-center">
+                  {evaluatedHistory.length > 0 ? (
+                    <>
+                      <p className="text-5xl font-bold text-primary mb-1">
+                        {Math.round(overallAccuracy * 100)}%
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Based on {evaluatedHistory.length} evaluated question(s)
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-muted-foreground py-4">Start practicing to see your stats!</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg gap-2">
+                    <History className="text-accent" /> Questions Attempted
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="text-center">
+                  <p className="text-5xl font-bold text-accent mb-1">
+                    {totalQuestionsAttempted}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Based on {uniqueTopicsPracticedCount} topic(s)
+                    Across {uniqueTopicsPracticedCount} topic(s)
                   </p>
-                </>
-              ) : (
-                <p className="text-muted-foreground py-4">Start practicing to see your stats!</p>
-              )}
-            </CardContent>
-          </Card>
+                   <p className="text-xs text-muted-foreground">
+                    Avg. {averageQuestionsPerTopic} per topic
+                  </p>
+                </CardContent>
+              </Card>
 
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center text-lg gap-2">
-                <History className="text-accent" /> Questions Attempted
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-center">
-               <p className="text-5xl font-bold text-accent mb-1">
-                {totalQuestionsAttempted}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Avg. {averageQuestionsPerTopic} per topic
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center text-lg gap-2">
-                <Star className="text-yellow-500" /> Strengths
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-               {strengths.length > 0 ? (
-                <ul className="space-y-1 text-sm">
-                  {strengths.map(topic => (
-                    <li key={topic.name} className="text-muted-foreground flex items-center">
-                       <Star size={14} className="text-yellow-500 mr-2"/> {topic.name} ({Math.round(topic.accuracy*100)}%)
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                 <p className="text-muted-foreground text-sm">Keep practicing to identify strengths!</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-        
-         <Card className="mb-8 shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Lightbulb className="text-orange-500" /> Focus Areas
-              </CardTitle>
-              <CardDescription>Topics where you might want to spend a bit more time.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {focusAreas.length > 0 ? (
-                <ul className="space-y-2">
-                  {focusAreas.map(topic => (
-                    <li key={topic.name} className="p-3 bg-muted/30 rounded-md">
-                      <span className="font-semibold text-foreground">{topic.name}</span>
-                      <p className="text-xs text-muted-foreground">Current Accuracy: {Math.round(topic.accuracy*100)}% - Last practiced: {topic.lastPracticed}</p>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                 <p className="text-muted-foreground">No specific focus areas identified, or you're doing great! Practice more topics to get detailed insights.</p>
-              )}
-            </CardContent>
-          </Card>
+              <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center text-lg gap-2">
+                    <Star className="text-yellow-500" /> Strengths
+                  </CardTitle>
+                  <CardDescription className="text-xs">Top topics with &gt;=80% accuracy.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {strengths.length > 0 ? (
+                    <ul className="space-y-1 text-sm">
+                      {strengths.map(topic => (
+                        <li key={topic.name} className="text-muted-foreground flex items-center">
+                          <Star size={14} className="text-yellow-500 mr-2 flex-shrink-0"/> 
+                          <span className="truncate" title={topic.name}>{topic.name}</span> ({Math.round(topic.accuracy*100)}%)
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">Keep practicing to identify strengths!</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="mb-8 shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Lightbulb className="text-orange-500" /> Focus Areas
+                </CardTitle>
+                <CardDescription>Topics with &lt;70% accuracy. Review these for improvement!</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {focusAreas.length > 0 ? (
+                  <ul className="space-y-2">
+                    {focusAreas.map(topic => (
+                      <li key={topic.name} className="p-3 bg-muted/30 rounded-md">
+                        <span className="font-semibold text-foreground">{topic.name}</span>
+                        <p className="text-xs text-muted-foreground">
+                          Current Accuracy: {Math.round(topic.accuracy*100)}% ({topic.count} attempts) - Last practiced: {topic.lastPracticed}
+                        </p>
+                        {/* Future: Link to practice this topic/type/difficulty */}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-muted-foreground">No specific focus areas identified yet, or you're doing great! Practice more to get detailed insights.</p>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
 
         <Card className="shadow-lg">
           <CardHeader>
@@ -397,7 +390,12 @@ export default function ProfilePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {userHistory.length === 0 ? (
+            {profileLoading ? (
+              <div className="flex justify-center items-center py-10">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                 <p className="ml-2 text-muted-foreground">Loading history...</p>
+              </div>
+            ) : userHistory.length === 0 ? (
               <p className="text-muted-foreground text-center py-6">Your practice history will appear here once you start solving problems.</p>
             ) : (
               <Accordion type="single" collapsible className="w-full space-y-2">
@@ -410,10 +408,10 @@ export default function ProfilePage() {
                           <div className="flex items-center gap-2 min-w-0 flex-grow text-left">
                             <ProblemIcon className="w-5 h-5 text-primary flex-shrink-0" />
                             <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 min-w-0">
-                              <span className="font-medium truncate">{item.topic}</span>
+                              <span className="font-medium truncate" title={item.topic}>{item.topic}</span>
                               <div className="flex gap-1 text-xs">
-                                  <Badge variant="outline" className="hidden sm:inline-flex">{item.problemType}</Badge>
-                                  <Badge variant="outline">{item.difficulty || 'N/A'}</Badge>
+                                  <Badge variant="outline" className="capitalize">{item.problemType.replace('_based', '-based')}</Badge>
+                                  <Badge variant="outline" className="capitalize">{item.difficulty || 'N/A'}</Badge>
                               </div>
                             </div>
                           </div>
@@ -454,7 +452,8 @@ export default function ProfilePage() {
                               </div>
                             </>
                           )}
-                          {!(item.problem.multipleChoiceOptions && item.problem.multipleChoiceOptions.length > 0) && item.evaluation && ( 
+                          {/* Model answer for non-MCQ if evaluated */}
+                          {!(item.problem.multipleChoiceOptions && item.problem.multipleChoiceOptions.length > 0) && item.evaluation && (
                             <div>
                               <strong className="block text-muted-foreground mt-2 mb-1">Model Answer / Key Points:</strong>
                               <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
@@ -466,7 +465,7 @@ export default function ProfilePage() {
                               <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.evaluation.feedback} /></div>
                             </div>
                           )}
-                          {item.timeTakenSeconds !== null && item.timeTakenSeconds !== undefined && item.timeTakenSeconds >= 0 && (
+                          {(item.timeTakenSeconds !== null && item.timeTakenSeconds !== undefined && item.timeTakenSeconds >= 0) && (
                             <div>
                               <strong className="block text-muted-foreground mb-1 flex items-center gap-1">
                                 <TimerHistoryIcon size={14} /> Time Taken:
@@ -476,7 +475,7 @@ export default function ProfilePage() {
                           )}
                           {item.isTopicRevised && item.topicDetails && (
                             <div>
-                              <strong className="block text-muted-foreground mb-1">Revised Details:</strong>
+                              <strong className="block text-muted-foreground mb-1">Problem Insights Fetched:</strong>
                               <div className="p-2 rounded bg-muted/30 max-h-32 overflow-y-auto"><MathRenderer content={item.topicDetails} /></div>
                             </div>
                           )}
@@ -496,3 +495,4 @@ export default function ProfilePage() {
     </>
   );
 }
+
