@@ -1,9 +1,12 @@
 
-// src/ai/flows/fetch-topic-details.ts
+// This file is deprecated and replaced by generate-problem-insights.ts
+// Keeping it here to avoid breaking existing references during the transition,
+// but it should be removed once all uses are updated.
+
 'use server';
 
 /**
- * @fileOverview Fetches topic details from the internet to assist with revision, focusing on problem-solving patterns.
+ * @fileOverview DEPRECATED: Fetches general topic details. Use generate-problem-insights.ts for problem-specific insights.
  *
  * - fetchTopicDetails - A function that handles the topic details retrieval process.
  * - FetchTopicDetailsInput - The input type for the fetchTopicDetails function.
@@ -24,11 +27,19 @@ const FetchTopicDetailsOutputSchema = z.object({
 export type FetchTopicDetailsOutput = z.infer<typeof FetchTopicDetailsOutputSchema>;
 
 export async function fetchTopicDetails(input: FetchTopicDetailsInput): Promise<FetchTopicDetailsOutput> {
-  return fetchTopicDetailsFlow(input);
+  console.warn("DEPRECATED: fetchTopicDetails is called. Use generateProblemInsights instead.");
+  // For now, let's just return a dummy response or call the old prompt if it still exists
+  // Or, ideally, this function body would be updated or removed.
+  // Returning a basic message indicating deprecation:
+  return { details: "This topic detail fetcher is deprecated. Please use problem-specific insights." };
+  // OR adapt to call the new flow if possible, though input schemas differ.
+  // For a cleaner transition, this flow should not be used directly.
 }
 
+// Old prompt - keeping for reference if needed, but ideally this whole file is removed.
+/*
 const prompt = ai.definePrompt({
-  name: 'fetchTopicDetailsPrompt',
+  name: 'fetchTopicDetailsPrompt', // This name might conflict if not removed/renamed
   input: {schema: FetchTopicDetailsInputSchema},
   output: {schema: FetchTopicDetailsOutputSchema},
   prompt: `You are an expert educator focused on helping students understand **underlying principles and common problem-solving patterns** for competitive exams. The user will provide a topic: {{{topic}}}.
@@ -55,7 +66,7 @@ Actionable Insights & Patterns: `,
 
 const fetchTopicDetailsFlow = ai.defineFlow(
   {
-    name: 'fetchTopicDetailsFlow',
+    name: 'fetchTopicDetailsFlow', // This name might conflict if not removed/renamed
     inputSchema: FetchTopicDetailsInputSchema,
     outputSchema: FetchTopicDetailsOutputSchema,
   },
@@ -64,4 +75,5 @@ const fetchTopicDetailsFlow = ai.defineFlow(
     return output!;
   }
 );
+*/
 
