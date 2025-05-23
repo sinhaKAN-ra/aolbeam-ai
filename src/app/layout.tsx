@@ -6,7 +6,10 @@ import 'katex/dist/katex.min.css'; // Import KaTeX CSS
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { Analytics } from "@vercel/analytics/next";
-import Header from '@/components/Header'; // Import the new Header
+import dynamic from 'next/dynamic';
+
+// Import the client-side HeaderWrapper component
+import HeaderWrapper from '@/components/HeaderWrapper';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -37,7 +40,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {/* <Header /> Add Header here */}
+          <HeaderWrapper />
           {children}
           <Toaster />
           <Analytics />

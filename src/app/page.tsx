@@ -16,8 +16,7 @@ import {
 import {
   fetchTopicDetails,
 } from '@/ai/flows/fetch-topic-details';
-import { RefreshCcw, FilePlus2, ArrowRight, Loader2 } from 'lucide-react';
-import Header from '@/components/Header';
+import { RefreshCw, FilePlus2, ArrowRight, Loader2 } from 'lucide-react';
 import { createClientComponentClient, type SupabaseClient } from '@supabase/auth-helpers-nextjs';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
@@ -50,7 +49,7 @@ export default function AOLBEAMPage() {
   const [isLoadingPageProfile, setIsLoadingPageProfile] = useState<boolean>(true);
 
   const [currentTopic, setCurrentTopic] = useState<string>('');
-  const [currentProblemType, setCurrentProblemType] = useState<Exclude<ProblemType, 'random'>>('theory');
+  const [currentProblemType, setCurrentProblemType] = useState<ProblemType>('theory');
   const [currentDifficulty, setCurrentDifficulty] = useState<DifficultyLevel>('medium');
   const [currentProblem, setCurrentProblem] = useState<GeneratePracticeProblemOutput | null>(null);
   const [evaluationResult, setEvaluationResult] = useState<EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string } | null>(null);
@@ -95,125 +94,94 @@ export default function AOLBEAMPage() {
     hasFetchedProfile.current = true;
 
     try {
-      console.log(`Page: Attempting to query user_profiles for user ${user.id} (fetchAndSetUserProfile)...`);
+      console.log(`Page: Attempting to query user_profiles for user ${user.id}...`);
       
-      // Add a timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Query timeout after 10 seconds')), 10000)
-      );
-      
-      const queryPromise = supabase
+      // First try to get the existing profile
+      const { data: profile, error } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('id', user.id)
         .single();
-      
-      let { data: profileData, error: fetchError, status: fetchStatus } = 
-        await Promise.race([queryPromise, timeoutPromise]) as any;
 
-      console.log(`Page: Query for user_profiles for ${user.id} completed.`);
-      console.log('Page: Query status:', fetchStatus);
-      console.log('Page: Query error code:', fetchError?.code);
-      console.log('Page: Query error message:', fetchError?.message);
-      console.log('Page: Profile data exists:', !!profileData);
-      
-      // If we get here but profileData is null and no error, it means no profile exists
-      if (!profileData && !fetchError) {
-        console.log('Page: No profile found and no error, creating new profile...');
-        throw { code: 'PGRST116', message: 'No rows returned' };
-      }
-      
-      if (profileData) {
-        console.log(`Page: Profile found for ${user.id}:`, profileData);
-        let needsClientSideUpdate = false;
-        const updatePayload: Partial<UserProfile> = {};
+      if (error) {
+        console.log('Page: Profile fetch error, will attempt to create new profile:', error.message);
+        
+        // If no profile exists, create a new one
+        if (error.code === 'PGRST116' || error.code === 'PGRST116') {  // 'PGRST116' means no rows returned
+          console.log('Page: Creating new profile for user:', user.id);
+          
+          const newProfile = {
+            id: user.id,
+            email: user.email || '',
+            full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            interaction_count: 0,
+            is_subscribed: false
+          };
 
-        if (!profileData.email && user.email) {
-          console.log(`Page: Profile for ${user.id} missing email, will attempt update.`);
-          updatePayload.email = user.email;
-          needsClientSideUpdate = true;
-        }
-        if (!profileData.full_name && user.user_metadata?.full_name) {
-          console.log(`Page: Profile for ${user.id} missing full_name from metadata, will attempt update.`);
-          updatePayload.full_name = user.user_metadata.full_name;
-          needsClientSideUpdate = true;
-        } else if (!profileData.full_name && user.email && !user.user_metadata?.full_name) {
-          console.log(`Page: Profile for ${user.id} missing full_name, will use email part for update.`);
-          updatePayload.full_name = user.email.split('@')[0];
-          needsClientSideUpdate = true;
-        }
-
-
-        if (needsClientSideUpdate) {
-          console.log(`Page: Attempting client-side update for profile ${user.id} with payload:`, updatePayload);
-          const { data: updatedProfile, error: clientUpdateError } = await supabase
+          // Insert the new profile
+          const { data: createdProfile, error: createError } = await supabase
             .from('user_profiles')
-            .update(updatePayload)
+            .insert([newProfile])
+            .select()
+            .single();
+
+          if (createError) {
+            console.error('Page: Error creating new profile:', createError);
+            throw createError;
+          }
+
+          console.log('Page: Successfully created new profile:', createdProfile);
+          setPageUserProfile(createdProfile);
+        } else {
+          console.error('Page: Error fetching profile:', error);
+          throw error;
+        }
+      } else {
+        console.log('Page: Successfully fetched existing profile:', profile);
+        
+        // Check if profile needs any updates
+        const updates: Partial<UserProfile> = {};
+        let needsUpdate = false;
+
+        if (!profile.email && user.email) {
+          updates.email = user.email;
+          needsUpdate = true;
+        }
+
+        if (!profile.full_name) {
+          updates.full_name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'User';
+          needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+          console.log('Page: Updating profile with missing fields:', updates);
+          const { data: updatedProfile, error: updateError } = await supabase
+            .from('user_profiles')
+            .update(updates)
             .eq('id', user.id)
             .select()
             .single();
-          
-          if (clientUpdateError) {
-            console.error(`Page: Error updating profile for ${user.id} with missing details via client:`, clientUpdateError);
-          } else if (updatedProfile) {
-            profileData = updatedProfile as UserProfile; 
-            console.log(`Page: Profile for ${user.id} updated successfully via client with details:`, profileData);
-          }
-        }
-        setPageUserProfile(profileData as UserProfile);
-        console.log(`Page: pageUserProfile set for ${user.id}`);
 
-      } else if (fetchError && fetchError.code === 'PGRST116') { 
-        console.log(`Page: No profile found for ${user.id} (PGRST116), attempting to create fallback profile...`);
-        const newProfilePayload: Omit<UserProfile, 'created_at' | 'updated_at'> = { 
-          id: user.id,
-          email: user.email!, 
-          full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'New User',
-          interaction_count: 0,
-          is_subscribed: false,
-        };
-        console.log(`Page: Fallback profile payload for ${user.id}:`, newProfilePayload);
-        const { data: insertedProfile, error: insertError } = await supabase
-          .from('user_profiles')
-          .insert(newProfilePayload)
-          .select()
-          .single();
-        
-        if (insertedProfile) {
-            console.log(`Page: Fallback profile created and set for ${user.id}:`, insertedProfile);
-            setPageUserProfile(insertedProfile as UserProfile);
-        } else if (insertError && insertError.code === '23505') { 
-            console.log(`Page: Fallback profile insert for ${user.id} failed (unique violation - 23505). Re-fetching profile...`);
-            const { data: refetchedData, error: refetchError } = await supabase
-                .from('user_profiles')
-                .select('*')
-                .eq('id', user.id)
-                .single();
-            if (refetchedData) {
-                console.log(`Page: Profile re-fetched successfully for ${user.id} after unique violation:`, refetchedData);
-                setPageUserProfile(refetchedData as UserProfile);
-            } else {
-                console.error(`Page: Error re-fetching profile for ${user.id} after unique violation:`, refetchError);
-                toast({ variant: 'destructive', title: 'Profile Sync Error', description: `Could not sync your profile: ${refetchError?.message || 'Unknown error'}`});
-            }
-        } else { 
-            console.error(`Page: Error creating fallback user profile for ${user.id}:`, insertError);
-            toast({ variant: 'destructive', title: 'Profile Creation Failed', description: `Could not create your profile: ${insertError?.message || 'Unknown error'}`});
+          if (updateError) {
+            console.error('Page: Error updating profile:', updateError);
+          } else {
+            console.log('Page: Successfully updated profile:', updatedProfile);
+            setPageUserProfile(updatedProfile);
+          }
+        } else {
+          setPageUserProfile(profile);
         }
-      } else if (fetchError) { 
-        console.error(`Page: Database error fetching profile for ${user.id}:`, fetchError);
-        toast({ variant: 'destructive', title: 'Profile Error', description: `Could not load your profile: ${fetchError.message}`});
-      } else {
-         console.warn(`Page: No profile data and no fetch error for ${user.id} (fetchAndSetUserProfile). This is unexpected.`);
       }
-    } catch (error) { 
-      console.error(`Page: Unexpected error during profile setup for ${user.id} (fetchAndSetUserProfile):`, error);
-      toast({ variant: 'destructive', title: 'Profile Setup Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
+    } catch (error) {
+      console.error(`Page: Error in fetchAndSetUserProfile for ${user.id}:`, error);
+      // Don't clear the user on error, just log it
     } finally {
-      console.log(`Page: fetchAndSetUserProfile for ${user.id} finished. Setting isLoadingPageProfile to false.`);
+      console.log(`Page: fetchAndSetUserProfile for ${user.id} completed.`);
       setIsLoadingPageProfile(false);
     }
-  }, [supabase, toast]); 
+  }, [isLoadingPageProfile, pageUserProfile?.id, supabase]); 
 
 
   // Effect to handle auth state changes and initial session check
@@ -664,54 +632,14 @@ export default function AOLBEAMPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header 
-        userProfile={pageUserProfile} 
-        isLoadingProfile={isLoadingPageProfile} 
-        onSignOut={handleSignOut}
-      />
-      <main className="flex-grow bg-background text-foreground">
-        <PaywallModal
-          isOpen={showPaywall}
-          onClose={() => {
-            const isMandatoryPaywall = !!(pageCurrentUser && pageUserProfile && !pageUserProfile.is_subscribed && ((pageUserProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT));
-            if (!isMandatoryPaywall) {
-              setShowPaywall(false);
-            } else {
-              toast({title: "Plan Selection Required", description: "Please select a plan to continue using AOLBEAM.", variant: "default"});
-            }
-          }}
-          onSubscribe={handleSubscribe}
-          onLoginRegister={handleLoginForPaywall}
-          isMandatory={showPaywall && !!(pageCurrentUser && pageUserProfile && !pageUserProfile.is_subscribed && ((pageUserProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT))}
-        />
-        
-        <section className="py-16 md:py-24 text-center bg-background">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="max-w-3xl mx-auto">
-              <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
-                <span className="text-primary">Access of Learning</span>
-              </h1>
-              <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
-                <span className="text-primary">Beam</span> into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
-                Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
-              </p>
-              <div className="mt-10">
-                <Button size="lg" onClick={scrollToProblemGenerator} className="text-lg px-8 py-3 shadow-lg hover:shadow-primary/30 transition-shadow">
-                  Generate Your First Problem <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">
-          {isLoadingPageProfile && pageCurrentUser && (
+      <div className="flex-grow">
+        <div ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">
+          {isLoadingPageProfile && pageCurrentUser ? (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
               <p className="text-muted-foreground">Loading your profile...</p>
             </div>
-          )}
-          {!isLoadingPageProfile && (
+          ) : (
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8">
               <div className="lg:col-span-3 flex flex-col gap-6">
                 <ProblemGenerator
@@ -724,10 +652,20 @@ export default function AOLBEAMPage() {
                 {currentProblem && (
                   <>
                     <div className="flex gap-2 mt-0"> 
-                      <Button onClick={handleNewProblemSameTopic} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (!!pageCurrentUser && isLoadingPageProfile))}>
-                        <RefreshCcw className="mr-2 h-4 w-4" /> Another (Same Topic)
+                      <Button 
+                        onClick={handleNewProblemSameTopic} 
+                        variant="outline" 
+                        className="flex-1" 
+                        disabled={!!(isLoadingProblem || (!!pageCurrentUser && isLoadingPageProfile))}
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" /> Another (Same Topic)
                       </Button>
-                      <Button onClick={handleStartNew} variant="outline" className="flex-1" disabled={!!(isLoadingProblem || (!!pageCurrentUser && isLoadingPageProfile))}>
+                      <Button 
+                        onClick={handleStartNew} 
+                        variant="outline" 
+                        className="flex-1" 
+                        disabled={!!(isLoadingProblem || (!!pageCurrentUser && isLoadingPageProfile))}
+                      >
                         <FilePlus2 className="mr-2 h-4 w-4" /> Start New Topic
                       </Button>
                     </div>
@@ -755,11 +693,24 @@ export default function AOLBEAMPage() {
               </div>
             </div>
           )}
-        </section>
-      </main>
+        </div>
+      </div>
 
-    <main ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16 flex-grow">
-      </main>
+      <PaywallModal
+        isOpen={showPaywall}
+        onClose={() => {
+          const isMandatoryPaywall = !!(pageCurrentUser && pageUserProfile && !pageUserProfile.is_subscribed && ((pageUserProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT));
+          if (!isMandatoryPaywall) {
+            setShowPaywall(false);
+          } else {
+            toast({title: "Plan Selection Required", description: "Please select a plan to continue using AOLBEAM.", variant: "default"});
+          }
+        }}
+        onSubscribe={handleSubscribe}
+        onLoginRegister={handleLoginForPaywall}
+        isMandatory={showPaywall && !!(pageCurrentUser && pageUserProfile && !pageUserProfile.is_subscribed && ((pageUserProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT))}
+      />
+      
       <Footer />
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 pb-4 text-center">
         <p className="text-xs text-muted-foreground">
@@ -768,4 +719,4 @@ export default function AOLBEAMPage() {
       </div>
     </div>
   );
-};
+}
