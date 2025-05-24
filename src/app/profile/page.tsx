@@ -3,8 +3,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSupabase } from '@/hooks/useSupabase';
-import type { User } from '@supabase/supabase-js';
+import { useSupabase, useSession } from '@/hooks/useSupabase';
+import type { User, Session } from '@supabase/supabase-js';
 
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -86,154 +86,110 @@ const problemTypeIcons: Record<ProblemType, React.ElementType> = {
 export default function ProfilePage() {
   const router = useRouter();
   const supabase = useSupabase();
+  const { session, loading: authLoading } = useSession();
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true); // For overall page auth check
   const [userProfileData, setUserProfileData] = useState<AppUserProfile | null>(null);
   const [userHistory, setUserHistory] = useState<DisplayHistoryItem[]>([]);
-  const [profileLoading, setProfileLoading] = useState(true); // For profile data and history loading
+  const [profileLoading, setProfileLoading] = useState(true);
 
-  const fetchProfileAndHistory = useCallback(async (currentUserId: string) => {
-    setProfileLoading(true);
-    try {
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', currentUserId)
-        .single();
+  // Handle auth state changes
+  useEffect(() => {
+    if (session?.user) {
+      setUser(session.user);
+    } else if (!authLoading) {
+      // Only redirect if we're not still loading the session
+      router.push('/');
+    }
+  }, [session, authLoading, router]);
+
+  // Load profile data when user is available
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      if (!user) return;
+      
+      setProfileLoading(true);
+      try {
+        // Fetch user profile and interactions in parallel
+        const [
+          { data: profile, error: profileError },
+          { data: interactions, error: historyError }
+        ] = await Promise.all([
+          supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single(),
+          supabase
+            .from('user_interactions')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+        ]);
 
       if (profileError) {
         console.error('Error fetching user profile:', profileError);
+        if (historyError) throw historyError;
         // If profile doesn't exist, it might be PGRST116, handle if necessary,
         // but trigger should create it.
         setUserProfileData(null);
       } else {
         setUserProfileData(profile as AppUserProfile);
+
+        if (interactions) {
+          const formattedInteractions = interactions.map((item: FetchedInteraction): DisplayHistoryItem => ({
+            id: item.id,
+            timestamp: item.created_at,
+            topic: item.topic,
+            problemType: item.problem_type,
+            difficulty: item.difficulty as DifficultyLevel | null,
+            problem: {
+              problemStatement: item.problem_statement,
+              answerFormat: item.answer_format,
+              multipleChoiceOptions: item.multiple_choice_options || undefined,
+              correctAnswer: item.correct_answer,
+            },
+            userAnswer: item.user_answer || undefined,
+            selectedOption: item.selected_option || undefined,
+            evaluation: (item.evaluation_is_correct !== null && 
+                       item.evaluation_is_correct !== undefined && 
+                       item.evaluation_feedback)
+              ? { 
+                  isCorrect: item.evaluation_is_correct, 
+                  feedback: item.evaluation_feedback 
+                }
+              : undefined,
+            isTopicRevised: item.is_topic_revised || false,
+            topicDetails: item.topic_details_content || null,
+            timeTakenSeconds: item.time_taken_seconds,
+          }));
+          
+          setUserHistory(formattedInteractions);
+        }
+      } catch (error) {
+        console.error('Error fetching profile data:', error);
+      } finally {
+        setProfileLoading(false);
       }
-
-      const { data: interactions, error: historyError } = await supabase
-        .from('user_interactions')
-        .select('*')
-        .eq('user_id', currentUserId)
-        .order('created_at', { ascending: false });
-
-      if (historyError) {
-        console.error('Error fetching user history:', historyError);
-        setUserHistory([]);
-      } else if (interactions) {
-        const formattedInteractions = interactions.map((item: FetchedInteraction): DisplayHistoryItem => ({
-          id: item.id,
-          timestamp: item.created_at,
-          topic: item.topic,
-          problemType: item.problem_type,
-          difficulty: item.difficulty,
-          problem: {
-            problemStatement: item.problem_statement,
-            answerFormat: item.answer_format,
-            multipleChoiceOptions: item.multiple_choice_options || undefined,
-            correctAnswer: item.correct_answer,
-          },
-          userAnswer: item.user_answer || undefined,
-          selectedOption: item.selected_option || undefined,
-          evaluation: (item.evaluation_is_correct !== null &&
-                         item.evaluation_is_correct !== undefined &&
-                         item.evaluation_feedback)
-            ? {
-                isCorrect: item.evaluation_is_correct,
-                feedback: item.evaluation_feedback
-              }
-            : undefined,
-          isTopicRevised: item.is_topic_revised || false,
-          topicDetails: item.topic_details_content || null,
-          timeTakenSeconds: item.time_taken_seconds,
-        }));
-        setUserHistory(formattedInteractions);
-      }
-    } catch (error) {
-      console.error('Error in fetchProfileAndHistory:', error);
-      setUserProfileData(null);
-      setUserHistory([]);
-    } finally {
-      setProfileLoading(false);
-    }
-  }, [supabase]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const checkAuthAndLoadData = async () => {
-      setLoading(true); // Initial overall loading
-      
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-      if (sessionError && isMounted) {
-        console.error("Error getting session:", sessionError);
-        setLoading(false);
-        router.push('/');
-        return;
-      }
-      
-      const currentUser = session?.user ?? null;
-      if (isMounted) {
-        setUser(currentUser);
-      }
-
-      if (currentUser) {
-        await fetchProfileAndHistory(currentUser.id);
-      } else {
-        if (isMounted) router.push('/');
-      }
-      if (isMounted) setLoading(false);
     };
 
-    checkAuthAndLoadData();
+    fetchProfileData();
+  }, [user, supabase]);
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!isMounted) return;
-
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-      
-      if (currentUser) {
-        // If user changes (e.g., logs in on another tab, or token refresh causes new session obj)
-        // we might re-fetch. For this simple profile, a full re-fetch is okay.
-        // For more complex apps, you might only fetch if user.id changes.
-        setLoading(true);
-        await fetchProfileAndHistory(currentUser.id);
-        setLoading(false);
-      } else {
-        router.push('/');
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      authListener?.subscription?.unsubscribe();
-    };
-  }, [supabase, router, fetchProfileAndHistory]);
-
-
-  if (loading || (user && profileLoading)) { // Show loader if overall auth check is happening OR if user exists but profile data is still loading
+  // Show loading state while checking auth
+  if (authLoading || !user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <Loader2 className="h-12 w-12 text-primary animate-spin" />
           <p>Loading profile...</p>
         </div>
       </div>
     );
   }
 
-  if (!user) {
-     // This case should ideally be handled by router.push, but as a fallback:
-    return (
-        <div className="flex items-center justify-center min-h-screen">
-            <p>Redirecting to login...</p>
-        </div>
-    );
-  }
-
-  // Calculate dynamic statistics
-  const evaluatedHistory = userHistory.filter(item => item.evaluation);
+  const overallAccuracy = userHistory.length > 0 && userHistory.filter(item => item.evaluation).length > 0
+    ? userHistory.filter(item => item.evaluation).reduce((acc, item) => acc + (item.evaluation?.isCorrect ? 1 : 0), 0) / userHistory.filter(item => item.evaluation).length
+    : 0;
   const totalQuestionsAttempted = userHistory.length;
   const correctAnswersCount = evaluatedHistory.filter(item => item.evaluation?.isCorrect).length;
   const overallAccuracy = evaluatedHistory.length > 0 ? (correctAnswersCount / evaluatedHistory.length) : 0;

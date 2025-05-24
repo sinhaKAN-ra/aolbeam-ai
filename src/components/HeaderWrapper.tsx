@@ -3,20 +3,22 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import type { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
-import { useSupabase } from '../hooks/useSupabase'; // Import the custom hook
+import { useSupabase, useSession } from '../hooks/useSupabase';
 import Header from './Header';
+import type { User, Session } from '@supabase/supabase-js';
 import type { UserProfile } from '@/types';
 
 export default function HeaderWrapper() {
+  const { session, loading: authLoading } = useSession();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const supabase = useSupabase(); // Use the custom hook
   const router = useRouter();
 
-  const fetchUserProfileHeader = useCallback(async (userId: string) => {
-    console.log(`HeaderWrapper: Attempting to fetch profile for user ${userId}`);
-    setIsLoading(true); // Set loading true at the start of fetch
+  // Function to fetch user profile
+  const fetchUserProfile = useCallback(async (userId: string) => {
+    if (!userId) return null;
+    
     try {
       let { data: profile, error } = await supabase
         .from('user_profiles')
@@ -64,52 +66,43 @@ export default function HeaderWrapper() {
     }
   }, [supabase]);
 
+  // Update user profile when session changes
   useEffect(() => {
-    console.log('HeaderWrapper: Setting up auth state listener');
-    setIsLoading(true); // Start with loading true
-
-    const checkInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('HeaderWrapper: Initial session:', session);
-      if (session?.user) {
-        await fetchUserProfileHeader(session.user.id);
-      } else {
+    const updateUserProfile = async () => {
+      if (!session?.user) {
         setUserProfile(null);
-        setIsLoading(false); // No user, so profile loading is done
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const profile = await fetchUserProfile(session.user.id);
+        setUserProfile(profile);
+      } catch (error) {
+        console.error('Error updating user profile:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    checkInitialSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event: AuthChangeEvent, session: Session | null) => {
-        console.log('HeaderWrapper: Auth state changed:', event, session);
-        if (session?.user) {
-          await fetchUserProfileHeader(session.user.id);
-        } else {
-          setUserProfile(null);
-          setIsLoading(false); // No user, profile loading done
-        }
-      }
-    );
-
-    return () => {
-      console.log('HeaderWrapper: Cleaning up auth listener');
-      subscription?.unsubscribe();
-    };
-  }, [supabase, fetchUserProfileHeader]);
+    updateUserProfile();
+  }, [session, fetchUserProfile]);
 
   const handleSignOut = async () => {
-    console.log('HeaderWrapper: Sign out initiated');
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      setUserProfile(null); // Clear profile on sign out
-      router.push('/'); // Redirect to home
-      // router.refresh(); // This might be causing issues, can be removed if not strictly needed
+      
+      // Clear local state
+      setUserProfile(null);
+      
+      // Redirect to home page
+      router.push('/');
+      router.refresh();
     } catch (error) {
-      console.error('HeaderWrapper: Error during sign out:', error);
-      throw error; // Re-throw to be caught by Header.tsx if needed
+      console.error('Error during sign out:', error);
+      throw error;
     }
   };
 
