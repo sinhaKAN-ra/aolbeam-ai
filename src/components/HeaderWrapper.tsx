@@ -1,111 +1,115 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import type { User, Session } from '@supabase/supabase-js';
-import { useSupabase } from '../hooks/useSupabase';
+import type { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
+import { useSupabase } from '../hooks/useSupabase'; // Import the custom hook
 import Header from './Header';
 import type { UserProfile } from '@/types';
 
 export default function HeaderWrapper() {
-  const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const supabase = useSupabase();
+  const supabase = useSupabase(); // Use the custom hook
   const router = useRouter();
 
-  // Function to fetch user profile
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfileHeader = useCallback(async (userId: string) => {
+    console.log(`HeaderWrapper: Attempting to fetch profile for user ${userId}`);
+    setIsLoading(true); // Set loading true at the start of fetch
     try {
-      const { data: profile, error } = await supabase
+      let { data: profile, error } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
-      return profile;
+      if (error && error.code === 'PGRST116') { // Profile not found
+        console.log(`HeaderWrapper: Profile not found for ${userId}, trigger might be pending or failed.`);
+        // Optionally, attempt to create if absolutely necessary, or just rely on trigger
+        // For now, we assume the trigger handles creation.
+        profile = null;
+      } else if (error) {
+        throw error;
+      }
+      
+      // If profile exists, but email/name is missing, try to update from auth user
+      const authUser = (await supabase.auth.getUser()).data.user;
+      if (profile && authUser && (!profile.email || !profile.full_name)) {
+        const updates: Partial<UserProfile> = {};
+        if (!profile.email && authUser.email) updates.email = authUser.email;
+        if (!profile.full_name && (authUser.user_metadata?.full_name || authUser.email)) {
+          updates.full_name = authUser.user_metadata?.full_name || authUser.email?.split('@')[0];
+        }
+        if (Object.keys(updates).length > 0) {
+          console.log(`HeaderWrapper: Profile for ${userId} missing fields, attempting update:`, updates);
+          const { data: updatedProfile, error: updateError } = await supabase
+            .from('user_profiles')
+            .update(updates)
+            .eq('id', userId)
+            .select()
+            .single();
+          if (updateError) console.error(`HeaderWrapper: Error updating profile with missing fields:`, updateError);
+          else profile = updatedProfile;
+        }
+      }
+      
+      console.log(`HeaderWrapper: Fetched profile for ${userId}:`, profile);
+      setUserProfile(profile as UserProfile | null);
     } catch (error) {
-      console.error('Error fetching user profile:', error);
-      return null;
+      console.error('HeaderWrapper: Error fetching user profile:', error);
+      setUserProfile(null); // Clear profile on error
+    } finally {
+      setIsLoading(false); // Ensure loading is set to false
     }
-  };
+  }, [supabase]);
 
-  // Handle auth state changes
   useEffect(() => {
     console.log('HeaderWrapper: Setting up auth state listener');
-    
-    // Get initial session
-    const initializeAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        console.log('Initial session:', session);
-        
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          console.log('User found, fetching profile...');
-          const profile = await fetchUserProfile(session.user.id);
-          console.log('Fetched profile:', profile);
-          setUserProfile(profile);
-        } else {
-          console.log('No user session found');
-          setUserProfile(null);
-        }
-      } catch (error) {
-        console.error('Error initializing auth:', error);
-      } finally {
-        setIsLoading(false);
+    setIsLoading(true); // Start with loading true
+
+    const checkInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('HeaderWrapper: Initial session:', session);
+      if (session?.user) {
+        await fetchUserProfileHeader(session.user.id);
+      } else {
+        setUserProfile(null);
+        setIsLoading(false); // No user, so profile loading is done
       }
     };
 
-    initializeAuth();
+    checkInitialSession();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, session);
-        setUser(session?.user ?? null);
-        
+      async (event: AuthChangeEvent, session: Session | null) => {
+        console.log('HeaderWrapper: Auth state changed:', event, session);
         if (session?.user) {
-          console.log('Auth change - user found, fetching profile...');
-          const profile = await fetchUserProfile(session.user.id);
-          console.log('Auth change - fetched profile:', profile);
-          setUserProfile(profile);
+          await fetchUserProfileHeader(session.user.id);
         } else {
-          console.log('Auth change - no user session');
           setUserProfile(null);
+          setIsLoading(false); // No user, profile loading done
         }
-        
-        setIsLoading(false);
       }
     );
 
     return () => {
-      console.log('Cleaning up auth listener');
+      console.log('HeaderWrapper: Cleaning up auth listener');
       subscription?.unsubscribe();
     };
-  }, [supabase]);
+  }, [supabase, fetchUserProfileHeader]);
 
   const handleSignOut = async () => {
     console.log('HeaderWrapper: Sign out initiated');
     try {
-      console.log('HeaderWrapper: Attempting to sign out from Supabase');
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      
-      console.log('HeaderWrapper: Supabase sign out successful, updating local state');
-      setUser(null);
-      setUserProfile(null);
-      
-      console.log('HeaderWrapper: Redirecting to home page');
-      router.push('/');
-      router.refresh();
-      
-      console.log('HeaderWrapper: Sign out flow completed');
+      setUserProfile(null); // Clear profile on sign out
+      router.push('/'); // Redirect to home
+      // router.refresh(); // This might be causing issues, can be removed if not strictly needed
     } catch (error) {
       console.error('HeaderWrapper: Error during sign out:', error);
-      throw error;
+      throw error; // Re-throw to be caught by Header.tsx if needed
     }
   };
 
