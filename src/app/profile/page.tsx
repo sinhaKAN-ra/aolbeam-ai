@@ -1,4 +1,4 @@
-
+// src/app/profile/page.tsx
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -17,7 +17,8 @@ import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 
 // Icons
-import { BarChart3, History, Lightbulb, UserCircle, Settings, Star, MessageSquareText, ListChecks, CheckCircle, XCircle, TimerIcon as TimerHistoryIcon, Brain as ConceptualIcon, Sigma as NumericalIcon, GitFork as DiagramIcon, Shuffle } from 'lucide-react';
+import { BarChart3, History, Lightbulb, UserCircle, Star, MessageSquareText, ListChecks, CheckCircle, XCircle, TimerIcon as TimerHistoryIcon, Brain as ConceptualIcon, Sigma as NumericalIcon, GitFork as DiagramIcon, Shuffle } from 'lucide-react';
+// Removed unused Settings icon
 
 interface FetchedInteraction {
   id: string;
@@ -128,20 +129,24 @@ export default function ProfilePage() {
 
       if (profileError) {
         console.error('Error fetching user profile:', profileError);
-        if (historyError) throw historyError;
         // If profile doesn't exist, it might be PGRST116, handle if necessary,
         // but trigger should create it.
         setUserProfileData(null);
       } else {
         setUserProfileData(profile as AppUserProfile);
+      }
+      // historyError is checked below
 
-        if (interactions) {
+      if (historyError) {
+          console.error('Error fetching user history:', historyError);
+          setUserHistory([]); // Set to empty array on error
+      } else if (interactions) {
           const formattedInteractions = interactions.map((item: FetchedInteraction): DisplayHistoryItem => ({
             id: item.id,
             timestamp: item.created_at,
             topic: item.topic,
-            problemType: item.problem_type,
-            difficulty: item.difficulty as DifficultyLevel | null,
+            problemType: item.problem_type, // This will be the resolved type from DB
+            difficulty: item.difficulty || null, // Ensure it's null if undefined
             problem: {
               problemStatement: item.problem_statement,
               answerFormat: item.answer_format,
@@ -164,19 +169,28 @@ export default function ProfilePage() {
           }));
           
           setUserHistory(formattedInteractions);
+        } else {
+            setUserHistory([]); // Set to empty if interactions are null/undefined
         }
-      } catch (error) {
-        console.error('Error fetching profile data:', error);
+
+      } catch (error) { // Catch any unexpected error from Promise.all or mapping
+        console.error('Error in fetchProfileData:', error);
+        setUserProfileData(null);
+        setUserHistory([]);
       } finally {
         setProfileLoading(false);
       }
     };
 
-    fetchProfileData();
-  }, [user, supabase]);
+    if (user) { // Only fetch if user is set
+        fetchProfileData();
+    } else if (!authLoading) { // If no user and auth is not loading, set profile loading to false
+        setProfileLoading(false);
+    }
+  }, [user, supabase, authLoading]); 
 
-  // Show loading state while checking auth
-  if (authLoading || !user) {
+  // Show loading state while checking auth or fetching profile
+  if (authLoading || profileLoading) { // Combined loading states
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-4">
@@ -187,13 +201,22 @@ export default function ProfilePage() {
     );
   }
 
-  const overallAccuracy = userHistory.length > 0 && userHistory.filter(item => item.evaluation).length > 0
-    ? userHistory.filter(item => item.evaluation).reduce((acc, item) => acc + (item.evaluation?.isCorrect ? 1 : 0), 0) / userHistory.filter(item => item.evaluation).length
-    : 0;
-  const totalQuestionsAttempted = userHistory.length;
+  // If no user after loading (e.g., redirect might not have happened yet or failed silently)
+  if (!user) {
+    // This case should ideally be handled by the redirect in the first useEffect,
+    // but as a fallback:
+    return (
+        <div className="flex items-center justify-center min-h-screen">
+            <p>Please log in to view your profile.</p>
+        </div>
+    );
+  }
+  
+  const evaluatedHistory = userHistory.filter(item => item.evaluation);
   const correctAnswersCount = evaluatedHistory.filter(item => item.evaluation?.isCorrect).length;
   const overallAccuracy = evaluatedHistory.length > 0 ? (correctAnswersCount / evaluatedHistory.length) : 0;
   
+  const totalQuestionsAttempted = userHistory.length;
   const uniqueTopics = [...new Set(userHistory.map(item => item.topic))];
   const uniqueTopicsPracticedCount = uniqueTopics.length;
   const averageQuestionsPerTopic = uniqueTopicsPracticedCount > 0 ? Math.round(totalQuestionsAttempted / uniqueTopicsPracticedCount) : 0;
@@ -208,10 +231,10 @@ export default function ProfilePage() {
     return {
       name: topic,
       accuracy: topicAccuracy,
-      count: topicItems.length,
+      count: topicItems.length, 
       lastPracticed: lastPracticedItem ? new Date(lastPracticedItem.timestamp).toLocaleDateString() : 'N/A',
-      problemType: lastPracticedItem ? lastPracticedItem.problemType : 'N/A',
-      difficulty: lastPracticedItem ? lastPracticedItem.difficulty : 'N/A',
+      problemType: lastPracticedItem?.problemType || 'random', 
+      difficulty: lastPracticedItem?.difficulty || 'medium', 
     };
   });
 
@@ -252,7 +275,7 @@ export default function ProfilePage() {
           </CardHeader>
         </Card>
 
-        {profileLoading && !userHistory.length ? ( // Show loader if profile data is actively loading and no history yet to show
+        {profileLoading && !userHistory.length ? ( 
           <div className="flex justify-center items-center py-10">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="ml-2 text-muted-foreground">Loading your stats and history...</p>
@@ -369,7 +392,7 @@ export default function ProfilePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {profileLoading && !userHistory.length ? ( // Still show loader if history is specifically loading
+            {profileLoading && !userHistory.length ? ( 
               <div className="flex justify-center items-center py-10">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                  <p className="ml-2 text-muted-foreground">Loading history...</p>
@@ -474,3 +497,4 @@ export default function ProfilePage() {
     </>
   );
 }
+
