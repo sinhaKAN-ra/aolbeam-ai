@@ -15,20 +15,20 @@ import {
   type EvaluateTheoryAnswerInput,
 } from '@/ai/flows/evaluate-theory-answer';
 import {
-  fetchTopicDetails,
-  type FetchTopicDetailsInput,
-  type FetchTopicDetailsOutput,
-} from '@/ai/flows/fetch-topic-details';
+  generateProblemInsights,
+  type GenerateProblemInsightsInput,
+  type GenerateProblemInsightsOutput,
+} from '@/ai/flows/generate-problem-insights';
 import { RefreshCw, FilePlus2, ArrowRight, Loader2 } from 'lucide-react';
 
-import { createClientComponentClient, type SupabaseClient } from '@supabase/auth-helpers-nextjs';
 import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { useSupabase } from '@/hooks/useSupabase'; // Import the custom hook
 
 import type { InteractionHistoryItem, ProblemType, UserProfile, DifficultyLevel } from '@/types';
 import { ProblemGenerator } from '@/components/ProblemGenerator';
 import { ProblemDisplay } from '@/components/ProblemDisplay';
 import { EvaluationResult } from '@/components/EvaluationResult';
-import { TopicRevision } from '@/components/TopicRevision';
+import { ProblemInsights } from '@/components/ProblemInsights';
 import { HistoryView } from '@/components/HistoryView';
 import { PaywallModal } from '@/components/PaywallModal';
 import { UseCaseBanner } from '@/components/UseCaseBanner';
@@ -41,31 +41,51 @@ const ALL_CONCRETE_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 
 
 export default function AOLBEAMPage() {
   const { toast } = useToast();
-  const [supabase] = useState<SupabaseClient>(() => {
-    console.log('Page: Initializing Supabase client (once)...');
-    return createClientComponentClient();
-  });
+  const supabase = useSupabase(); // Use the custom hook
   
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isLoadingPageProfile, setIsLoadingPageProfile] = useState<boolean>(true);
+  const [isLoadingPageProfile, setIsLoadingPageProfile] = useState<boolean>(true); // Start true for initial load
 
   const [currentTopic, setCurrentTopic] = useState<string>('');
   const [currentProblemType, setCurrentProblemType] = useState<ProblemType>('theory');
   const [currentDifficulty, setCurrentDifficulty] = useState<DifficultyLevel>('medium');
   const [currentProblem, setCurrentProblem] = useState<GeneratePracticeProblemOutput | null>(null);
   const [evaluationResult, setEvaluationResult] = useState<EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string } | null>(null);
-  const [topicDetails, setTopicDetails] = useState<string | null>(null);
+  const [problemInsights, setProblemInsights] = useState<string | null>(null);
 
   const [isLoadingProblem, setIsLoadingProblem] = useState<boolean>(false);
   const [isLoadingEvaluation, setIsLoadingEvaluation] = useState<boolean>(false);
-  const [isLoadingDetails, setIsLoadingDetails] = useState<boolean>(false);
+  const [isLoadingInsights, setIsLoadingInsights] = useState<boolean>(false);
 
-  const [history, setHistory] = useLocalStorage<InteractionHistoryItem[]>('aolbeamHistory_guest', []);
+  const [history, setHistory] = useState<InteractionHistoryItem[]>([]); // Initialize empty for server, load from localStorage on client
   const [guestInteractionCount, setGuestInteractionCount] = useLocalStorage<number>('aolbeamGuestInteractionCount', 0);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
+  const [isClientMounted, setIsClientMounted] = useState(false);
 
   const problemGeneratorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIsClientMounted(true);
+    // Load history from localStorage only on the client after mount
+    const savedHistory = localStorage.getItem('aolbeamHistory_guest');
+    if (savedHistory) {
+      try {
+        setHistory(JSON.parse(savedHistory));
+      } catch (e) {
+        console.error("Error parsing history from localStorage", e);
+        setHistory([]);
+      }
+    }
+  }, []);
+
+
+  const saveHistoryToLocalStorage = useCallback((newHistory: InteractionHistoryItem[]) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('aolbeamHistory_guest', JSON.stringify(newHistory));
+    }
+  }, []);
+
 
   const scrollToProblemGenerator = () => {
     problemGeneratorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -74,7 +94,7 @@ export default function AOLBEAMPage() {
   const fetchAndSetUserProfile = useCallback(async (user: User) => {
     console.log(`Page: fetchAndSetUserProfile called for user: ${user.id}`);
     setIsLoadingPageProfile(true);
-    setUserProfile(null); // Reset profile while fetching
+    setUserProfile(null); 
 
     try {
       console.log(`Page: Attempting to query user_profiles for user ${user.id} (fetchAndSetUserProfile)...`);
@@ -84,9 +104,9 @@ export default function AOLBEAMPage() {
         .eq('id', user.id)
         .single();
 
-      console.log(`Page: Profile query for ${user.id} - Status: ${fetchStatus}, Error: ${fetchError}, Data:`, profileData);
+      console.log(`Page: Profile query for ${user.id} - Status: ${fetchStatus}, Error:`, fetchError, "Data:", profileData);
 
-      if (fetchError && fetchError.code === 'PGRST116') { // Profile not found
+      if (fetchError && fetchError.code === 'PGRST116') { 
         console.log(`Page: Profile not found for ${user.id}, attempting to create one.`);
         const newProfilePayload: Partial<UserProfile> = {
           id: user.id,
@@ -103,7 +123,7 @@ export default function AOLBEAMPage() {
 
         if (createError) {
           console.error(`Page: Error creating new profile for ${user.id}:`, createError);
-          if (createError.code === '23505') { // Unique constraint violation, likely trigger ran
+          if (createError.code === '23505') { 
             console.log(`Page: Profile creation failed due to unique constraint (likely trigger ran), re-fetching for ${user.id}.`);
             const { data: refetchedProfile, error: refetchError } = await supabase
               .from('user_profiles')
@@ -129,7 +149,6 @@ export default function AOLBEAMPage() {
         toast({ variant: "destructive", title: "Profile Error", description: fetchError.message });
       } else if (profileData) {
          console.log(`Page: Successfully fetched existing profile for ${user.id}:`, profileData);
-         // Check if email or full_name needs to be updated from auth data
          const updates: Partial<UserProfile> = {};
          let needsDBUpdate = false;
          if (!profileData.email && user.email) {
@@ -151,7 +170,6 @@ export default function AOLBEAMPage() {
               .single();
             if (updateError) {
               console.error(`Page: Error updating profile for ${user.id} with missing fields:`, updateError);
-              // Use existing profileData even if update fails, or handle more gracefully
             } else {
               profileData = updatedProfileData;
               console.log(`Page: Successfully updated profile for ${user.id} with missing fields:`, profileData);
@@ -174,15 +192,14 @@ export default function AOLBEAMPage() {
     const handleAuthChange = async (event: AuthChangeEvent, session: Session | null) => {
       console.log(`Page: Auth state changed: ${event}`, { user: session?.user?.email });
       const user = session?.user ?? null;
-      setCurrentUser(user); // This should always be the first state update related to auth change
+      setCurrentUser(user); 
       
       if (user) {
         console.log(`Page: User authenticated from onAuthStateChange, calling fetchAndSetUserProfile.`);
         await fetchAndSetUserProfile(user);
       } else {
-        // User signed out or session expired
-        setUserProfile(null); // Clear profile
-        setIsLoadingPageProfile(false); // No profile to load
+        setUserProfile(null); 
+        setIsLoadingPageProfile(false); 
       }
     };
 
@@ -203,16 +220,16 @@ export default function AOLBEAMPage() {
         } else {
           console.log('Page: No existing session found in checkUser.');
           setUserProfile(null);
-          setIsLoadingPageProfile(false); // Ensure loading state is cleared if no user
+          setIsLoadingPageProfile(false); 
         }
       } catch (error) {
         console.error('Page: Error in checkUser:', error);
         setUserProfile(null);
-        setIsLoadingPageProfile(false); // Ensure loading state is cleared on error
+        setIsLoadingPageProfile(false); 
       }
     };
 
-    checkUser();
+    checkUser(); // Call on initial mount
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
 
@@ -290,21 +307,28 @@ export default function AOLBEAMPage() {
         selectedOption: itemToAdd.selectedOption,
         evaluation: itemToAdd.evaluation,
         difficulty: itemToAdd.difficulty, 
-        problemType: itemToAdd.problemType, // Store the originally selected type, including 'random'
+        problemType: itemToAdd.problemType, 
     };
 
-    setHistory(prevHistory => [newHistoryItem, ...prevHistory].slice(0, 50));
+    setHistory(prevHistory => {
+      const updatedHistory = [newHistoryItem, ...prevHistory].slice(0, 50);
+      saveHistoryToLocalStorage(updatedHistory); // Save to localStorage
+      return updatedHistory;
+    });
+
 
     if (currentUser && itemToAdd.problem && itemToAdd.problem.problemStatement) {
         const dbRecord: any = { 
             user_id: currentUser.id,
             topic: itemToAdd.topic,
-            problem_type: itemToAdd.actualProblemType, // Store the *actual* generated type
+            problem_type: itemToAdd.actualProblemType, 
             difficulty: itemToAdd.difficulty, 
             problem_statement: itemToAdd.problem.problemStatement,
             answer_format: itemToAdd.problem.answerFormat,
             multiple_choice_options: itemToAdd.problem.multipleChoiceOptions,
             correct_answer: itemToAdd.problem.correctAnswer,
+            is_topic_revised: false,
+            topic_details_content: null 
         };
         try {
           console.log("Page: Attempting to save new problem to Supabase:", dbRecord);
@@ -314,16 +338,20 @@ export default function AOLBEAMPage() {
               toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account. " + dbError.message });
           } else if (dbData) {
             console.log("Page: Successfully saved new problem to Supabase, ID:", dbData.id);
-            setHistory(prev => prev.map(hItem => 
-                hItem.id === newHistoryItem.id ? { ...hItem, supabase_id: dbData.id } : hItem
-            ));
+            setHistory(prev => {
+                const updatedHistory = prev.map(hItem => 
+                    hItem.id === newHistoryItem.id ? { ...hItem, supabase_id: dbData.id } : hItem
+                );
+                saveHistoryToLocalStorage(updatedHistory);
+                return updatedHistory;
+            });
           }
         } catch (e) {
             console.error("Page: Exception saving history to Supabase:", e);
             toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account." });
         }
     }
-  }, [setHistory, supabase, currentUser, toast]); 
+  }, [setHistory, supabase, currentUser, toast, saveHistoryToLocalStorage]); 
 
   const updateLastHistoryItem = useCallback(async (updates: Partial<InteractionHistoryItem>) => {
     let itemToUpdateSupabaseId: string | undefined;
@@ -337,11 +365,12 @@ export default function AOLBEAMPage() {
         problem: updates.problem ? { ...prevHistory[0].problem!, ...updates.problem } : prevHistory[0].problem,
       };
       itemToUpdateSupabaseId = updatedItem.supabase_id;
-      updatedItemForSupabase = updatedItem; // Capture the fully updated item
-      return [updatedItem, ...prevHistory.slice(1)];
+      updatedItemForSupabase = updatedItem; 
+      const newHistory = [updatedItem, ...prevHistory.slice(1)];
+      saveHistoryToLocalStorage(newHistory);
+      return newHistory;
     });
-
-    // Perform Supabase update outside setHistory to use the latest state
+    
     if (supabase && currentUser && itemToUpdateSupabaseId && updatedItemForSupabase) { 
       const dbUpdatePayload: any = {};
       if (updates.userAnswer !== undefined) dbUpdatePayload.user_answer = updates.userAnswer;
@@ -349,7 +378,6 @@ export default function AOLBEAMPage() {
       if (updates.evaluation !== undefined) {
         dbUpdatePayload.evaluation_is_correct = updates.evaluation.isCorrect;
         dbUpdatePayload.evaluation_feedback = updates.evaluation.feedback;
-        // Check if these optional fields exist on the evaluation object before assigning
         if ('correctAnswer' in updates.evaluation && updates.evaluation.correctAnswer !== undefined) {
             dbUpdatePayload.evaluation_correct_answer_detail = updates.evaluation.correctAnswer;
         }
@@ -357,8 +385,8 @@ export default function AOLBEAMPage() {
             dbUpdatePayload.evaluation_explanation_detail = updates.evaluation.explanation;
         }
       }
-      if (updates.isTopicRevised !== undefined) dbUpdatePayload.is_topic_revised = updates.isTopicRevised;
-      if (updates.topicDetails !== undefined) dbUpdatePayload.topic_details_content = updates.topicDetails;
+      if (updates.isTopicRevised !== undefined) dbUpdatePayload.is_topic_revised = updates.isTopicRevised; 
+      if (updates.topicDetails !== undefined) dbUpdatePayload.topic_details_content = updates.topicDetails; 
       if (updates.feedbackRating !== undefined) dbUpdatePayload.feedback_rating = updates.feedbackRating;
       if (updates.feedbackComment !== undefined) dbUpdatePayload.feedback_comment = updates.feedbackComment;
       if (updates.timeTakenSeconds !== undefined) dbUpdatePayload.time_taken_seconds = updates.timeTakenSeconds;
@@ -381,7 +409,7 @@ export default function AOLBEAMPage() {
     } else if (supabase && currentUser && !itemToUpdateSupabaseId && history.length > 0 && history[0] && Object.keys(updates).length > 0) {
         console.warn("Page: Attempted to update history item in Supabase, but supabase_id was missing for the last item. Local history updated.", history[0]);
     }
-  }, [setHistory, supabase, currentUser, toast, history]);
+  }, [setHistory, supabase, currentUser, toast, history, saveHistoryToLocalStorage]);
 
 
   const handleGenerateProblem = async (topic: string, type: ProblemType, difficulty: DifficultyLevel) => {
@@ -392,7 +420,7 @@ export default function AOLBEAMPage() {
     setCurrentDifficulty(difficulty); 
     setCurrentProblem(null);
     setEvaluationResult(null);
-    setTopicDetails(null);
+    setProblemInsights(null); 
 
     let actualProblemTypeForAI: Exclude<ProblemType, 'random'>;
     if (type === 'random') {
@@ -410,8 +438,8 @@ export default function AOLBEAMPage() {
       setCurrentProblem(problemWithDifficulty);
       await addToHistory({ 
         topic,
-        problemType: type, // User's selection ('random' or specific)
-        actualProblemType: actualProblemTypeForAI, // Actual type sent to AI
+        problemType: type, 
+        actualProblemType: actualProblemTypeForAI, 
         difficulty: problemDifficulty, 
         problem: problemWithDifficulty, 
       });
@@ -437,13 +465,13 @@ export default function AOLBEAMPage() {
       const isMcqStyleProblem = currentProblem.multipleChoiceOptions && currentProblem.multipleChoiceOptions.length > 0;
 
       if (!isMcqStyleProblem) { 
-        const fetchedDetailsForEval = topicDetails || (await fetchTopicDetails({topic: currentTopic})).details || "No specific topic details available for this evaluation.";
+        const insightsForEval = problemInsights || (await generateProblemInsights({ problemStatement: currentProblem.problemStatement, topic: currentTopic })).insights || "No specific problem insights available for this evaluation.";
         
         const evalInput: EvaluateTheoryAnswerInput = {
           question: currentProblem.problemStatement,
           studentAnswer: answer,
           answerFormat: currentProblem.answerFormat, 
-          topicDetails: fetchedDetailsForEval,
+          topicDetails: insightsForEval,
         };
         evalOutput = await evaluateTheoryAnswer(evalInput);
         updatesForHistory.userAnswer = answer;
@@ -469,23 +497,23 @@ export default function AOLBEAMPage() {
     }
   };
 
-  const handleFetchTopicDetails = async (topicToFetch: string) => {
+  const handleGenerateProblemInsights = async (problemStatement: string, topicToFetch: string) => { 
     if ((currentUser && isLoadingPageProfile) || checkUsageLimit()) return;
 
-    setIsLoadingDetails(true);
+    setIsLoadingInsights(true); 
     try {
       await incrementInteraction();
-      const result = await fetchTopicDetails({ topic: topicToFetch });
-      setTopicDetails(result.details);
-      await updateLastHistoryItem({ isTopicRevised: true, topicDetails: result.details }); 
-      toast({ title: "Topic Details Fetched", description: `Details for "${topicToFetch}" are now available.` });
+      const result = await generateProblemInsights({ problemStatement, topic: topicToFetch }); 
+      setProblemInsights(result.insights); 
+      await updateLastHistoryItem({ isTopicRevised: true, topicDetails: result.insights }); 
+      toast({ title: "Problem Insights Fetched", description: `Insights for the current problem are now available.` });
     } catch (error) 
     {
-      console.error("Page: Error fetching topic details:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to fetch topic details." });
-      setTopicDetails("Failed to load details. Please try again."); 
+      console.error("Page: Error fetching problem insights:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to fetch problem insights." });
+      setProblemInsights("Failed to load insights. Please try again."); 
     } finally {
-      setIsLoadingDetails(false);
+      setIsLoadingInsights(false); 
     }
   };
 
@@ -513,7 +541,7 @@ export default function AOLBEAMPage() {
     setCurrentTopic('');
     setCurrentProblem(null);
     setEvaluationResult(null);
-    setTopicDetails(null);
+    setProblemInsights(null); 
     toast({ title: "Ready for New Topic", description: "Enter a new topic and problem type." });
   };
 
@@ -553,25 +581,25 @@ export default function AOLBEAMPage() {
 
 
   useEffect(() => {
-    // This effect attempts to restore the last session state for guest users if no current problem is loaded
-    if (!isLoadingPageProfile && !currentUser && history.length > 0 && !currentProblem && !isLoadingProblem) {
+    // This effect is to restore guest session state from localStorage
+    // Only run if not logged in, not loading profile, and not loading a problem.
+    if (isClientMounted && !isLoadingPageProfile && !currentUser && !currentProblem && !isLoadingProblem && history.length > 0) {
       const lastItem = history[0];
       if (lastItem) {
         setCurrentTopic(lastItem.topic);
-        // Ensure problemType from history is valid, default if not
         const validProblemTypes: ProblemType[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based', 'random'];
         setCurrentProblemType(validProblemTypes.includes(lastItem.problemType) ? lastItem.problemType : 'theory');
         setCurrentDifficulty(lastItem.difficulty || 'medium');
         setCurrentProblem(lastItem.problem);
         if (lastItem.evaluation) setEvaluationResult(lastItem.evaluation);
         if (lastItem.isTopicRevised && lastItem.topicDetails) {
-          setTopicDetails(lastItem.topicDetails);
+          setProblemInsights(lastItem.topicDetails);
         } else {
-          setTopicDetails(null);
+          setProblemInsights(null);
         }
       }
     }
-  }, [currentUser, history, isLoadingProblem, currentProblem, isLoadingPageProfile]);
+  }, [currentUser, history, isLoadingProblem, currentProblem, isLoadingPageProfile, isClientMounted]);
 
 
   const interactionsLeftText = () => {
@@ -587,14 +615,14 @@ export default function AOLBEAMPage() {
 
   return (
     <>
-      <section className="py-16 md:py-24 text-center bg-background"> {/* Removed hero gradient */}
+      <section className="py-16 md:py-24 text-center bg-background">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
              <span className="text-black dark:text-primary">Access of Learning</span>
             </h1>
             <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
-            <span className="text-primary">Beam</span> into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
+            Beam into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
               Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
             </p>
             <div className="mt-10">
@@ -609,7 +637,7 @@ export default function AOLBEAMPage() {
       <UseCaseBanner />
 
       <div ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">
-        {isLoadingPageProfile && currentUser ? (
+        {isLoadingPageProfile && currentUser && !userProfile ? ( // Show main page loader only if actively loading profile for a logged-in user
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
             <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
             <p className="text-muted-foreground">Loading your profile...</p>
@@ -658,13 +686,14 @@ export default function AOLBEAMPage() {
             </div>
 
             <div className="lg:col-span-2 flex flex-col gap-6">
-              <TopicRevision
-                topic={currentProblem ? currentTopic : null} 
-                details={topicDetails}
-                onFetchDetails={handleFetchTopicDetails}
-                isLoading={!!(isLoadingDetails || (!!currentUser && isLoadingPageProfile))}
+              <ProblemInsights
+                problem={currentProblem} 
+                topic={currentTopic}    
+                insights={problemInsights}
+                onFetchInsights={handleGenerateProblemInsights}
+                isLoading={!!(isLoadingInsights || (!!currentUser && isLoadingPageProfile))}
               />
-              <HistoryView history={history} />
+              {isClientMounted && <HistoryView history={history} />} 
             </div>
           </div>
         )}
@@ -694,5 +723,3 @@ export default function AOLBEAMPage() {
   );
 }
 
-
-    

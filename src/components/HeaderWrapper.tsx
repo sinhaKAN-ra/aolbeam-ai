@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -11,7 +12,7 @@ export default function HeaderWrapper() {
   const { session, loading: authLoading } = useSession();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const supabase = useSupabase();
+  const supabase = useSupabase(); // Use the custom hook
   const router = useRouter();
 
   // Function to fetch user profile
@@ -19,17 +20,49 @@ export default function HeaderWrapper() {
     if (!userId) return null;
     
     try {
-      const { data: profile, error } = await supabase
+      let { data: profile, error } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
-      return profile;
+      if (error && error.code === 'PGRST116') { // Profile not found
+        console.log(`HeaderWrapper: Profile not found for ${userId}, trigger might be pending or failed.`);
+        // Optionally, attempt to create if absolutely necessary, or just rely on trigger
+        // For now, we assume the trigger handles creation.
+        profile = null;
+      } else if (error) {
+        throw error;
+      }
+      
+      // If profile exists, but email/name is missing, try to update from auth user
+      const authUser = (await supabase.auth.getUser()).data.user;
+      if (profile && authUser && (!profile.email || !profile.full_name)) {
+        const updates: Partial<UserProfile> = {};
+        if (!profile.email && authUser.email) updates.email = authUser.email;
+        if (!profile.full_name && (authUser.user_metadata?.full_name || authUser.email)) {
+          updates.full_name = authUser.user_metadata?.full_name || authUser.email?.split('@')[0];
+        }
+        if (Object.keys(updates).length > 0) {
+          console.log(`HeaderWrapper: Profile for ${userId} missing fields, attempting update:`, updates);
+          const { data: updatedProfile, error: updateError } = await supabase
+            .from('user_profiles')
+            .update(updates)
+            .eq('id', userId)
+            .select()
+            .single();
+          if (updateError) console.error(`HeaderWrapper: Error updating profile with missing fields:`, updateError);
+          else profile = updatedProfile;
+        }
+      }
+      
+      console.log(`HeaderWrapper: Fetched profile for ${userId}:`, profile);
+      setUserProfile(profile as UserProfile | null);
     } catch (error) {
-      console.error('Error fetching user profile:', error);
-      return null;
+      console.error('HeaderWrapper: Error fetching user profile:', error);
+      setUserProfile(null); // Clear profile on error
+    } finally {
+      setIsLoading(false); // Ensure loading is set to false
     }
   }, [supabase]);
 
