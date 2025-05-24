@@ -1,10 +1,10 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSupabase } from '@/hooks/useSupabase';
-import type { User, Session } from '@supabase/supabase-js';
+import type { User } from '@supabase/supabase-js';
 
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import MathRenderer from '@/components/MathRenderer';
-import type { ProblemType, DifficultyLevel, UserProfile as AppUserProfile } from '@/types';
+import type { ProblemType, DifficultyLevel, UserProfile as AppUserProfile } from '@/types'; // Ensure this matches your actual types file
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 
@@ -23,8 +23,8 @@ interface FetchedInteraction {
   id: string;
   created_at: string;
   topic: string;
-  problem_type: ProblemType; // This is the resolved concrete type from DB
-  difficulty?: DifficultyLevel | null; // This is the selected difficulty from DB
+  problem_type: ProblemType;
+  difficulty?: DifficultyLevel | null;
   problem_statement: string;
   answer_format: string;
   multiple_choice_options?: string[] | null;
@@ -33,8 +33,8 @@ interface FetchedInteraction {
   selected_option?: string | null;
   evaluation_is_correct?: boolean | null;
   evaluation_feedback?: string | null;
-  is_topic_revised?: boolean | null; // True if insights were fetched
-  topic_details_content?: string | null; // The insights content
+  is_topic_revised?: boolean | null;
+  topic_details_content?: string | null;
   time_taken_seconds?: number | null;
 }
 
@@ -42,7 +42,7 @@ interface DisplayHistoryItem {
   id: string;
   timestamp: string;
   topic: string;
-  problemType: ProblemType; // Resolved concrete type
+  problemType: ProblemType;
   difficulty?: DifficultyLevel | null;
   problem: {
     problemStatement: string;
@@ -57,7 +57,7 @@ interface DisplayHistoryItem {
     feedback: string;
   };
   isTopicRevised?: boolean;
-  topicDetails?: string | null; // This stores problem-specific insights
+  topicDetails?: string | null;
   timeTakenSeconds?: number | null;
 }
 
@@ -79,7 +79,7 @@ const problemTypeIcons: Record<ProblemType, React.ElementType> = {
   conceptual: ConceptualIcon,
   numerical: NumericalIcon,
   diagram_based: DiagramIcon,
-  random: Shuffle, // 'random' won't be in DB, but for type completeness
+  random: Shuffle,
 };
 
 
@@ -87,120 +87,132 @@ export default function ProfilePage() {
   const router = useRouter();
   const supabase = useSupabase();
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [authSubscription, setAuthSubscription] = useState<{ unsubscribe: () => void } | null>(null);
+  const [loading, setLoading] = useState(true); // For overall page auth check
   const [userProfileData, setUserProfileData] = useState<AppUserProfile | null>(null);
   const [userHistory, setUserHistory] = useState<DisplayHistoryItem[]>([]);
-  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true); // For profile data and history loading
+
+  const fetchProfileAndHistory = useCallback(async (currentUserId: string) => {
+    setProfileLoading(true);
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', currentUserId)
+        .single();
+
+      if (profileError) {
+        console.error('Error fetching user profile:', profileError);
+        // If profile doesn't exist, it might be PGRST116, handle if necessary,
+        // but trigger should create it.
+        setUserProfileData(null);
+      } else {
+        setUserProfileData(profile as AppUserProfile);
+      }
+
+      const { data: interactions, error: historyError } = await supabase
+        .from('user_interactions')
+        .select('*')
+        .eq('user_id', currentUserId)
+        .order('created_at', { ascending: false });
+
+      if (historyError) {
+        console.error('Error fetching user history:', historyError);
+        setUserHistory([]);
+      } else if (interactions) {
+        const formattedInteractions = interactions.map((item: FetchedInteraction): DisplayHistoryItem => ({
+          id: item.id,
+          timestamp: item.created_at,
+          topic: item.topic,
+          problemType: item.problem_type,
+          difficulty: item.difficulty,
+          problem: {
+            problemStatement: item.problem_statement,
+            answerFormat: item.answer_format,
+            multipleChoiceOptions: item.multiple_choice_options || undefined,
+            correctAnswer: item.correct_answer,
+          },
+          userAnswer: item.user_answer || undefined,
+          selectedOption: item.selected_option || undefined,
+          evaluation: (item.evaluation_is_correct !== null &&
+                         item.evaluation_is_correct !== undefined &&
+                         item.evaluation_feedback)
+            ? {
+                isCorrect: item.evaluation_is_correct,
+                feedback: item.evaluation_feedback
+              }
+            : undefined,
+          isTopicRevised: item.is_topic_revised || false,
+          topicDetails: item.topic_details_content || null,
+          timeTakenSeconds: item.time_taken_seconds,
+        }));
+        setUserHistory(formattedInteractions);
+      }
+    } catch (error) {
+      console.error('Error in fetchProfileAndHistory:', error);
+      setUserProfileData(null);
+      setUserHistory([]);
+    } finally {
+      setProfileLoading(false);
+    }
+  }, [supabase]);
 
   useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setUser(session.user);
-        } else {
-          const { data: { user: currentUser } } = await supabase.auth.getUser();
-          if (currentUser) {
-            setUser(currentUser);
-          } else {
-            router.push('/');
-            return;
-          }
-        }
-      } catch (error) {
-        console.error('Error checking session:', error);
-        router.push('/');
-      } finally {
+    let isMounted = true;
+
+    const checkAuthAndLoadData = async () => {
+      setLoading(true); // Initial overall loading
+      
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError && isMounted) {
+        console.error("Error getting session:", sessionError);
         setLoading(false);
-        setAuthChecked(true);
+        router.push('/');
+        return;
       }
+      
+      const currentUser = session?.user ?? null;
+      if (isMounted) {
+        setUser(currentUser);
+      }
+
+      if (currentUser) {
+        await fetchProfileAndHistory(currentUser.id);
+      } else {
+        if (isMounted) router.push('/');
+      }
+      if (isMounted) setLoading(false);
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state changed in profile:', event, session?.user?.email);
-      if (event === 'SIGNED_IN' && session?.user) {
-        setUser(session.user);
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
+    checkAuthAndLoadData();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!isMounted) return;
+
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      
+      if (currentUser) {
+        // If user changes (e.g., logs in on another tab, or token refresh causes new session obj)
+        // we might re-fetch. For this simple profile, a full re-fetch is okay.
+        // For more complex apps, you might only fetch if user.id changes.
+        setLoading(true);
+        await fetchProfileAndHistory(currentUser.id);
+        setLoading(false);
+      } else {
         router.push('/');
       }
     });
 
-    setAuthSubscription(subscription);
-    checkSession();
-
     return () => {
-      if (authSubscription) {
-        authSubscription.unsubscribe();
-      }
+      isMounted = false;
+      authListener?.subscription?.unsubscribe();
     };
-  }, [router, supabase, authSubscription]); // Added authSubscription
+  }, [supabase, router, fetchProfileAndHistory]);
 
-  useEffect(() => {
-    const fetchProfileData = async () => {
-      if (!user) return;
 
-      setProfileLoading(true);
-      try {
-        const { data: profile, error: profileError } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-
-        if (profileError) throw profileError;
-        setUserProfileData(profile as AppUserProfile);
-
-        const { data: interactions, error: historyError } = await supabase
-          .from('user_interactions')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (historyError) throw historyError;
-
-        if (interactions) {
-          const formattedInteractions = interactions.map((item: FetchedInteraction): DisplayHistoryItem => ({
-            id: item.id,
-            timestamp: item.created_at,
-            topic: item.topic,
-            problemType: item.problem_type, // This is the resolved concrete type from DB
-            difficulty: item.difficulty,    // This is the selected difficulty from DB
-            problem: {
-              problemStatement: item.problem_statement,
-              answerFormat: item.answer_format,
-              multipleChoiceOptions: item.multiple_choice_options || undefined,
-              correctAnswer: item.correct_answer,
-            },
-            userAnswer: item.user_answer || undefined,
-            selectedOption: item.selected_option || undefined,
-            evaluation: (item.evaluation_is_correct !== null &&
-                           item.evaluation_is_correct !== undefined &&
-                           item.evaluation_feedback)
-              ? {
-                  isCorrect: item.evaluation_is_correct,
-                  feedback: item.evaluation_feedback
-                }
-              : undefined,
-            isTopicRevised: item.is_topic_revised || false,
-            topicDetails: item.topic_details_content || null, // This is problem-specific insights
-            timeTakenSeconds: item.time_taken_seconds,
-          }));
-          setUserHistory(formattedInteractions);
-        }
-      } catch (error) {
-        console.error('Error fetching profile data:', error);
-      } finally {
-        setProfileLoading(false);
-      }
-    };
-
-    fetchProfileData();
-  }, [user, supabase]);
-
-  if (loading || !authChecked) {
+  if (loading || (user && profileLoading)) { // Show loader if overall auth check is happening OR if user exists but profile data is still loading
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-4">
@@ -212,7 +224,12 @@ export default function ProfilePage() {
   }
 
   if (!user) {
-    return null; // Will be redirected by the first useEffect
+     // This case should ideally be handled by router.push, but as a fallback:
+    return (
+        <div className="flex items-center justify-center min-h-screen">
+            <p>Redirecting to login...</p>
+        </div>
+    );
   }
 
   // Calculate dynamic statistics
@@ -243,7 +260,7 @@ export default function ProfilePage() {
   });
 
   const strengths = topicStats
-    .filter(topic => topic.accuracy >= 0.80 && topic.count > 0) // Adjusted threshold for strengths
+    .filter(topic => topic.accuracy >= 0.80 && topic.count > 0)
     .sort((a, b) => b.accuracy - a.accuracy || b.count - a.count)
     .slice(0, 3);
 
@@ -279,10 +296,10 @@ export default function ProfilePage() {
           </CardHeader>
         </Card>
 
-        {profileLoading ? (
+        {profileLoading && !userHistory.length ? ( // Show loader if profile data is actively loading and no history yet to show
           <div className="flex justify-center items-center py-10">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="ml-2 text-muted-foreground">Loading your stats...</p>
+            <p className="ml-2 text-muted-foreground">Loading your stats and history...</p>
           </div>
         ) : (
           <>
@@ -364,11 +381,17 @@ export default function ProfilePage() {
                   <ul className="space-y-2">
                     {focusAreas.map(topic => (
                       <li key={topic.name} className="p-3 bg-muted/30 rounded-md">
-                        <span className="font-semibold text-foreground">{topic.name}</span>
-                        <p className="text-xs text-muted-foreground">
-                          Current Accuracy: {Math.round(topic.accuracy*100)}% ({topic.count} attempts) - Last practiced: {topic.lastPracticed}
-                        </p>
-                        {/* Future: Link to practice this topic/type/difficulty */}
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <span className="font-semibold text-foreground">{topic.name}</span>
+                                <p className="text-xs text-muted-foreground">
+                                Current Accuracy: {Math.round(topic.accuracy*100)}% ({topic.count} attempts) - Last practiced: {topic.lastPracticed}
+                                </p>
+                            </div>
+                             {/* <Button variant="link" size="sm" asChild>
+                                <Link href={`/?topic=${encodeURIComponent(topic.name)}&type=${topic.problemType || 'random'}&difficulty=${topic.difficulty || 'medium'}`}>Practice {topic.name} &rarr;</Link>
+                            </Button> */}
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -390,7 +413,7 @@ export default function ProfilePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {profileLoading ? (
+            {profileLoading && !userHistory.length ? ( // Still show loader if history is specifically loading
               <div className="flex justify-center items-center py-10">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                  <p className="ml-2 text-muted-foreground">Loading history...</p>
@@ -495,4 +518,3 @@ export default function ProfilePage() {
     </>
   );
 }
-
