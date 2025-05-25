@@ -1,116 +1,96 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { useSupabase } from '@/hooks/useSupabase';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 
-export default function PaymentSuccess() {
+function PaymentSuccessContent() {
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [message, setMessage] = useState('Verifying your payment...');
-  const { toast } = useToast();
-  const supabase = useSupabase();
+  const orderId = searchParams.get('order_id');
+  const status = searchParams.get('status');
 
-  useEffect(() => {
-    const verifyPayment = async () => {
-      try {
-        const orderId = searchParams.get('order_id');
-        const paymentId = searchParams.get('payment_id');
+  if (!orderId || !status) {
+    return (
+      <div className="container mx-auto px-4 py-16 text-center">
+        <Card className="max-w-md mx-auto">
+          <CardHeader>
+            <CardTitle className="text-xl">Invalid Payment Response</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-6">
+              We couldn't process your payment response. Please contact support if you've been charged.
+            </p>
+            <Button asChild>
+              <Link href="/">Return Home</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-        if (!orderId) {
-          throw new Error('No order ID found in URL');
-        }
-
-        // Verify payment with your backend
-        const response = await fetch(`/api/payments/verify?order_id=${orderId}&payment_id=${paymentId || ''}`);
-        
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || 'Failed to verify payment');
-        }
-
-        const data = await response.json();
-        
-        if (data.status === 'success') {
-          setStatus('success');
-          setMessage('Your payment was successful!');
-          
-          // Refresh user session to get updated subscription status
-          await supabase.auth.refreshSession();
-        } else {
-          setStatus('error');
-          setMessage(data.message || 'Payment verification failed');
-        }
-      } catch (error) {
-        console.error('Payment verification error:', error);
-        setStatus('error');
-        setMessage(error instanceof Error ? error.message : 'An error occurred while verifying your payment');
-        
-        toast({
-          variant: 'destructive',
-          title: 'Verification Error',
-          description: 'There was an error verifying your payment. Please contact support if the issue persists.',
-        });
-      }
-    };
-
-    verifyPayment();
-  }, [searchParams, toast, supabase.auth]);
+  const isSuccess = status === 'SUCCESS';
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-md">
-        <div className="text-center">
-          {status === 'loading' && (
-            <div className="mx-auto flex items-center justify-center h-12 w-12 text-blue-500">
-              <Loader2 className="h-12 w-12 animate-spin" />
-            </div>
-          )}
-          
-          {status === 'success' && (
-            <div className="mx-auto flex items-center justify-center h-12 w-12 text-green-500">
-              <CheckCircle2 className="h-12 w-12" />
-            </div>
-          )}
-          
-          {status === 'error' && (
-            <div className="mx-auto flex items-center justify-center h-12 w-12 text-red-500">
-              <AlertCircle className="h-12 w-12" />
-            </div>
-          )}
-          
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-            {status === 'loading' ? 'Processing...' : 
-             status === 'success' ? 'Payment Successful!' : 'Payment Error'}
-          </h2>
-          
-          <p className="mt-2 text-sm text-gray-600">
-            {message}
+    <div className="container mx-auto px-4 py-16 text-center">
+      <Card className="max-w-md mx-auto">
+        <CardHeader>
+          <div className="flex justify-center mb-4">
+            {isSuccess ? (
+              <CheckCircle2 className="h-16 w-16 text-green-500" />
+            ) : (
+              <XCircle className="h-16 w-16 text-red-500" />
+            )}
+          </div>
+          <CardTitle className="text-xl">
+            {isSuccess ? 'Payment Successful!' : 'Payment Failed'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground mb-6">
+            {isSuccess
+              ? 'Thank you for your subscription. You now have full access to all features.'
+              : 'We couldn\'t process your payment. Please try again or contact support.'}
           </p>
-          
-          <div className="mt-6">
-            <Button
-              onClick={() => window.location.href = '/dashboard'}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              {status === 'success' ? 'Go to Dashboard' : 'Back to Home'}
+          <div className="space-y-4">
+            <Button asChild className="w-full">
+              <Link href="/">Return Home</Link>
             </Button>
-            
-            {status === 'error' && (
-              <Button
-                variant="outline"
-                className="mt-4 w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                onClick={() => window.location.reload()}
-              >
-                Try Again
+            {!isSuccess && (
+              <Button variant="outline" asChild className="w-full">
+                <Link href="/pricing">Try Again</Link>
               </Button>
             )}
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
+  );
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto px-4 py-16 text-center">
+        <Card className="max-w-md mx-auto">
+          <CardHeader>
+            <div className="flex justify-center mb-4">
+              <Loader2 className="h-16 w-16 animate-spin text-primary" />
+            </div>
+            <CardTitle className="text-xl">Processing Payment...</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-6">
+              Please wait while we verify your payment status.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }

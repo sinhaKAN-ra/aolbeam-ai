@@ -1,141 +1,96 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
-import { useSubscriptionStatus } from '@/hooks/useSubscription';
-import { toast } from '@/hooks/use-toast';
+import Link from 'next/link';
 
-export default function PaymentReturnPage() {
+function PaymentReturnContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const orderId = searchParams.get('order_id');
-  const paymentId = searchParams.get('payment_id');
   const status = searchParams.get('status');
-  
-  const [isVerifying, setIsVerifying] = useState(true);
-  const [verificationStatus, setVerificationStatus] = useState<'success' | 'failed' | 'pending'>('pending');
-  const [message, setMessage] = useState('Verifying your payment...');
-  
-  const { checkStatus } = useSubscriptionStatus();
 
-  useEffect(() => {
-    const verifyPayment = async () => {
-      if (!orderId) {
-        setVerificationStatus('failed');
-        setMessage('No order ID found in the URL');
-        setIsVerifying(false);
-        return;
-      }
+  if (!orderId || !status) {
+    return (
+      <div className="container mx-auto px-4 py-16 text-center">
+        <Card className="max-w-md mx-auto">
+          <CardHeader>
+            <CardTitle className="text-xl">Invalid Payment Response</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-6">
+              We couldn't process your payment response. Please contact support if you've been charged.
+            </p>
+            <Button asChild>
+              <Link href="/">Return Home</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-      try {
-        const result = await checkStatus(orderId, paymentId || undefined);
-        
-        if (result.status === 'success' || result.data?.status === 'ACTIVE') {
-          setVerificationStatus('success');
-          setMessage('Your payment was successful!');
-          
-          // Show success toast
-          toast({
-            title: 'Payment Successful',
-            description: 'Your subscription has been activated successfully.',
-          });
-          
-          // Redirect to dashboard after a short delay
-          setTimeout(() => {
-            router.push('/dashboard');
-          }, 3000);
-        } else {
-          setVerificationStatus('failed');
-          setMessage(result.message || 'Payment verification failed');
-          
-          toast({
-            variant: 'destructive',
-            title: 'Payment Verification Failed',
-            description: result.message || 'There was an issue verifying your payment. Please contact support if the issue persists.',
-          });
-        }
-      } catch (error) {
-        console.error('Payment verification error:', error);
-        setVerificationStatus('failed');
-        setMessage('An error occurred while verifying your payment');
-        
-        toast({
-          variant: 'destructive',
-          title: 'Verification Error',
-          description: 'There was an error verifying your payment. Please check your subscription status or contact support.',
-        });
-      } finally {
-        setIsVerifying(false);
-      }
-    };
-
-    verifyPayment();
-  }, [orderId, paymentId, status, checkStatus, router]);
+  const isSuccess = status === 'SUCCESS';
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8 text-center">
-        {isVerifying ? (
-          <div className="flex flex-col items-center">
-            <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Processing Your Payment</h1>
-            <p className="text-gray-600 mb-6">Please wait while we verify your payment details...</p>
-          </div>
-        ) : (
-          <>
-            {verificationStatus === 'success' ? (
-              <div className="flex flex-col items-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                  <CheckCircle2 className="h-10 w-10 text-green-600" />
-                </div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h1>
-                <p className="text-gray-600 mb-6">{message}</p>
-                <p className="text-sm text-gray-500 mb-6">You will be redirected to your dashboard shortly...</p>
-                <Button 
-                  onClick={() => router.push('/dashboard')}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700"
-                >
-                  Go to Dashboard
-                </Button>
-              </div>
+    <div className="container mx-auto px-4 py-16 text-center">
+      <Card className="max-w-md mx-auto">
+        <CardHeader>
+          <div className="flex justify-center mb-4">
+            {isSuccess ? (
+              <CheckCircle2 className="h-16 w-16 text-green-500" />
             ) : (
-              <div className="flex flex-col items-center">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                  <XCircle className="h-10 w-10 text-red-600" />
-                </div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Issue</h1>
-                <p className="text-gray-600 mb-6">{message}</p>
-                <div className="space-y-3 w-full">
-                  <Button 
-                    onClick={() => router.push('/pricing')}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700"
-                  >
-                    Back to Pricing
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => window.location.reload()}
-                  >
-                    Try Again
-                  </Button>
-                </div>
-              </div>
+              <XCircle className="h-16 w-16 text-red-500" />
             )}
-          </>
-        )}
-        
-        <div className="mt-8 pt-6 border-t border-gray-200">
-          <p className="text-sm text-gray-500">
-            Having trouble? Contact our support team at{' '}
-            <a href="mailto:support@aolbeam.ai" className="text-indigo-600 hover:underline">
-              support@aolbeam.ai
-            </a>
+          </div>
+          <CardTitle className="text-xl">
+            {isSuccess ? 'Payment Successful!' : 'Payment Failed'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground mb-6">
+            {isSuccess
+              ? 'Thank you for your subscription. You now have full access to all features.'
+              : 'We couldn\'t process your payment. Please try again or contact support.'}
           </p>
-        </div>
-      </div>
+          <div className="space-y-4">
+            <Button asChild className="w-full">
+              <Link href="/">Return Home</Link>
+            </Button>
+            {!isSuccess && (
+              <Button variant="outline" asChild className="w-full">
+                <Link href="/pricing">Try Again</Link>
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
+  );
+}
+
+export default function PaymentReturnPage() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto px-4 py-16 text-center">
+        <Card className="max-w-md mx-auto">
+          <CardHeader>
+            <div className="flex justify-center mb-4">
+              <Loader2 className="h-16 w-16 animate-spin text-primary" />
+            </div>
+            <CardTitle className="text-xl">Processing Payment...</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-6">
+              Please wait while we verify your payment status.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <PaymentReturnContent />
+    </Suspense>
   );
 }
