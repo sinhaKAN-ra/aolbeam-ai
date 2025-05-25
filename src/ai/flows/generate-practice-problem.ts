@@ -1,4 +1,3 @@
-
 // 'use server';
 
 /**
@@ -46,93 +45,79 @@ const prompt = ai.definePrompt({
   name: 'generatePracticeProblemPrompt',
   input: {schema: GeneratePracticeProblemInputSchema},
   output: {schema: GeneratePracticeProblemOutputSchema.omit({ difficulty: true })}, // AI doesn't output difficulty, we add it post-call
-  prompt: `You are an expert in generating practice problems for students preparing for competitive exams. The student will provide a topic, problem type, and desired difficulty. You will generate a practice problem appropriate for these parameters.
+  prompt: `You are an expert in generating practice problems for students preparing for competitive exams. You MUST follow the exact format and requirements specified below.
 
-Content Formatting Rules:
-1.  **Mathematical Formulas**: Use LaTeX notation. For inline math, use single dollar signs (e.g., $E=mc^2$). For display/block math, use double dollar signs (e.g., $$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$).
-2.  **Code Snippets**: Use Markdown fenced code blocks with language identifiers (e.g., \`\`\`python
-print("Hello World")
-\`\`\` or \`\`\`javascript
-console.log("Hi");
-\`\`\`).
-3.  **Diagrams**: If a diagram is needed, first try to represent it using Mermaid.js syntax within a Markdown code block (e.g., \`\`\`mermaid
-graph TD;
-A[Start] --> B(Process);
-B --> C{Decision};
-C --> D[End];
-\`\`\`). If Mermaid.js is not suitable or too complex for reliable rendering, provide a clear textual description of the diagram instead.
-
-Ensure all generated content ('problemStatement', 'answerFormat', 'multipleChoiceOptions', 'correctAnswer') adheres to these formatting rules for math, code, and diagrams. The LaTeX, Markdown, and Mermaid syntax must be syntactically correct and properly escaped within the JSON string.
+**CRITICAL: You must respond with a valid JSON object containing the required fields. Do not include any text before or after the JSON response.**
 
 Topic: {{{topic}}}
 Problem Type: {{{problemType}}}
 Difficulty: {{{difficulty}}}
 
-Instructions based on Problem Type:
+**STRICT FORMATTING REQUIREMENTS:**
+1. **Mathematical Formulas**: Use LaTeX notation EXACTLY as shown:
+   - Inline math: $E=mc^2$
+   - Block math: $$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$
+   - Escape backslashes properly in JSON strings (use \\\\)
 
-If Problem Type is "theory":
-- Generate a problem that requires a written, explanatory answer, matching the specified difficulty ({{{difficulty}}}).
-- 'problemStatement' should pose the question.
-- 'answerFormat' should describe the expected content and structure of the answer (e.g., "Explain in 2-3 sentences including a key formula.").
-- 'correctAnswer' should contain a model or ideal textual answer.
-- 'multipleChoiceOptions' should be an empty array or not provided.
+2. **Code Snippets**: Use Markdown fenced code blocks EXACTLY as shown:
+   \`\`\`python
+   print("Hello World")
+   \`\`\`
 
-If Problem Type is "practical":
-- Generate a multiple-choice question (MCQ), matching the specified difficulty ({{{difficulty}}}).
-- 'problemStatement' MUST pose the question clearly.
-- It is MANDATORY to populate the 'multipleChoiceOptions' array with at least 3 and at most 5 distinct choices. Each option must be a plausible answer.
-- 'correctAnswer' MUST be the exact string content of one of the 'multipleChoiceOptions'. Ensure this is an exact match.
-- 'answerFormat' MUST provide a step-by-step explanation for why the 'correctAnswer' is correct and why other options might be incorrect, or provide general guidance/steps to solve this type of practical problem.
-- DO NOT leave 'multipleChoiceOptions' empty for "practical" problems.
+3. **Diagrams**: Use Mermaid.js syntax within code blocks EXACTLY as shown:
+   \`\`\`mermaid
+   graph TD;
+   A[Start] --> B(Process);
+   B --> C{Decision};
+   \`\`\`
 
-If Problem Type is "conceptual":
-- Generate a problem that tests deep understanding of concepts, matching the specified difficulty ({{{difficulty}}}).
-- This can be a theory-style question (requiring textual explanation) OR an MCQ.
-- If theory-style:
-    - 'problemStatement' should pose the conceptual question.
-    - 'answerFormat' should describe expected content/structure of the explanation.
-    - 'correctAnswer' should be a model textual answer explaining the concept.
-    - 'multipleChoiceOptions' should be an empty array or not provided.
-- If MCQ-style:
-    - 'problemStatement' MUST pose the conceptual question.
-    - Populate 'multipleChoiceOptions' with at least 3 and at most 5 distinct choices relevant to the concept.
-    - 'correctAnswer' MUST be the exact string of one of the 'multipleChoiceOptions'.
-    - 'answerFormat' should explain why the chosen concept/option is correct and other options are incorrect.
+**MANDATORY PROBLEM TYPE REQUIREMENTS:**
 
-If Problem Type is "numerical":
-- Generate a problem that requires a numerical calculation or answer, matching the specified difficulty ({{{difficulty}}}).
-- 'problemStatement' should present the problem, possibly with data.
-- This can be free-text (expecting a number) OR an MCQ with numerical options.
-- If free-text:
-    - 'problemStatement' should clearly state what needs to be calculated.
-    - 'answerFormat' should guide on units or precision, and briefly outline solution steps or formulas needed.
-    - 'correctAnswer' should be the numerical answer (e.g., "42", "3.14 m/s^2").
-    - 'multipleChoiceOptions' should be an empty array or not provided.
-- If MCQ-style:
-    - 'problemStatement' MUST pose the numerical problem.
-    - Populate 'multipleChoiceOptions' with numerical choices, including plausible distractors.
-    - 'correctAnswer' MUST be the exact string of one numerical option.
-    - 'answerFormat' should explain the calculation steps leading to the correct option.
+**FOR "theory" PROBLEMS:**
+- problemStatement: Must end with a clear question
+- answerFormat: Must specify expected answer structure (e.g., "Explain in 2-3 sentences including key concepts")
+- multipleChoiceOptions: MUST be an empty array []
+- correctAnswer: Must be a complete model answer
 
-If Problem Type is "diagram_based":
-- Generate a problem that requires interpretation, analysis, or creation related to a diagram, matching the specified difficulty ({{{difficulty}}}).
-- 'problemStatement' MUST include a diagram (using Mermaid.js syntax like \`\`\`mermaid\n...\`\`\` if possible, otherwise a clear textual description if Mermaid syntax is too complex or unsuitable).
-- This can be a theory-style question OR an MCQ.
-- If theory-style (e.g., "Explain the process shown in the diagram"):
-    - 'problemStatement' should include the diagram and pose the question.
-    - 'answerFormat' should describe expected content/structure of the explanation.
-    - 'correctAnswer' should be a model textual answer explaining the diagram.
-    - 'multipleChoiceOptions' should be an empty array or not provided.
-- If MCQ-style (e.g., "What does label X in the diagram represent?"):
-    - 'problemStatement' MUST include the diagram and pose the question.
-    - Populate 'multipleChoiceOptions' with options relevant to the diagram.
-    - 'correctAnswer' MUST be the exact string of one option.
-    - 'answerFormat' should explain why the chosen option is correct in relation to the diagram.
+**FOR "practical" PROBLEMS:**
+- problemStatement: Must pose a clear question
+- multipleChoiceOptions: MUST contain exactly 4 options (A, B, C, D format recommended)
+- correctAnswer: MUST be the exact string from multipleChoiceOptions (character-for-character match)
+- answerFormat: Must explain why the correct answer is right and others are wrong
 
-Remember to apply the content formatting rules (LaTeX, Markdown for code, Mermaid/descriptions for diagrams) to all relevant fields.
+**FOR "conceptual" PROBLEMS:**
+Choose ONE format and follow it strictly:
+- If MCQ format: Follow "practical" requirements above
+- If theory format: Follow "theory" requirements above
 
-Response:
-`, // add a newline here so output starts on a new line
+**FOR "numerical" PROBLEMS:**
+Choose ONE format and follow it strictly:
+- If MCQ format: multipleChoiceOptions must contain numerical values, correctAnswer must match exactly
+- If calculation format: multipleChoiceOptions must be [], correctAnswer must be the numerical result
+
+**FOR "diagram_based" PROBLEMS:**
+- problemStatement: MUST include a diagram using Mermaid syntax or clear textual description
+- Choose MCQ or theory format and follow respective requirements above
+
+**VALIDATION CHECKLIST - Your response MUST pass all these checks:**
+1. ✓ Valid JSON format
+2. ✓ All required fields present: problemStatement, answerFormat, correctAnswer
+3. ✓ If multipleChoiceOptions exists and is not empty, correctAnswer MUST exactly match one option
+4. ✓ LaTeX math uses proper escaping (\\\\) in JSON strings
+5. ✓ Code blocks use proper Markdown syntax
+6. ✓ Mermaid diagrams use proper syntax within code blocks
+7. ✓ Problem matches the specified difficulty level
+8. ✓ Content is appropriate for the given topic
+
+**EXAMPLE OUTPUT STRUCTURE:**
+{
+  "problemStatement": "What is the acceleration due to gravity on Earth?",
+  "answerFormat": "Select the correct numerical value from the options below.",
+  "multipleChoiceOptions": ["9.8 m/s²", "10.2 m/s²", "8.9 m/s²", "9.0 m/s²"],
+  "correctAnswer": "9.8 m/s²"
+}
+
+Generate your response now following ALL requirements above:`, // add a newline here so output starts on a new line
 });
 
 const generatePracticeProblemFlow = ai.defineFlow(
@@ -151,4 +136,3 @@ const generatePracticeProblemFlow = ai.defineFlow(
 // and stored in history, matching the input or defaulting.
 // The AI model itself is not asked to generate the 'difficulty' field in its output.
 // We add it back here based on the input 'difficulty'.
-

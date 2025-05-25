@@ -95,7 +95,7 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
 
     if (isMcqProblem && selectedOption) {
       onSubmitAnswer(selectedOption, finalTimeTaken);
-    } else if (!isMcqProblem && userAnswer.trim()) {
+    } else if (!isMcqProblem && userAnswer?.trim()) {
       onSubmitAnswer(userAnswer, finalTimeTaken);
     }
   };
@@ -119,7 +119,7 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
   };
   
   const isMcqStyleProblem = problem.multipleChoiceOptions && problem.multipleChoiceOptions.length > 0;
-  const canSubmitAnswer = isMcqStyleProblem ? selectedOption !== '' : userAnswer.trim() !== '';
+  const canSubmitAnswer = isMcqStyleProblem ? selectedOption !== '' : (userAnswer?.trim() ?? '') !== '';
   const isTimerNeededToStart = !isTimerActive && elapsedTimeInSeconds === 0;
 
   return (

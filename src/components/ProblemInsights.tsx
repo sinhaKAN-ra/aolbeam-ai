@@ -20,6 +20,24 @@ interface ProblemInsightsProps {
 export function ProblemInsights({ problem, topic, insights, onFetchInsights, isLoading }: ProblemInsightsProps) {
   const explanatoryMessage = "Understand the core patterns and principles for the current problem. This helps you recognize how to approach similar challenges effectively, a key skill for top performers.";
 
+  const handleFetchInsights = async () => {
+    console.log('Fetch insights clicked');
+    console.log('Problem:', problem);
+    console.log('Topic:', topic);
+    
+    if (!problem || !topic) {
+      console.error('Cannot fetch insights: problem or topic is missing');
+      return;
+    }
+    
+    try {
+      console.log('Calling onFetchInsights with:', problem.problemStatement, topic);
+      await onFetchInsights(problem.problemStatement, topic);
+    } catch (error) {
+      console.error('Error in handleFetchInsights:', error);
+    }
+  };
+
   if (!problem || !topic) {
     return (
       <Card className="shadow-lg">
@@ -32,33 +50,51 @@ export function ProblemInsights({ problem, topic, insights, onFetchInsights, isL
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Placeholder or additional info if needed when no topic is selected */}
+          <Button 
+            variant="outline" 
+            className="w-full"
+            disabled
+          >
+            Generate a problem to see insights
+          </Button>
         </CardContent>
       </Card>
     );
   }
 
+  console.log('Rendering ProblemInsights with:', { 
+    hasProblem: !!problem, 
+    topic, 
+    hasInsights: !!insights,
+    isLoading 
+  });
+
   return (
-    <Card className="shadow-lg">
+    <Card className="shadow-lg relative z-10">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xl font-semibold">
           <Lightbulb className="text-primary" /> Insights for: <span className="font-normal truncate" title={topic}>{topic}</span>
         </CardTitle>
         <CardDescription className="text-sm mt-1">
-         {explanatoryMessage}
+          {explanatoryMessage}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {!insights && (
+        {!insights ? (
           <Button 
-            onClick={() => onFetchInsights(problem.problemStatement, topic)} 
-            disabled={isLoading || !problem} 
-            className="w-full text-base py-3"
+            onClick={handleFetchInsights} 
+            disabled={isLoading} 
+            className="w-full text-base py-3 cursor-pointer relative z-20"
+            data-testid="fetch-insights-button"
           >
-            {isLoading ? <Loader2 className="animate-spin" /> : <><Info className="mr-2 h-4 w-4" /> Fetch Problem Insights</>}
+            {isLoading ? (
+              <Loader2 className="animate-spin mr-2 h-4 w-4" />
+            ) : (
+              <Info className="mr-2 h-4 w-4" />
+            )}
+            Fetch Problem Insights
           </Button>
-        )}
-        {insights && (
+        ) : (
           <>
             <ScrollArea className="h-60 w-full rounded-md border p-4 bg-muted/30">
               <div className="prose prose-sm max-w-none dark:prose-invert">
@@ -66,12 +102,16 @@ export function ProblemInsights({ problem, topic, insights, onFetchInsights, isL
               </div>
             </ScrollArea>
             <Button 
-              onClick={() => onFetchInsights(problem.problemStatement, topic)} 
-              disabled={isLoading || !problem} 
-              className="w-full mt-4 text-base py-3" 
+              onClick={handleFetchInsights} 
+              disabled={isLoading} 
+              className="w-full mt-4 text-base py-3 cursor-pointer" 
               variant="outline"
+              data-testid="fetch-again-button"
             >
-             {isLoading ? <Loader2 className="animate-spin" /> : "Fetch Again"}
+              {isLoading ? (
+                <Loader2 className="animate-spin mr-2 h-4 w-4" />
+              ) : null}
+              Fetch Again
             </Button>
           </>
         )}

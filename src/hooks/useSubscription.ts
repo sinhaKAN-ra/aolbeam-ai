@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import { loadCashfree, type CashfreeInstance } from '@/services/cashfree';
 import { toast } from '@/hooks/use-toast';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { useSupabase } from './useSupabase';
 
 declare global {
   interface Window {
@@ -15,19 +15,7 @@ declare global {
 export function useSubscription() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // Initialize Supabase client with proper environment variables
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-    {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true,
-      },
-    }
-  );
+  const supabase = useSupabase();
   
   // Add type for order data
   interface OrderData {
@@ -138,17 +126,7 @@ export function useSubscriptionStatus() {
   const [subscription, setSubscription] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-    {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true,
-      },
-    }
-  );
+  const supabase = useSupabase();
 
   const checkStatus = useCallback(async (orderId: string, paymentId?: string) => {
     setIsLoading(true);

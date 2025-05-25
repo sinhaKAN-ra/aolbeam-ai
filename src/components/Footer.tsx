@@ -5,7 +5,7 @@
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useSupabase } from '@/hooks/useSupabase';
 import { Brain, FileText, ShieldCheck, DollarSign, Mail, Rss, Briefcase, BookOpen, Award, BriefcaseBusiness, GraduationCap, Scaling, Instagram, Linkedin } from 'lucide-react';
 import { Info as AboutIcon } from 'lucide-react';
 
@@ -53,7 +53,7 @@ const examLinks: ExamLink[] = [
 
 export default function Footer() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const supabase = createClientComponentClient(); // Use the hook if it's global, or initialize here
+  const supabase = useSupabase();
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -71,7 +71,7 @@ export default function Footer() {
   }, [supabase]);
 
   return (
-    <footer className="mt-auto py-8 border-t bg-card/50">
+    <footer className="w-full py-8 border-t bg-card/50 mt-auto">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <div className="mb-4 flex justify-center items-center gap-2">
           <Brain className="h-7 w-7 text-primary" />

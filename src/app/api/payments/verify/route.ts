@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     // First, check if we have the payment in our database
     const { data: subscription, error: dbError } = await supabase
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
         const paymentData = await cashfreeResponse.json();
         
         // Update the subscription status in our database
-        const { error: updateError } = await supabase
+        const { error: updateError } = await (await createClient())
           .from('subscriptions')
           .update({
             status: paymentData.payment_status === 'SUCCESS' ? 'ACTIVE' : 'FAILED',
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
 
     // If we don't have the subscription in our DB, try to fetch it from Cashfree
     const cashfreeResponse = await fetch(
-      `https://sandbox.cashfree.com/pg/orders/${orderId}`,
+      `https://api.cashfree.com/pg/orders/${orderId}/payments`,
       {
         headers: {
           'x-client-id': process.env.CASHFREE_APP_ID!,
@@ -98,34 +98,46 @@ export async function GET(request: Request) {
 
     if (!cashfreeResponse.ok) {
       const error = await cashfreeResponse.json();
-      throw new Error(error.message || 'Failed to fetch order from Cashfree');
+      console.error('Cashfree API error:', error);
+      throw new Error('Failed to verify payment with Cashfree');
     }
 
-    const orderData = await cashfreeResponse.json();
+    const paymentData = await cashfreeResponse.json();
     
-    // Save the order to our database
-    const { data: newSubscription, error: insertError } = await supabase
-      .from('subscriptions')
-      .insert({
-        user_id: orderData.customer_details.customer_id,
-        order_id: orderData.order_id,
-        amount: orderData.order_amount,
-        currency: orderData.order_currency,
-        status: orderData.order_status === 'PAID' ? 'ACTIVE' : 'PENDING',
-        payment_gateway: 'cashfree',
-        payment_status: orderData.payment_status,
-        payment_id: paymentId || null,
-        metadata: orderData,
-      })
-      .select()
-      .single();
+    // Process the payment data and update our database
+    if (paymentData && paymentData.length > 0) {
+      const latestPayment = paymentData[0];
+      
+      // Insert the subscription into our database
+      const { data: newSubscription, error: insertError } = await (await createClient())
+        .from('subscriptions')
+        .insert({
+          user_id: latestPayment.customer_id,
+          order_id: orderId,
+          payment_id: latestPayment.payment_id,
+          amount: latestPayment.payment_amount,
+          currency: latestPayment.payment_currency,
+          status: latestPayment.payment_status === 'SUCCESS' ? 'ACTIVE' : latestPayment.payment_status,
+          payment_method: latestPayment.payment_method?.channel || 'unknown',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
 
-    if (insertError) throw insertError;
+      if (insertError) throw insertError;
 
+      return NextResponse.json({
+        status: latestPayment.payment_status === 'SUCCESS' ? 'success' : 'pending',
+        message: `Order status: ${latestPayment.payment_status}`,
+        data: newSubscription,
+      });
+    }
+
+    // If we don't have any payment data, return an error
     return NextResponse.json({
-      status: orderData.order_status === 'PAID' ? 'success' : 'pending',
-      message: `Order status: ${orderData.order_status}`,
-      data: newSubscription,
+      status: 'error',
+      message: 'No payment data found',
     });
   } catch (error) {
     console.error('Payment verification error:', error);

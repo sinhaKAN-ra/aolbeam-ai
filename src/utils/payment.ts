@@ -1,7 +1,6 @@
-import { getSupabaseClient } from '@/hooks/useSupabase';
+import supabase from '@/lib/supabase/client';
 
 export async function verifyCashfreePayment(orderId: string, paymentId?: string) {
-  const supabase = getSupabaseClient();
   
   try {
     // First, check if we have the payment in our database

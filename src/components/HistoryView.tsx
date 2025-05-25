@@ -5,7 +5,7 @@ import type * as React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { History as HistoryIcon, MessageSquareText, ListChecks, CheckCircle, XCircle, Brain as ConceptualIcon, Sigma as NumericalIcon, GitFork as DiagramIcon, Shuffle } from 'lucide-react';
+import { History as HistoryIcon, MessageSquareText, ListChecks, CheckCircle, XCircle, Brain as ConceptualIcon, Sigma as NumericalIcon, GitFork as DiagramIcon, Shuffle, Clock } from 'lucide-react';
 import type { InteractionHistoryItem, ProblemType } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import MathRenderer from './MathRenderer';
@@ -22,6 +22,13 @@ const problemTypeIcons: Record<ProblemType, React.ElementType> = {
   numerical: NumericalIcon,
   diagram_based: DiagramIcon,
   random: Shuffle,
+};
+
+const formatTimeTaken = (seconds: number): string => {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+  return `${minutes}m ${remainingSeconds}s`;
 };
 
 export function HistoryView({ history, onRevisitProblem }: HistoryViewProps) {
@@ -50,8 +57,8 @@ export function HistoryView({ history, onRevisitProblem }: HistoryViewProps) {
         </CardTitle>
         <CardDescription>Review your past practice sessions.</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow overflow-hidden">
-        <ScrollArea className="h-[calc(100vh-20rem)] sm:h-[calc(100vh-16rem)] md:h-full max-h-[600px] pr-3">
+      <CardContent className="flex-grow overflow-hidden p-0">
+        <ScrollArea className="h-[60vh] min-h-[400px] max-h-[800px] w-full pr-3">
           <Accordion type="single" collapsible className="w-full space-y-2">
             {history.map((item) => {
               // Use item.problemType if it's a concrete type, or item.actualProblemType if item.problemType was 'random'
@@ -73,9 +80,17 @@ export function HistoryView({ history, onRevisitProblem }: HistoryViewProps) {
                             <span className="ml-1">{item.evaluation.isCorrect ? 'Correct' : 'Incorrect'}</span>
                           </Badge>
                         )}
-                        <span className="text-xs text-muted-foreground hidden sm:inline">
-                          {new Date(item.timestamp).toLocaleDateString()}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {item.timeTakenSeconds && (
+                            <span className="text-xs text-muted-foreground flex items-center" title="Time taken">
+                              <Clock className="h-3 w-3 mr-0.5" />
+                              {formatTimeTaken(item.timeTakenSeconds)}
+                            </span>
+                          )}
+                          <span className="text-xs text-muted-foreground hidden sm:inline">
+                            {new Date(item.timestamp).toLocaleDateString()}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </AccordionTrigger>

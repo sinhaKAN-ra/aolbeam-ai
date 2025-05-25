@@ -1,24 +1,50 @@
 // src/app/profile/page.tsx
-'use client';
+"use client";
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSupabase, useSession } from '@/hooks/useSupabase';
-import type { User, Session } from '@supabase/supabase-js';
+import { useAuth } from '@/contexts/AuthContext';
+import { useSupabase } from '@/hooks/useSupabase';
+import { useToast } from '@/hooks/use-toast';
+import { formatDistanceToNow, format } from 'date-fns';
+import { HistoryView } from '@/components/HistoryView';
+import type { InteractionHistoryItem } from '@/types';
 
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
-import MathRenderer from '@/components/MathRenderer';
-import type { ProblemType, DifficultyLevel, UserProfile as AppUserProfile } from '@/types'; // Ensure this matches your actual types file
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import MathRenderer from '@/components/MathRenderer';
 
 // Icons
-import { BarChart3, History, Lightbulb, UserCircle, Star, MessageSquareText, ListChecks, CheckCircle, XCircle, TimerIcon as TimerHistoryIcon, Brain as ConceptualIcon, Sigma as NumericalIcon, GitFork as DiagramIcon, Shuffle } from 'lucide-react';
-// Removed unused Settings icon
+import { 
+  BarChart2, 
+  BookOpen, 
+  Clock, 
+  Award,
+  BarChart3, 
+  History as HistoryIcon, 
+  Lightbulb, 
+  UserCircle, 
+  Star, 
+  MessageSquareText, 
+  ListChecks, 
+  Brain as ConceptualIcon, 
+  Sigma as NumericalIcon, 
+  GitFork as DiagramIcon, 
+  Shuffle, 
+  Loader2, 
+  RefreshCw, 
+  CheckCircle, 
+  XCircle
+} from 'lucide-react';
+
+// Types
+import type { ProblemType, DifficultyLevel, UserProfile as AppUserProfile } from '@/types';
 
 interface FetchedInteraction {
   id: string;
@@ -62,6 +88,15 @@ interface DisplayHistoryItem {
   timeTakenSeconds?: number | null;
 }
 
+interface UserStats {
+  totalProblems: number;
+  correctAnswers: number;
+  accuracy: number;
+  avgTimePerProblem: number;
+  topics: { name: string; count: number }[];
+  recentHistory: DisplayHistoryItem[];
+}
+
 const formatTimeTakenForDisplay = (totalSeconds?: number | null): string | null => {
   if (totalSeconds === null || totalSeconds === undefined || totalSeconds < 0) {
     return null;
@@ -83,418 +118,432 @@ const problemTypeIcons: Record<ProblemType, React.ElementType> = {
   random: Shuffle,
 };
 
-
 export default function ProfilePage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const { user, isLoading: authLoading, signOut } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
+  const [profile, setProfile] = useState<AppUserProfile | null>(null);
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [userHistory, setUserHistory] = useState<InteractionHistoryItem[]>([]);
+
+  // Initialize Supabase client
   const supabase = useSupabase();
-  const { session, loading: authLoading } = useSession();
-  const [user, setUser] = useState<User | null>(null);
-  const [userProfileData, setUserProfileData] = useState<AppUserProfile | null>(null);
-  const [userHistory, setUserHistory] = useState<DisplayHistoryItem[]>([]);
-  const [profileLoading, setProfileLoading] = useState(true);
-
-  // Handle auth state changes
-  useEffect(() => {
-    if (session?.user) {
-      setUser(session.user);
-    } else if (!authLoading) {
-      // Only redirect if we're not still loading the session
-      router.push('/');
+  
+  const fetchUserProfile = useCallback(async () => {
+    if (!user?.id) {
+      setIsLoading(false);
+      return;
     }
-  }, [session, authLoading, router]);
 
-  // Load profile data when user is available
-  useEffect(() => {
-    const fetchProfileData = async () => {
-      if (!user) return;
+    try {
+      setIsLoading(true);
+      console.log('Fetching profile for user:', user.id);
       
-      setProfileLoading(true);
-      try {
-        // Fetch user profile and interactions in parallel
-        const [
-          { data: profile, error: profileError },
-          { data: interactions, error: historyError }
-        ] = await Promise.all([
-          supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single(),
-          supabase
-            .from('user_interactions')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-        ]);
+      // First check if profile exists
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
 
       if (profileError) {
-        console.error('Error fetching user profile:', profileError);
-        // If profile doesn't exist, it might be PGRST116, handle if necessary,
-        // but trigger should create it.
-        setUserProfileData(null);
-      } else {
-        setUserProfileData(profile as AppUserProfile);
-      }
-      // historyError is checked below
+        // If profile doesn't exist, create a new one
+        if (profileError.code === 'PGRST116') {
+          console.log('Creating new profile for user:', user.id);
+          const { data: newProfile, error: createError } = await supabase
+            .from('user_profiles')
+            .insert([
+              { 
+                id: user.id, 
+                email: user.email,
+                full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }
+            ])
+            .select()
+            .single();
 
-      if (historyError) {
-          console.error('Error fetching user history:', historyError);
-          setUserHistory([]); // Set to empty array on error
-      } else if (interactions) {
-          const formattedInteractions = interactions.map((item: FetchedInteraction): DisplayHistoryItem => ({
-            id: item.id,
-            timestamp: item.created_at,
-            topic: item.topic,
-            problemType: item.problem_type, // This will be the resolved type from DB
-            difficulty: item.difficulty || null, // Ensure it's null if undefined
-            problem: {
-              problemStatement: item.problem_statement,
-              answerFormat: item.answer_format,
-              multipleChoiceOptions: item.multiple_choice_options || undefined,
-              correctAnswer: item.correct_answer,
-            },
-            userAnswer: item.user_answer || undefined,
-            selectedOption: item.selected_option || undefined,
-            evaluation: (item.evaluation_is_correct !== null && 
-                       item.evaluation_is_correct !== undefined && 
-                       item.evaluation_feedback)
-              ? { 
-                  isCorrect: item.evaluation_is_correct, 
-                  feedback: item.evaluation_feedback 
-                }
-              : undefined,
-            isTopicRevised: item.is_topic_revised || false,
-            topicDetails: item.topic_details_content || null,
-            timeTakenSeconds: item.time_taken_seconds,
-          }));
-          
-          setUserHistory(formattedInteractions);
-        } else {
-            setUserHistory([]); // Set to empty if interactions are null/undefined
+          if (createError) throw createError;
+          setProfile(newProfile);
+          return newProfile;
         }
+        throw profileError;
+      }
+      
+      setProfile(profileData);
+      return profileData;
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+    }
+  }, [user, supabase]);
 
-      } catch (error) { // Catch any unexpected error from Promise.all or mapping
-        console.error('Error in fetchProfileData:', error);
-        setUserProfileData(null);
-        setUserHistory([]);
+  // Calculate statistics
+  const calculateStats = useCallback((history: DisplayHistoryItem[]) => {
+    const totalProblems = history.length;
+    const correctAnswers = history.filter(item => item.evaluation?.isCorrect).length;
+    const accuracy = totalProblems > 0 ? Math.round((correctAnswers / totalProblems) * 100) : 0;
+
+    // Group by topic
+    const topicMap = new Map<string, number>();
+    history.forEach(item => {
+      const topic = item.topic || 'General';
+      topicMap.set(topic, (topicMap.get(topic) || 0) + 1);
+    });
+
+    const topics = Array.from(topicMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    const newStats: UserStats = {
+      totalProblems,
+      correctAnswers,
+      accuracy,
+      avgTimePerProblem: 0, // This would require tracking time spent
+      topics,
+      recentHistory: history
+    };
+
+    setStats(newStats);
+    return newStats;
+  }, []);
+
+  // Fetch interaction history
+  const fetchInteractionHistory = useCallback(async (): Promise<InteractionHistoryItem[]> => {
+    if (!user?.id) return [];
+
+    try {
+      const { data: historyData, error: historyError } = await supabase
+        .from('user_interactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (historyError) throw historyError;
+      
+      const formattedHistory: InteractionHistoryItem[] = (historyData || []).map((item: FetchedInteraction) => ({
+        id: item.id,
+        timestamp: item.created_at,
+        topic: item.topic || 'General',
+        problemType: item.problem_type,
+        difficulty: item.difficulty || 'medium',
+        problem: {
+          problemStatement: item.problem_statement,
+          answerFormat: item.answer_format,
+          multipleChoiceOptions: item.multiple_choice_options || undefined,
+          correctAnswer: item.correct_answer,
+        },
+        userAnswer: item.user_answer || undefined,
+        selectedOption: item.selected_option || undefined,
+        evaluation: item.evaluation_is_correct !== null ? {
+          isCorrect: item.evaluation_is_correct || false,
+          feedback: item.evaluation_feedback || '',
+          correctAnswer: item.correct_answer,
+          explanation: ''
+        } : undefined,
+        isTopicRevised: item.is_topic_revised || false,
+        topicDetails: item.topic_details_content || null,
+        timeTakenSeconds: item.time_taken_seconds || undefined,
+        actualProblemType: item.problem_type as any
+      }));
+
+      setUserHistory(formattedHistory);
+      return formattedHistory;
+    } catch (error) {
+      console.error('Error fetching interaction history:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to load interaction history.',
+      });
+      return [];
+    }
+  }, [user, supabase, toast]);
+
+  // Handle refresh
+  const handleRefresh = useCallback(async () => {
+    try {
+      setIsRefreshing(true);
+      const [profileData, historyData] = await Promise.all([
+        fetchUserProfile(),
+        fetchInteractionHistory()
+      ]);
+
+      if (historyData && historyData.length > 0) {
+        calculateStats(historyData);
+      }
+      
+      toast({
+        title: "Profile Updated",
+        description: "Your profile has been refreshed successfully.",
+      });
+    } catch (error) {
+      console.error('Error refreshing profile:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to refresh profile. Please try again.",
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fetchUserProfile, fetchInteractionHistory, calculateStats, toast]);
+
+  // Load data on mount
+  useEffect(() => {
+    const loadData = async () => {
+      if (authLoading || !user?.id) return;
+      
+      try {
+        setIsLoading(true);
+        const [profileData, historyData] = await Promise.all([
+          fetchUserProfile(),
+          fetchInteractionHistory()
+        ]);
+
+        if (historyData && historyData.length > 0) {
+          calculateStats(historyData);
+        }
+      } catch (error) {
+        console.error('Error loading profile data:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Failed to load profile data. Please try again.',
+        });
       } finally {
-        setProfileLoading(false);
+        setIsLoading(false);
       }
     };
 
-    if (user) { // Only fetch if user is set
-        fetchProfileData();
-    } else if (!authLoading) { // If no user and auth is not loading, set profile loading to false
-        setProfileLoading(false);
-    }
-  }, [user, supabase, authLoading]); 
+    loadData();
+  }, [user, authLoading, fetchUserProfile, fetchInteractionHistory, calculateStats, toast]);
 
-  // Show loading state while checking auth or fetching profile
-  if (authLoading || profileLoading) { // Combined loading states
+  if (authLoading || (isLoading && !isRefreshing)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-12 w-12 text-primary animate-spin" />
-          <p>Loading profile...</p>
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading your profile...</p>
         </div>
       </div>
     );
   }
 
-  // If no user after loading (e.g., redirect might not have happened yet or failed silently)
   if (!user) {
-    // This case should ideally be handled by the redirect in the first useEffect,
-    // but as a fallback:
+    router.push('/login');
     return (
-        <div className="flex items-center justify-center min-h-screen">
-            <p>Please log in to view your profile.</p>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <h1 className="text-2xl font-bold mb-4">Please Sign In</h1>
+        <p className="text-muted-foreground mb-4">You need to be signed in to view your profile.</p>
+      </div>
     );
   }
-  
-  const evaluatedHistory = userHistory.filter(item => item.evaluation);
-  const correctAnswersCount = evaluatedHistory.filter(item => item.evaluation?.isCorrect).length;
-  const overallAccuracy = evaluatedHistory.length > 0 ? (correctAnswersCount / evaluatedHistory.length) : 0;
-  
-  const totalQuestionsAttempted = userHistory.length;
-  const uniqueTopics = [...new Set(userHistory.map(item => item.topic))];
-  const uniqueTopicsPracticedCount = uniqueTopics.length;
-  const averageQuestionsPerTopic = uniqueTopicsPracticedCount > 0 ? Math.round(totalQuestionsAttempted / uniqueTopicsPracticedCount) : 0;
-
-  const topicStats = uniqueTopics.map(topic => {
-    const topicItems = userHistory.filter(item => item.topic === topic && item.evaluation);
-    const topicCorrectCount = topicItems.filter(item => item.evaluation?.isCorrect).length;
-    const topicAccuracy = topicItems.length > 0 ? topicCorrectCount / topicItems.length : 0;
-    const lastPracticedItem = userHistory
-      .filter(item => item.topic === topic)
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
-    return {
-      name: topic,
-      accuracy: topicAccuracy,
-      count: topicItems.length, 
-      lastPracticed: lastPracticedItem ? new Date(lastPracticedItem.timestamp).toLocaleDateString() : 'N/A',
-      problemType: lastPracticedItem?.problemType || 'random', 
-      difficulty: lastPracticedItem?.difficulty || 'medium', 
-    };
-  });
-
-  const strengths = topicStats
-    .filter(topic => topic.accuracy >= 0.80 && topic.count > 0)
-    .sort((a, b) => b.accuracy - a.accuracy || b.count - a.count)
-    .slice(0, 3);
-
-  const focusAreas = topicStats
-    .filter(topic => topic.accuracy < 0.70 && topic.count > 0)
-    .sort((a, b) => a.accuracy - b.accuracy || b.count - a.count)
-    .slice(0, 3);
 
   return (
-    <>
-      <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <Card className="mb-8 shadow-xl overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-primary/10 via-card to-card p-6 flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
-            <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-2 border-primary shadow-md">
-              <AvatarImage src={user.user_metadata?.avatar_url} alt={userProfileData?.full_name || user.email || 'User Avatar'} />
-              <AvatarFallback className="text-2xl bg-primary/20 text-primary">
-                {userProfileData?.full_name ? userProfileData.full_name.charAt(0).toUpperCase() :
-                 (user.email ? user.email.charAt(0).toUpperCase() : <UserCircle size={48} />)}
-              </AvatarFallback>
-            </Avatar>
-            <div className="text-center sm:text-left">
-              <CardTitle className="text-2xl sm:text-3xl font-bold text-primary">
-                Welcome, {userProfileData?.full_name || user.email?.split('@')[0] || 'AOLBEAM Learner'}!
-              </CardTitle>
-              <CardDescription className="text-md text-muted-foreground mt-1">
-                This is your personal learning dashboard. Track your progress and conquer your exams.
-              </CardDescription>
-              <p className="text-xs text-muted-foreground mt-2">Joined: {new Date(user.created_at).toLocaleDateString()}</p>
-              {userProfileData?.is_subscribed && userProfileData.subscription_plan_id && (
-                <Badge variant="secondary" className="mt-2">Plan: {userProfileData.subscription_plan_id.charAt(0).toUpperCase() + userProfileData.subscription_plan_id.slice(1)}</Badge>
-              )}
-            </div>
-          </CardHeader>
-        </Card>
+    <div className="container mx-auto px-4 py-8 space-y-8">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Profile</h1>
+        <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
+          {isRefreshing ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="mr-2 h-4 w-4" />
+          )}
+          Refresh
+        </Button>
+      </div>
 
-        {profileLoading && !userHistory.length ? ( 
-          <div className="flex justify-center items-center py-10">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="ml-2 text-muted-foreground">Loading your stats and history...</p>
-          </div>
-        ) : (
-          <>
-            <div className="grid md:grid-cols-3 gap-6 mb-8">
-              <Card className="shadow-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center text-lg gap-2">
-                    <BarChart3 className="text-primary" /> Overall Accuracy
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="text-center">
-                  {evaluatedHistory.length > 0 ? (
-                    <>
-                      <p className="text-5xl font-bold text-primary mb-1">
-                        {Math.round(overallAccuracy * 100)}%
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Based on {evaluatedHistory.length} evaluated question(s)
-                      </p>
-                    </>
-                  ) : (
-                    <p className="text-muted-foreground py-4">Start practicing to see your stats!</p>
-                  )}
-                </CardContent>
-              </Card>
+      {profile && (
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+          </TabsList>
 
-              <Card className="shadow-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center text-lg gap-2">
-                    <History className="text-accent" /> Questions Attempted
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="text-center">
-                  <p className="text-5xl font-bold text-accent mb-1">
-                    {totalQuestionsAttempted}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Across {uniqueTopicsPracticedCount} topic(s)
-                  </p>
-                   <p className="text-xs text-muted-foreground">
-                    Avg. {averageQuestionsPerTopic} per topic
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center text-lg gap-2">
-                    <Star className="text-yellow-500" /> Strengths
-                  </CardTitle>
-                  <CardDescription className="text-xs">Top topics with &gt;=80% accuracy.</CardDescription>
+          <TabsContent value="overview" className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Problems</CardTitle>
+                  <BookOpen className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  {strengths.length > 0 ? (
-                    <ul className="space-y-1 text-sm">
-                      {strengths.map(topic => (
-                        <li key={topic.name} className="text-muted-foreground flex items-center">
-                          <Star size={14} className="text-yellow-500 mr-2 flex-shrink-0"/> 
-                          <span className="truncate" title={topic.name}>{topic.name}</span> ({Math.round(topic.accuracy*100)}%)
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-muted-foreground text-sm">Keep practicing to identify strengths!</p>
-                  )}
+                  <div className="text-2xl font-bold">{stats?.totalProblems || 0}</div>
+                  <p className="text-xs text-muted-foreground">Problems attempted</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Accuracy</CardTitle>
+                  <BarChart2 className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats?.accuracy || 0}%</div>
+                  <div className="mt-2">
+                    <Progress value={stats?.accuracy} className="h-2" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Correct Answers</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats?.correctAnswers || 0}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {stats?.totalProblems ? 
+                      `Out of ${stats.totalProblems} attempts` : 'No attempts yet'}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Active Since</CardTitle>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {profile.created_at ? 
+                      new Date(profile.created_at).toLocaleDateString() : 'N/A'}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {profile.created_at ? 
+                      formatDistanceToNow(new Date(profile.created_at), { addSuffix: true }) : ''}
+                  </p>
                 </CardContent>
               </Card>
             </div>
 
-            <Card className="mb-8 shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Lightbulb className="text-orange-500" /> Focus Areas
-                </CardTitle>
-                <CardDescription>Topics with &lt;70% accuracy. Review these for improvement!</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {focusAreas.length > 0 ? (
-                  <ul className="space-y-2">
-                    {focusAreas.map(topic => (
-                      <li key={topic.name} className="p-3 bg-muted/30 rounded-md">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <span className="font-semibold text-foreground">{topic.name}</span>
-                                <p className="text-xs text-muted-foreground">
-                                Current Accuracy: {Math.round(topic.accuracy*100)}% ({topic.count} attempts) - Last practiced: {topic.lastPracticed}
-                                </p>
-                            </div>
-                             {/* <Button variant="link" size="sm" asChild>
-                                <Link href={`/?topic=${encodeURIComponent(topic.name)}&type=${topic.problemType || 'random'}&difficulty=${topic.difficulty || 'medium'}`}>Practice {topic.name} &rarr;</Link>
-                            </Button> */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Top Topics</CardTitle>
+                  <CardDescription>Your most practiced topics</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {stats?.topics?.length ? (
+                    <div className="space-y-4">
+                      {stats.topics.map((topic) => (
+                        <div key={topic.name} className="space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span>{topic.name}</span>
+                            <span className="font-medium">{topic.count} problems</span>
+                          </div>
+                          <Progress 
+                            value={(topic.count / (stats.totalProblems || 1)) * 100} 
+                            className="h-2" 
+                          />
                         </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-muted-foreground">No specific focus areas identified yet, or you're doing great! Practice more to get detailed insights.</p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No topic data available yet.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent Activity</CardTitle>
+                  <CardDescription>Your recent problem-solving activity</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {stats?.recentHistory?.length ? (
+                    <div className="space-y-4">
+                      {stats.recentHistory.slice(0, 5).map((item) => (
+                        <div key={item.id} className="flex items-center space-x-3">
+                          <div className={`p-2 rounded-full ${
+                            item.evaluation?.isCorrect ? 'bg-green-100 dark:bg-green-900/50' : 'bg-red-100 dark:bg-red-900/50'
+                          }`}>
+                            {item.evaluation?.isCorrect ? (
+                              <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                            ) : (
+                              <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{item.topic}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {item.timestamp ? formatDistanceToNow(new Date(item.timestamp), { addSuffix: true }) : 'Unknown time'}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No recent activity.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="history" className="space-y-4">
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-xl font-semibold">
+                  Problem History
+                </CardTitle>
+                <CardDescription>Your complete problem-solving history with detailed feedback</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <HistoryView history={userHistory} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="settings" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Profile Information</CardTitle>
+                <CardDescription>Manage your account settings</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">Name</h3>
+                  <p className="text-sm">{profile.full_name || 'Not set'}</p>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">Email</h3>
+                  <p className="text-sm">{profile.email || 'Not set'}</p>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">Account Status</h3>
+                  <div className="flex items-center">
+                    <div className={`h-2.5 w-2.5 rounded-full mr-2 ${
+                      profile.is_subscribed ? 'bg-green-500' : 'bg-yellow-500'
+                    }`}></div>
+                    <span className="text-sm">
+                      {profile.is_subscribed ? 'Premium Account' : 'Free Account'}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">Interactions</h3>
+                  <p className="text-sm">{profile.interaction_count || 0} problems attempted</p>
+                </div>
+                {profile.subscription_started_at && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium">Member Since</h3>
+                    <p className="text-sm">
+                      {new Date(profile.subscription_started_at).toLocaleDateString()}
+                    </p>
+                  </div>
                 )}
               </CardContent>
             </Card>
-          </>
-        )}
-
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <History className="text-primary" /> Recent History
-            </CardTitle>
-            <CardDescription>
-              Review your past practice sessions.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {profileLoading && !userHistory.length ? ( 
-              <div className="flex justify-center items-center py-10">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                 <p className="ml-2 text-muted-foreground">Loading history...</p>
-              </div>
-            ) : userHistory.length === 0 ? (
-              <p className="text-muted-foreground text-center py-6">Your practice history will appear here once you start solving problems.</p>
-            ) : (
-              <Accordion type="single" collapsible className="w-full space-y-2">
-                {userHistory.map((item) => {
-                  const ProblemIcon = problemTypeIcons[item.problemType] || MessageSquareText;
-                  return (
-                    <AccordionItem value={item.id} key={item.id} className="bg-card border rounded-md shadow-sm">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                         <div className="flex justify-between items-center w-full gap-2">
-                          <div className="flex items-center gap-2 min-w-0 flex-grow text-left">
-                            <ProblemIcon className="w-5 h-5 text-primary flex-shrink-0" />
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 min-w-0">
-                              <span className="font-medium truncate" title={item.topic}>{item.topic}</span>
-                              <div className="flex gap-1 text-xs">
-                                  <Badge variant="outline" className="capitalize">{item.problemType.replace('_based', '-based')}</Badge>
-                                  <Badge variant="outline" className="capitalize">{item.difficulty || 'N/A'}</Badge>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {item.evaluation && (
-                              <Badge variant={item.evaluation.isCorrect ? "default" : "destructive"} className={`${item.evaluation.isCorrect ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'} text-white`}>
-                                {item.evaluation.isCorrect ? <CheckCircle size={14}/> : <XCircle size={14}/>}
-                                <span className="ml-1">{item.evaluation.isCorrect ? 'Correct' : 'Incorrect'}</span>
-                              </Badge>
-                            )}
-                            <span className="text-xs text-muted-foreground hidden sm:inline">
-                              {new Date(item.timestamp).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-3 pt-1 text-sm">
-                        <div className="space-y-3 prose prose-sm dark:prose-invert max-w-none">
-                          <div>
-                            <strong className="block text-muted-foreground mb-1">Problem:</strong>
-                            <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.problemStatement} /></div>
-                          </div>
-                          {item.userAnswer && !item.selectedOption && (
-                            <div>
-                              <strong className="block text-muted-foreground mb-1">Your Answer:</strong>
-                              <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.userAnswer} /></div>
-                            </div>
-                          )}
-                          {item.problem.multipleChoiceOptions && item.problem.multipleChoiceOptions.length > 0 && item.selectedOption && (
-                            <>
-                              <div>
-                                <strong className="block text-muted-foreground mb-1">Your Choice:</strong>
-                                <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.selectedOption} /></div>
-                              </div>
-                              <div>
-                                <strong className="block text-muted-foreground mt-2 mb-1">Correct Answer:</strong>
-                                <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
-                              </div>
-                            </>
-                          )}
-                          {/* Model answer for non-MCQ if evaluated */}
-                          {!(item.problem.multipleChoiceOptions && item.problem.multipleChoiceOptions.length > 0) && item.evaluation && (
-                            <div>
-                              <strong className="block text-muted-foreground mt-2 mb-1">Model Answer / Key Points:</strong>
-                              <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.problem.correctAnswer} /></div>
-                            </div>
-                          )}
-                          {item.evaluation?.feedback && (
-                            <div>
-                              <strong className="block text-muted-foreground mb-1">Feedback:</strong>
-                              <div className="p-2 rounded bg-muted/30"><MathRenderer content={item.evaluation.feedback} /></div>
-                            </div>
-                          )}
-                          {(item.timeTakenSeconds !== null && item.timeTakenSeconds !== undefined && item.timeTakenSeconds >= 0) && (
-                            <div>
-                              <strong className="block text-muted-foreground mb-1 flex items-center gap-1">
-                                <TimerHistoryIcon size={14} /> Time Taken:
-                              </strong>
-                              <p className="p-2 rounded bg-muted/30">{formatTimeTakenForDisplay(item.timeTakenSeconds)}</p>
-                            </div>
-                          )}
-                          {item.isTopicRevised && item.topicDetails && (
-                            <div>
-                              <strong className="block text-muted-foreground mb-1">Problem Insights Fetched:</strong>
-                              <div className="p-2 rounded bg-muted/30 max-h-32 overflow-y-auto"><MathRenderer content={item.topicDetails} /></div>
-                            </div>
-                          )}
-                          {!item.evaluation && (
-                            <p className="text-muted-foreground italic">This problem was generated but not answered.</p>
-                          )}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  );
-                })}
-              </Accordion>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </>
+          </TabsContent>
+        </Tabs>
+      )}
+    </div>
   );
 }
 

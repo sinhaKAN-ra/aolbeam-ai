@@ -1,16 +1,7 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs';
+import { Database } from './database.types.js'; // Using explicit .js extension for ESM compatibility
 
-// Create and export a single supabase client for interacting with your database
-const supabase = createSupabaseClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true,
-    },
-  }
-);
+// Create a single supabase client for the entire app
+const supabase = createBrowserSupabaseClient<Database>();
 
 export default supabase;

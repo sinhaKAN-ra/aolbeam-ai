@@ -1,3 +1,22 @@
+export interface PaymentMethod {
+  id: string;
+  name: string;
+  type: 'card' | 'upi' | 'netbanking' | 'wallet' | 'paypal';
+  imageUrl?: string;
+  disabled?: boolean;
+}
+
+export interface PaymentDetails {
+  orderId: string;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'refunded';
+  paymentMethod: string;
+  createdAt: string;
+  updatedAt: string;
+  metadata?: Record<string, any>;
+}
+
 export interface CashfreeOrderResponse {
   cf_order_id: string;
   created_at: string;

@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
-import supabase from '@/lib/supabase/client';
-import { headers } from 'next/headers';
+import { createClient } from '@/utils/supabase/server';
+import { cookies, headers } from 'next/headers';
 
 export async function POST(request: Request) {
   try {
+    // Initialize the server-side Supabase client
+    const cookieStore = cookies();
+    const supabase = await createClient();
+    
     // Verify webhook signature (important for security)
     const body = await request.text();
     const signature = (await headers()).get('x-webhook-signature');
@@ -27,7 +31,7 @@ export async function POST(request: Request) {
     }
 
     // Update the subscription status in your database
-    const { error } = await supabase
+    const { error } = await (await createClient())
       .from('subscriptions')
       .update({
         status: payment_status === 'SUCCESS' ? 'ACTIVE' : 'FAILED',
@@ -45,21 +49,24 @@ export async function POST(request: Request) {
       );
     }
 
-    // If payment is successful, update user's subscription status
+    // If payment is successful, update the user's profile
     if (payment_status === 'SUCCESS') {
-      const { data: subscription } = await supabase
+      // Get the subscription to get the user ID
+      const { data: subscription } = await (await createClient())
         .from('subscriptions')
         .select('user_id, plan_id')
         .eq('order_id', order_id)
         .single();
 
-      if (subscription) {
-        await supabase
+      if (subscription?.user_id) {
+        // Update the user's profile to mark as subscribed
+        await (await createClient())
           .from('user_profiles')
           .update({
-            subscription_status: 'active',
-            plan_id: subscription.plan_id,
-            subscription_updated_at: new Date().toISOString(),
+            is_subscribed: true,
+            subscription_plan_id: subscription.plan_id,
+            subscription_started_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .eq('id', subscription.user_id);
       }

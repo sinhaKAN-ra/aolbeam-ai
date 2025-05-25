@@ -5,14 +5,14 @@ import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { createClient } from '@/utils/supabase/client';
+import { useSupabase } from '@/hooks/useSupabase';
 
 export default function PaymentSuccess() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Verifying your payment...');
   const { toast } = useToast();
-  const supabase = createClient();
+  const supabase = useSupabase();
 
   useEffect(() => {
     const verifyPayment = async () => {

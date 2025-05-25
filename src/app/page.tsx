@@ -1,9 +1,10 @@
-
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import type { User } from '@supabase/supabase-js';
 import {
   generatePracticeProblem,
   type GeneratePracticeProblemOutput,
@@ -21,9 +22,6 @@ import {
 } from '@/ai/flows/generate-problem-insights';
 import { RefreshCw, FilePlus2, ArrowRight, Loader2 } from 'lucide-react';
 
-import type { User, AuthChangeEvent, Session } from '@supabase/supabase-js';
-import { useSupabase } from '@/hooks/useSupabase'; // Import the custom hook
-
 import type { InteractionHistoryItem, ProblemType, UserProfile, DifficultyLevel } from '@/types';
 import { ProblemGenerator } from '@/components/ProblemGenerator';
 import { ProblemDisplay } from '@/components/ProblemDisplay';
@@ -33,20 +31,26 @@ import { HistoryView } from '@/components/HistoryView';
 import { PaywallModal } from '@/components/PaywallModal';
 import { UseCaseBanner } from '@/components/UseCaseBanner';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useSupabase } from '@/hooks/useSupabase';
 
+// This is a client component that will be hydrated on the client
+// Server-side data fetching should be moved to a Server Component
+// and passed as props to this component
 
 const FREE_INTERACTION_LIMIT = 5;
 const ALL_CONCRETE_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
 
-
 export default function AOLBEAMPage() {
   const { toast } = useToast();
-  const supabase = useSupabase(); // Use the custom hook
+  const { user: currentUser, isLoading: isAuthLoading } = useAuth();
+  const supabase = useSupabase();
   
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  // User profile state
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isLoadingPageProfile, setIsLoadingPageProfile] = useState<boolean>(true); // Start true for initial load
+  const [isLoadingPageProfile, setIsLoadingPageProfile] = useState<boolean>(true);
+  const hasFetchedProfile = useRef(false);
 
+  // Problem generation state
   const [currentTopic, setCurrentTopic] = useState<string>('');
   const [currentProblemType, setCurrentProblemType] = useState<ProblemType>('theory');
   const [currentDifficulty, setCurrentDifficulty] = useState<DifficultyLevel>('medium');
@@ -54,20 +58,25 @@ export default function AOLBEAMPage() {
   const [evaluationResult, setEvaluationResult] = useState<EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string } | null>(null);
   const [problemInsights, setProblemInsights] = useState<string | null>(null);
 
+  // Loading states
   const [isLoadingProblem, setIsLoadingProblem] = useState<boolean>(false);
   const [isLoadingEvaluation, setIsLoadingEvaluation] = useState<boolean>(false);
   const [isLoadingInsights, setIsLoadingInsights] = useState<boolean>(false);
 
-  const [history, setHistory] = useState<InteractionHistoryItem[]>([]); // Initialize empty for server, load from localStorage on client
+  // History and interactions
+  const [history, setHistory] = useState<InteractionHistoryItem[]>([]);
   const [guestInteractionCount, setGuestInteractionCount] = useLocalStorage<number>('aolbeamGuestInteractionCount', 0);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [isClientMounted, setIsClientMounted] = useState(false);
 
+  // Refs
   const problemGeneratorRef = useRef<HTMLDivElement>(null);
-
+  
+  // Initialize client-side state and fetch initial data
   useEffect(() => {
     setIsClientMounted(true);
-    // Load history from localStorage only on the client after mount
+    
+    // Load history from localStorage if available
     const savedHistory = localStorage.getItem('aolbeamHistory_guest');
     if (savedHistory) {
       try {
@@ -77,171 +86,171 @@ export default function AOLBEAMPage() {
         setHistory([]);
       }
     }
-  }, []);
-
-
+    
+    // Fetch user profile if authenticated
+    if (currentUser) {
+      fetchAndSetUserProfile(currentUser);
+    } else {
+      setIsLoadingPageProfile(false);
+    }
+    
+    return () => {
+      // Cleanup if needed
+    };
+  }, [currentUser]);
+  
+  // Save history to localStorage when it changes
   const saveHistoryToLocalStorage = useCallback((newHistory: InteractionHistoryItem[]) => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('aolbeamHistory_guest', JSON.stringify(newHistory));
     }
   }, []);
-
-
-  const scrollToProblemGenerator = () => {
-    problemGeneratorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
   
-  const fetchAndSetUserProfile = useCallback(async (user: User) => {
-    console.log(`Page: fetchAndSetUserProfile called for user: ${user.id}`);
-    setIsLoadingPageProfile(true);
-    setUserProfile(null); 
+  // Scroll to problem generator helper
+  const scrollToProblemGenerator = useCallback(() => {
+    problemGeneratorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+  
 
-    try {
-      console.log(`Page: Attempting to query user_profiles for user ${user.id} (fetchAndSetUserProfile)...`);
-      let { data: profileData, error: fetchError, status: fetchStatus } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+  
+  const fetchAndSetUserProfile = useCallback(
+    async (user: User | null) => {
+      if (!user?.id) {
+        console.log('Page: No user ID available');
+        setUserProfile(null);
+        setIsLoadingPageProfile(false);
+        return;
+      }
 
-      console.log(`Page: Profile query for ${user.id} - Status: ${fetchStatus}, Error:`, fetchError, "Data:", profileData);
+      // Prevent multiple fetches
+      if (hasFetchedProfile.current) return;
+      hasFetchedProfile.current = true;
 
-      if (fetchError && fetchError.code === 'PGRST116') { 
-        console.log(`Page: Profile not found for ${user.id}, attempting to create one.`);
-        const newProfilePayload: Partial<UserProfile> = {
-          id: user.id,
-          email: user.email || '',
-          full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-          interaction_count: 0,
-          is_subscribed: false,
-        };
-        const { data: createdProfile, error: createError } = await supabase
-          .from('user_profiles')
-          .insert([newProfilePayload])
-          .select()
-          .single();
+      console.log(`Page: fetchAndSetUserProfile called for user: ${user.id}`);
+      setIsLoadingPageProfile(true);
+      setUserProfile(null);
 
-        if (createError) {
-          console.error(`Page: Error creating new profile for ${user.id}:`, createError);
-          if (createError.code === '23505') { 
-            console.log(`Page: Profile creation failed due to unique constraint (likely trigger ran), re-fetching for ${user.id}.`);
-            const { data: refetchedProfile, error: refetchError } = await supabase
-              .from('user_profiles')
-              .select('*')
-              .eq('id', user.id)
-              .single();
-            if (refetchError) {
-              console.error(`Page: Error re-fetching profile for ${user.id}:`, refetchError);
-              toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile after creation attempt." });
+      const fetchUserProfile = async (user: User) => {
+        try {
+          console.log(`Page: Attempting to query user_profiles for user ${user.id}...`);
+          
+          // Use the client-side Supabase client for client-side operations
+          const { data: profileData, error: fetchError } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+          if (fetchError) {
+            if (fetchError.code === 'PGRST116') { 
+              console.log(`Page: Profile not found for ${user.id}, attempting to create one.`);
+              const newProfilePayload: Partial<UserProfile> = {
+                id: user.id,
+                email: user.email || '',
+                full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+                interaction_count: 0,
+                is_subscribed: false,
+              };
+              
+              const { data: createdProfile, error: createError } = await supabase
+                .from('user_profiles')
+                .insert([newProfilePayload])
+                .select()
+                .single();
+
+              if (createError) {
+                console.error(`Page: Error creating profile:`, createError);
+                toast({ 
+                  variant: "destructive", 
+                  title: "Profile Error", 
+                  description: "Failed to create user profile." 
+                });
+                return;
+              }
+              
+              console.log(`Page: Created new profile for ${user.id}`);
+              setUserProfile(createdProfile as UserProfile);
+              return;
+            }
+            
+            // If it's another type of error, throw it
+            throw fetchError;
+          }
+
+          if (profileData) {
+            console.log(`Page: Found existing profile for ${user.id}`);
+            
+            // Check if we need to update any profile fields
+            const updates: Partial<UserProfile> = {};
+            let needsUpdate = false;
+            
+            if (!profileData.email && user.email) {
+              updates.email = user.email;
+              needsUpdate = true;
+            }
+            
+            if (!profileData.full_name && (user.user_metadata?.full_name || user.email)) {
+              updates.full_name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'User';
+              needsUpdate = true;
+            }
+
+            if (needsUpdate) {
+              console.log(`Page: Profile for ${user.id} missing fields, attempting update:`, updates);
+              const { data: updatedProfileData, error: updateError } = await supabase
+                .from('user_profiles')
+                .update(updates)
+                .eq('id', user.id)
+                .select()
+                .single();
+
+              if (updateError) {
+                console.error(`Page: Error updating profile for ${user.id}:`, updateError);
+                // Continue with the existing profile data even if update fails
+                setUserProfile(profileData as UserProfile);
+              } else if (updatedProfileData) {
+                console.log(`Page: Successfully updated profile for ${user.id}:`, updatedProfileData);
+                setUserProfile(updatedProfileData as UserProfile);
+              }
             } else {
-              profileData = refetchedProfile;
-              console.log(`Page: Successfully re-fetched profile for ${user.id} after 23505 error:`, profileData);
+              console.log(`Page: Using existing profile for ${user.id}`);
+              setUserProfile(profileData as UserProfile);
             }
           } else {
-            toast({ variant: "destructive", title: "Profile Error", description: createError.message });
+            console.warn(`Page: No profile data received for ${user.id} and no error was thrown.`);
+            setUserProfile(null);
           }
-        } else {
-          console.log(`Page: Successfully created new profile for ${user.id}:`, createdProfile);
-          profileData = createdProfile;
+        } catch (error) {
+          console.error(`Page: Error in fetchUserProfile for ${user.id}:`, error);
+          toast({
+            variant: "destructive",
+            title: "Profile Error",
+            description: error instanceof Error ? error.message : "An error occurred while loading your profile.",
+          });
+        } finally {
+          console.log(`Page: Finished loading profile for ${user.id}`);
+          setIsLoadingPageProfile(false);
         }
-      } else if (fetchError) {
-        console.error(`Page: Error fetching profile for ${user.id}:`, fetchError);
-        toast({ variant: "destructive", title: "Profile Error", description: fetchError.message });
-      } else if (profileData) {
-         console.log(`Page: Successfully fetched existing profile for ${user.id}:`, profileData);
-         const updates: Partial<UserProfile> = {};
-         let needsDBUpdate = false;
-         if (!profileData.email && user.email) {
-            updates.email = user.email;
-            needsDBUpdate = true;
-         }
-         if (!profileData.full_name && (user.user_metadata?.full_name || user.email)) {
-            updates.full_name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'User';
-            needsDBUpdate = true;
-         }
+      };
 
-         if (needsDBUpdate) {
-            console.log(`Page: Profile for ${user.id} missing fields, attempting update:`, updates);
-            const { data: updatedProfileData, error: updateError } = await supabase
-              .from('user_profiles')
-              .update(updates)
-              .eq('id', user.id)
-              .select()
-              .single();
-            if (updateError) {
-              console.error(`Page: Error updating profile for ${user.id} with missing fields:`, updateError);
-            } else {
-              profileData = updatedProfileData;
-              console.log(`Page: Successfully updated profile for ${user.id} with missing fields:`, profileData);
-            }
-         }
-      }
-      setUserProfile(profileData as UserProfile | null);
-    } catch (error) {
-      console.error(`Page: Unexpected error in fetchAndSetUserProfile for ${user.id}:`, error);
-      toast({ variant: "destructive", title: "Profile Error", description: "Could not load your profile." });
-    } finally {
-      console.log(`Page: fetchAndSetUserProfile for ${user.id} finished. isLoadingPageProfile will be set to false.`);
-      setIsLoadingPageProfile(false);
-    }
-  }, [toast, supabase]);
+      fetchUserProfile(user);
+    },
+    [supabase, toast]
+  );
 
   useEffect(() => {
-    console.log('Page: Main useEffect for auth running. Supabase client available:', !!supabase);
-    
-    const handleAuthChange = async (event: AuthChangeEvent, session: Session | null) => {
-      console.log(`Page: Auth state changed: ${event}`, { user: session?.user?.email });
-      const user = session?.user ?? null;
-      setCurrentUser(user); 
-      
-      if (user) {
-        console.log(`Page: User authenticated from onAuthStateChange, calling fetchAndSetUserProfile.`);
-        await fetchAndSetUserProfile(user);
+    if (!isAuthLoading) {
+      if (currentUser) {
+        fetchAndSetUserProfile(currentUser);
       } else {
-        setUserProfile(null); 
-        setIsLoadingPageProfile(false); 
-      }
-    };
-
-    const checkUser = async () => {
-      console.log('Page: checkUser called. Checking for existing session...');
-      setIsLoadingPageProfile(true);
-      try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-        
-        const user = session?.user ?? null;
-        console.log('Page: Current user from getSession:', user?.email);
-        setCurrentUser(user);
-
-        if (user) {
-          console.log('Page: Existing session found in checkUser, calling fetchAndSetUserProfile.');
-          await fetchAndSetUserProfile(user);
-        } else {
-          console.log('Page: No existing session found in checkUser.');
-          setUserProfile(null);
-          setIsLoadingPageProfile(false); 
-        }
-      } catch (error) {
-        console.error('Page: Error in checkUser:', error);
         setUserProfile(null);
-        setIsLoadingPageProfile(false); 
+        setIsLoadingPageProfile(false);
       }
-    };
-
-    checkUser(); // Call on initial mount
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthChange);
-
-    return () => {
-      console.log('Page: Cleaning up auth subscription.');
-      subscription?.unsubscribe();
-    };
-  }, [supabase, fetchAndSetUserProfile]); // fetchAndSetUserProfile is memoized with useCallback
+    }
+  }, [currentUser, isAuthLoading, fetchAndSetUserProfile]);
 
   useEffect(() => {
     console.log(
-      `Page: Profile state updated - isLoadingProfile: ${isLoadingPageProfile} pageCurrentUser: ${!!currentUser} pageUserProfile email: ${userProfile?.email}`
+      `Page: Profile state updated - isLoadingProfile: ${isLoadingPageProfile} pageCurrentUser: ${!!currentUser} pageUserProfile email: ${userProfile?.email || 'undefined'}`
     );
   }, [isLoadingPageProfile, currentUser, userProfile]);
 
@@ -266,7 +275,6 @@ export default function AOLBEAMPage() {
     }
     return false; 
   }, [currentUser, userProfile, guestInteractionCount]);
-
 
   const incrementInteraction = useCallback(async () => {
     if (currentUser && userProfile && !userProfile.is_subscribed) {
@@ -295,7 +303,6 @@ export default function AOLBEAMPage() {
     }
   }, [currentUser, userProfile, supabase, setGuestInteractionCount, toast]);
 
-
   const addToHistory = useCallback(async (itemToAdd: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'> & { actualProblemType: Exclude<ProblemType, 'random'> }) => {
     const newHistoryItem: InteractionHistoryItem = {
         ...itemToAdd,
@@ -312,10 +319,9 @@ export default function AOLBEAMPage() {
 
     setHistory(prevHistory => {
       const updatedHistory = [newHistoryItem, ...prevHistory].slice(0, 50);
-      saveHistoryToLocalStorage(updatedHistory); // Save to localStorage
+      saveHistoryToLocalStorage(updatedHistory);
       return updatedHistory;
     });
-
 
     if (currentUser && itemToAdd.problem && itemToAdd.problem.problemStatement) {
         const dbRecord: any = { 
@@ -411,7 +417,6 @@ export default function AOLBEAMPage() {
     }
   }, [setHistory, supabase, currentUser, toast, history, saveHistoryToLocalStorage]);
 
-
   const handleGenerateProblem = async (topic: string, type: ProblemType, difficulty: DifficultyLevel) => {
     if ((currentUser && isLoadingPageProfile) || checkUsageLimit()) return;
 
@@ -465,7 +470,14 @@ export default function AOLBEAMPage() {
       const isMcqStyleProblem = currentProblem.multipleChoiceOptions && currentProblem.multipleChoiceOptions.length > 0;
 
       if (!isMcqStyleProblem) { 
-        const insightsForEval = problemInsights || (await generateProblemInsights({ problemStatement: currentProblem.problemStatement, topic: currentTopic })).insights || "No specific problem insights available for this evaluation.";
+          let insightsForEval = problemInsights;
+        if (!insightsForEval) {
+          const result = await generateProblemInsights({ 
+            problemStatement: currentProblem.problemStatement, 
+            topic: currentTopic 
+          });
+          insightsForEval = JSON.stringify(result, null, 2);
+        }
         
         const evalInput: EvaluateTheoryAnswerInput = {
           question: currentProblem.problemStatement,
@@ -498,22 +510,62 @@ export default function AOLBEAMPage() {
   };
 
   const handleGenerateProblemInsights = async (problemStatement: string, topicToFetch: string) => { 
-    if ((currentUser && isLoadingPageProfile) || checkUsageLimit()) return;
-
-    setIsLoadingInsights(true); 
     try {
+      console.log("handleGenerateProblemInsights called with:", { problemStatement, topicToFetch });
+      
+      // Check user and loading state
+      const userCheck = currentUser && isLoadingPageProfile;
+      const usageLimitReached = checkUsageLimit();
+      console.log("User check:", { currentUser, isLoadingPageProfile, userCheck, usageLimitReached });
+      
+      if (userCheck || usageLimitReached) {
+        console.log("Cannot fetch insights: User not loaded or usage limit reached");
+        if (usageLimitReached) {
+          toast({ variant: "destructive", title: "Usage Limit Reached", description: "You've reached your free usage limit. Please sign up to continue." });
+          setShowPaywall(true);
+        }
+        return;
+      }
+      
+      console.log("Fetching insights for:", { problemStatement, topicToFetch });
+      setIsLoadingInsights(true); 
+      
       await incrementInteraction();
-      const result = await generateProblemInsights({ problemStatement, topic: topicToFetch }); 
-      setProblemInsights(result.insights); 
-      await updateLastHistoryItem({ isTopicRevised: true, topicDetails: result.insights }); 
-      toast({ title: "Problem Insights Fetched", description: `Insights for the current problem are now available.` });
-    } catch (error) 
-    {
-      console.error("Page: Error fetching problem insights:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to fetch problem insights." });
-      setProblemInsights("Failed to load insights. Please try again."); 
+      const result = await generateProblemInsights({ 
+        problemStatement, 
+        topic: topicToFetch 
+      });
+      
+      console.log("Generated insights:", result);
+      
+      // Store the complete insights object
+      const insightsString = JSON.stringify(result, null, 2);
+      setProblemInsights(insightsString);
+      
+      if (currentUser) {
+        await updateLastHistoryItem({ 
+          isTopicRevised: true, 
+          topicDetails: insightsString 
+        });
+      }
+      
+      toast({ 
+        title: "Problem Insights Fetched", 
+        description: `Insights for the current problem are now available.` 
+      });
+      
+      return result;
+    } catch (error) {
+      console.error("Page: Error in handleGenerateProblemInsights:", error);
+      toast({ 
+        variant: "destructive", 
+        title: "Error", 
+        description: error instanceof Error ? error.message : "Failed to fetch problem insights." 
+      });
+      setProblemInsights("Failed to load insights. Please try again.");
+      throw error; // Re-throw to allow error handling in the calling component
     } finally {
-      setIsLoadingInsights(false); 
+      setIsLoadingInsights(false);
     }
   };
 
@@ -546,7 +598,7 @@ export default function AOLBEAMPage() {
   };
 
   const handleSubscribe = async (planId: string) => {
-    if (!supabase || !currentUser || !userProfile) { 
+    if (!currentUser || !userProfile) { 
       toast({ variant: "destructive", title: "Error", description: "Authentication service not ready or user not logged in."});
       return;
     }
@@ -579,10 +631,7 @@ export default function AOLBEAMPage() {
     toast({title: "Login to Subscribe", description: "Please use the Login/Sign Up option in the header."})
   };
 
-
   useEffect(() => {
-    // This effect is to restore guest session state from localStorage
-    // Only run if not logged in, not loading profile, and not loading a problem.
     if (isClientMounted && !isLoadingPageProfile && !currentUser && !currentProblem && !isLoadingProblem && history.length > 0) {
       const lastItem = history[0];
       if (lastItem) {
@@ -600,7 +649,6 @@ export default function AOLBEAMPage() {
       }
     }
   }, [currentUser, history, isLoadingProblem, currentProblem, isLoadingPageProfile, isClientMounted]);
-
 
   const interactionsLeftText = () => {
     if (isLoadingPageProfile && currentUser) return "Loading interactions...";
@@ -637,13 +685,13 @@ export default function AOLBEAMPage() {
       <UseCaseBanner />
 
       <div ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">
-        {isLoadingPageProfile && currentUser && !userProfile ? ( // Show main page loader only if actively loading profile for a logged-in user
+        {isLoadingPageProfile && currentUser && !userProfile ? (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
             <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
             <p className="text-muted-foreground">Loading your profile...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8 relative">
             <div className="lg:col-span-3 flex flex-col gap-6">
               <ProblemGenerator
                 onGenerate={handleGenerateProblem}
@@ -685,7 +733,7 @@ export default function AOLBEAMPage() {
               {evaluationResult && <EvaluationResult evaluation={evaluationResult} />}
             </div>
 
-            <div className="lg:col-span-2 flex flex-col gap-6">
+            <div className="lg:col-span-2 flex flex-col gap-6 relative z-10">
               <ProblemInsights
                 problem={currentProblem} 
                 topic={currentTopic}    

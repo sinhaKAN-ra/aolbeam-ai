@@ -11,6 +11,7 @@ export interface InteractionHistoryItem {
   timestamp: string;
   topic: string;
   problemType: ProblemType; // This can be 'random' if the user selected it, but the problem itself will be of a concrete type
+  actualProblemType?: Exclude<ProblemType, 'random'>; // The actual problem type generated when 'random' is selected
   difficulty: DifficultyLevel;
   problem: GeneratePracticeProblemOutput; // This will contain the actual problem type generated
   userAnswer?: string; // For theory

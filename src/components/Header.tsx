@@ -1,9 +1,9 @@
-
 // src/components/Header.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -14,16 +14,36 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useToast } from '@/hooks/use-toast';
-import { useSupabase } from '../hooks/useSupabase';
-import type { User } from '@supabase/supabase-js';
-import type { UserProfile } from '@/types';
-import { Brain, Menu, UserCircle, LogOut, ShieldCheck, Home, User as ProfileIcon, Newspaper, Mail as ContactIcon, Info as AboutIcon, DollarSign, Settings, Loader2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { 
+  Brain, 
+  Menu, 
+  X,
+  UserCircle, 
+  LogOut, 
+  ShieldCheck, 
+  Home, 
+  User as ProfileIcon, 
+  Newspaper, 
+  Mail as ContactIcon, 
+  Info as AboutIcon, 
+  DollarSign, 
+  Settings,
+  Loader2
+} from 'lucide-react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
 
-// Simple Google Icon SVG
-const GoogleIcon = ({ className }: { className?: string }) => (
-  <svg className={className} version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" enableBackground="new 0 0 48 48">
+// Google Icon Component
+const GoogleIcon = ({ className = "" }: { className?: string }) => (
+  <svg 
+    className={className} 
+    version="1.1" 
+    xmlns="http://www.w3.org/2000/svg" 
+    viewBox="0 0 48 48" 
+    enableBackground="new 0 0 48 48"
+  >
     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
     <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
     <path fill="#FBBC05" d="M10.53 28.71c-.4-1.2-.62-2.48-.62-3.71s.22-2.51.62-3.71l-7.98-6.19C.92 18.05 0 20.94 0 24c0 3.06.92 5.95 2.56 8.48l7.97-6.77z"/>
@@ -32,108 +52,135 @@ const GoogleIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-
-interface HeaderProps {
-  userProfile: UserProfile | null;
-  isLoadingProfile: boolean;
-  onSignOut: () => Promise<void>;
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  requiresAuth?: boolean;
 }
 
-export default function Header({ userProfile, isLoadingProfile, onSignOut }: HeaderProps) {
+interface UserMenuItem {
+  label: string;
+  icon: React.ReactNode;
+  href?: string;
+  onClick?: (e: React.MouseEvent) => void;
+  divider?: boolean;
+}
+
+export default function Header() {
   const { toast } = useToast();
+  const router = useRouter();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  
-  // Get Supabase client instance
-  const supabase = useSupabase();
-  
-  // Derive currentUser from userProfile if it exists
-  const currentUser = userProfile 
-    ? { 
-        id: userProfile.id, 
-        email: userProfile.email || ''
-      } as User 
-    : null;
-    
-  // Debug log to track profile and loading state
-  useEffect(() => {
-    console.log('Header - Profile updated:', { 
-      hasUserProfile: !!userProfile, 
-      isLoadingProfile,
-      currentUser: currentUser?.email
-    });
-  }, [userProfile, isLoadingProfile, currentUser]);
-
-  const handleSignInWithGoogle = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
-        },
-      });
-      if (error) {
-        console.error('Google sign-in error:', error);
-        toast({ 
-          variant: "destructive", 
-          title: "Login Error", 
-          description: error.message || 'Failed to sign in with Google' 
-        });
-      }
-    } catch (error) {
-      console.error('Unexpected error during Google sign-in:', error);
-      toast({
-        variant: "destructive",
-        title: "Unexpected Error",
-        description: "An unexpected error occurred during sign-in.",
-      });
-    }
-  };
-
+  const { user, isLoading, signInWithGoogle, signOut } = useAuth();
+  const [userInitials, setUserInitials] = useState('');
+  const [userEmail, setUserEmail] = useState('');
   const [isSigningOut, setIsSigningOut] = useState(false);
+  
+  const isAdmin = user?.email === ADMIN_EMAIL;
 
-  const handleSignOut = async (e: React.MouseEvent) => {
+  // Handle sign out
+  const handleSignOut = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
-    if (isSigningOut) return; // Prevent multiple clicks
+    if (isSigningOut) return;
     
     setIsSigningOut(true);
-    
     try {
-      console.log('Header: Starting sign out process...');
-      await onSignOut();
-      console.log('Header: Sign out successful');
-      
-      toast({ 
-        title: 'Signed out successfully',
-        description: 'You have been signed out of your account.'
+      await signOut();
+      setMobileNavOpen(false);
+      router.push('/');
+      toast({
+        title: "Signed out successfully",
+        description: "You have been signed out of your account.",
       });
     } catch (error) {
-      console.error('Header: Sign out error:', error);
-      
+      console.error('Error signing out:', error);
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to sign out. Please try again.',
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to sign out",
+        variant: "destructive",
       });
-      
-      // Re-throw the error so the parent component can handle it if needed
-      throw error;
     } finally {
-      console.log('Header: Sign out process completed');
       setIsSigningOut(false);
-      setMobileNavOpen(false);
     }
-  };
+  }, [isSigningOut, signOut, router, toast]);
 
-  const navItems = [
-    { href: "/", label: "Home", icon: Home },
-    ...(currentUser ? [{ href: "/profile", label: "Profile", icon: ProfileIcon }] : []),
-    { href: "/pricing", label: "Pricing", icon: DollarSign },
-    { href: "/blog", label: "Blog", icon: Newspaper },
-    { href: "/about", label: "About Us", icon: AboutIcon },
-    { href: "/contact-us", label: "Contact", icon: ContactIcon },
-  ];
+  // Handle sign in with Google
+  const handleSignIn = useCallback(async () => {
+    try {
+      await signInWithGoogle();
+      setMobileNavOpen(false);
+    } catch (error) {
+      console.error('Error signing in:', error);
+      toast({
+        variant: "destructive",
+        title: "Sign In Failed",
+        description: error instanceof Error ? error.message : "Could not sign in with Google. Please try again.",
+      });
+    }
+  }, [signInWithGoogle, toast]);
+
+  // Navigation items
+  const navItems = useMemo<NavItem[]>(() => [
+    { href: "/", label: "Home", icon: <Home className="h-4 w-4" /> },
+    ...(user ? [{ href: "/profile", label: "Profile", icon: <ProfileIcon className="h-4 w-4" /> }] : []),
+    { href: "/pricing", label: "Pricing", icon: <DollarSign className="h-4 w-4" /> },
+    { href: "/blog", label: "Blog", icon: <Newspaper className="h-4 w-4" /> },
+    { href: "/about", label: "About Us", icon: <AboutIcon className="h-4 w-4" /> },
+    { href: "/contact-us", label: "Contact", icon: <ContactIcon className="h-4 w-4" /> },
+  ], [user]);
+
+  // User menu items
+  const userMenuItems = useMemo<UserMenuItem[]>(() => {
+    const items: UserMenuItem[] = [
+      {
+        label: 'Profile',
+        icon: <UserCircle className="mr-2 h-4 w-4" />,
+        href: '/profile',
+      },
+      {
+        label: 'Settings',
+        icon: <Settings className="mr-2 h-4 w-4" />,
+        href: '/settings',
+      },
+    ];
+
+    if (isAdmin) {
+      items.push({
+        label: 'Admin',
+        icon: <ShieldCheck className="mr-2 h-4 w-4" />,
+        href: '/admin',
+      });
+    }
+
+    items.push({
+      label: 'Sign out',
+      icon: <LogOut className="mr-2 h-4 w-4" />,
+      onClick: handleSignOut,
+    });
+
+    return items;
+  }, [isAdmin, handleSignOut]);
+
+  // Set up user display info when user changes
+  useEffect(() => {
+    if (user) {
+      // Get user initials for avatar
+      const name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'U';
+      const initials = name
+        .split(' ')
+        .map((part: string) => part[0]?.toUpperCase() || '')
+        .join('')
+        .substring(0, 2);
+        
+      setUserInitials(initials);
+      setUserEmail(user.email || '');
+    } else {
+      setUserInitials('');
+      setUserEmail('');
+    }
+  }, [user]);
 
   return (
     <header className="sticky top-0 z-30 w-full border-b bg-background/95 backdrop-blur-sm">
@@ -149,67 +196,80 @@ export default function Header({ userProfile, isLoadingProfile, onSignOut }: Hea
           
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            {isLoadingProfile && currentUser && <Button variant="ghost" size="icon" disabled><Loader2 className="h-5 w-5 animate-spin" /></Button>}
+            {isLoading && user && <Button variant="ghost" size="icon" disabled><Loader2 className="h-5 w-5 animate-spin" /></Button>}
             
-            {!isLoadingProfile && currentUser && userProfile ? (
+            {!isLoading && user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <UserCircle className="h-6 w-6" />
-                    <span className="sr-only">User Menu</span>
+                  <Button
+                    variant="ghost"
+                    className="relative h-8 w-8 rounded-full p-0"
+                    disabled={isLoading}
+                  >
+                    {userInitials ? (
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-primary/10 text-sm font-medium">
+                          {userInitials}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : (
+                      <UserCircle className="h-6 w-6" />
+                    )}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem disabled className="text-xs text-muted-foreground">
-                    {currentUser.email}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link href="/profile" onClick={() => setMobileNavOpen(false)}>
-                      <ProfileIcon className="mr-2 h-4 w-4" /> Profile
-                    </Link>
-                  </DropdownMenuItem>
-                  {currentUser.email === ADMIN_EMAIL && (
-                    <DropdownMenuItem asChild>
-                      <Link href="/admin/blog" onClick={() => setMobileNavOpen(false)}>
-                        <ShieldCheck className="mr-2 h-4 w-4" /> Admin
-                      </Link>
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <button 
-                      onClick={(e) => handleSignOut(e)} 
-                      className="w-full flex items-center"
-                      disabled={isSigningOut}
-                    >
-                      {isSigningOut ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Signing out...
-                        </>
-                      ) : (
-                        <>
-                          <LogOut className="mr-2 h-4 w-4" />
-                          Sign Out
-                        </>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <div className="flex items-center justify-start gap-3 p-2">
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      {userInitials || 'U'}
+                    </div>
+                    <div className="flex flex-col space-y-0.5 overflow-hidden">
+                      <p className="truncate text-sm font-medium leading-none">
+                        {user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'}
+                      </p>
+                      {userEmail && (
+                        <p className="truncate text-xs leading-none text-muted-foreground">
+                          {userEmail}
+                        </p>
                       )}
-                    </button>
-                  </DropdownMenuItem>
+                    </div>
+                  </div>
+                  <DropdownMenuSeparator />
+                  {userMenuItems.map((item) => (
+                    <DropdownMenuItem
+                      key={item.label}
+                      asChild={!!item.href}
+                      onClick={item.onClick}
+                      className="cursor-pointer"
+                      disabled={isSigningOut && item.label === 'Sign out'}
+                    >
+                      {item.href ? (
+                        <Link href={item.href} className="w-full flex items-center">
+                          {item.icon}
+                          <span>{item.label}</span>
+                        </Link>
+                      ) : (
+                        <div className="flex w-full items-center">
+                          {item.icon}
+                          <span>{item.label}</span>
+                          {isSigningOut && item.label === 'Sign out' && (
+                            <Loader2 className="ml-2 h-3 w-3 animate-spin" />
+                          )}
+                        </div>
+                      )}
+                    </DropdownMenuItem>
+                  ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-               !isLoadingProfile && !currentUser && (
-                  <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleSignInWithGoogle} 
-                      className="min-w-[120px] hidden md:inline-flex items-center" // hidden md:inline-flex
-                    >
-                      <GoogleIcon className="mr-2 h-4 w-4" />
-                      Login / Sign Up
-                    </Button>
-               )
+              <Button
+                onClick={handleSignIn}
+                variant="outline"
+                className="flex items-center gap-2"
+                disabled={isLoading}
+              >
+                <GoogleIcon className="h-4 w-4" />
+                <span className="hidden sm:inline">Sign in</span>
+              </Button>
             )}
             <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileNavOpen(!mobileNavOpen)}>
               <Menu className="h-6 w-6" />
@@ -222,43 +282,43 @@ export default function Header({ userProfile, isLoadingProfile, onSignOut }: Hea
             <nav className="flex flex-col space-y-1">
               {navItems.map(item => {
                 // Skip rendering the Profile link if user is not authenticated
-                if (item.href === '/profile' && !currentUser) {
+                if (item.href === '/profile' && !user) {
                   return null;
                 }
                 return (
                   <Button key={item.label} variant="ghost" asChild className="justify-start" onClick={()=>setMobileNavOpen(false)}>
                     <Link href={item.href} className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full">
-                      <item.icon className="mr-3 h-5 w-5" /> {item.label}
+                      <span className="mr-3 h-5 w-5">{item.icon}</span> {item.label}
                     </Link>
                   </Button>
                 );
               })}
-              {currentUser?.email === ADMIN_EMAIL && (
-                  <Button variant="ghost" asChild className="justify-start" onClick={()=>setMobileNavOpen(false)}>
-                      <Link href="/admin/blog" className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full">
-                      <ShieldCheck className="mr-3 h-5 w-5" /> Admin
-                      </Link>
-                  </Button>
+              {user?.email === ADMIN_EMAIL && (
+                <Button variant="ghost" asChild className="justify-start" onClick={()=>setMobileNavOpen(false)}>
+                  <Link href="/admin/blog" className="py-2 px-3 text-base font-medium text-muted-foreground hover:text-primary hover:bg-accent w-full">
+                    <ShieldCheck className="mr-3 h-5 w-5" /> Admin
+                  </Link>
+                </Button>
               )}
               <DropdownMenuSeparator />
-              {!currentUser && (
+              {!user && (
                 <Button 
-                    variant="default" 
-                    onClick={() => { handleSignInWithGoogle(); setMobileNavOpen(false);}} 
-                    className="w-full text-base py-3 mt-2 flex items-center justify-center"
-                  >
-                    <GoogleIcon className="mr-2 h-5 w-5" />
-                    Login / Sign Up
-                  </Button>
+                  variant="default" 
+                  onClick={() => { handleSignIn(); setMobileNavOpen(false);}} 
+                  className="w-full text-base py-3 mt-2 flex items-center justify-center"
+                >
+                  <GoogleIcon className="mr-2 h-5 w-5" />
+                  Login / Sign Up
+                </Button>
               )}
-              {currentUser && (
-                 <Button 
-                    variant="outline" 
-                    onClick={(e) => { handleSignOut(e); setMobileNavOpen(false);}}
-                    className="w-full text-base py-3 mt-2"
-                  >
-                    <LogOut className="mr-2 h-5 w-5" /> Sign Out
-                  </Button>
+              {user && (
+                <Button 
+                  variant="outline" 
+                  onClick={(e) => { handleSignOut(e); setMobileNavOpen(false);}}
+                  className="w-full text-base py-3 mt-2"
+                >
+                  <LogOut className="mr-2 h-5 w-5" /> Sign Out
+                </Button>
               )}
             </nav>
           </div>

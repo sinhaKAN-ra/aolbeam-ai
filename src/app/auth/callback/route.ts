@@ -3,38 +3,25 @@
 
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
-  
-  try {
-    const code = requestUrl.searchParams.get('code');
-    const next = requestUrl.searchParams.get('next') || '/';
+  const code = requestUrl.searchParams.get('code');
 
-    if (code) {
-      const cookieStore = cookies();
-      const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
-      
-      // Exchange the code for a session
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      
-      if (error) {
-        console.error('Error exchanging code for session:', error);
-        return NextResponse.redirect(
-          `${requestUrl.origin}/auth/auth-code-error?error=${encodeURIComponent(error.message)}`
-        );
-      }
-    }
-
-    // URL to redirect to after sign in process completes
-    return NextResponse.redirect(`${requestUrl.origin}${next}`);
+  if (code) {
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
     
-  } catch (error) {
-    console.error('Error in auth callback:', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-    return NextResponse.redirect(
-      `${requestUrl.origin}/auth/auth-code-error?error=${encodeURIComponent(errorMessage)}`
-    );
+    try {
+      await supabase.auth.exchangeCodeForSession(code);
+      return NextResponse.redirect(new URL('/', requestUrl.origin));
+    } catch (error) {
+      console.error('Error exchanging code for session:', error);
+      return NextResponse.redirect(new URL('/auth/error', requestUrl.origin));
+    }
   }
+
+  // If no code is present, redirect to home
+  return NextResponse.redirect(new URL('/', requestUrl.origin));
 }

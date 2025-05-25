@@ -1,4 +1,3 @@
-
 "use client";
 
 import type * as React from 'react';
@@ -36,12 +35,12 @@ export function ProblemGenerator({
   defaultProblemType = "theory",
   defaultDifficulty = "medium"
 }: ProblemGeneratorProps) {
-  const [topic, setTopic] = useState<string>(defaultTopic);
+  const [topic, setTopic] = useState<string>(defaultTopic || "");
   const [problemType, setProblemType] = useState<ProblemType>(defaultProblemType);
   const [difficulty, setDifficulty] = useState<DifficultyLevel>(defaultDifficulty);
 
   useEffect(() => {
-    setTopic(defaultTopic);
+    setTopic(defaultTopic || "");
   }, [defaultTopic]);
 
   useEffect(() => {
@@ -54,10 +53,13 @@ export function ProblemGenerator({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (topic.trim()) {
-      onGenerate(topic, problemType, difficulty);
+    const trimmedTopic = topic?.trim() || "";
+    if (trimmedTopic) {
+      onGenerate(trimmedTopic, problemType, difficulty);
     }
   };
+
+  const isTopicValid = Boolean(topic?.trim());
 
   return (
     <Card className="shadow-lg">
@@ -123,7 +125,7 @@ export function ProblemGenerator({
             </Select>
           </div>
 
-          <Button type="submit" disabled={isLoading || !topic.trim()} className="w-full text-base py-3">
+          <Button type="submit" disabled={isLoading || !isTopicValid} className="w-full text-base py-3">
             {isLoading ? <Loader2 className="animate-spin" /> : "Generate Problem"}
           </Button>
         </form>

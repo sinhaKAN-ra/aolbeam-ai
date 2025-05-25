@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Lightbulb, Target, Rocket, Users } from 'lucide-react';
+import { Lightbulb, Target, Rocket, Users, Mail, Phone, ExternalLink } from 'lucide-react';
 // Footer is now global
 
 export const metadata: Metadata = {
@@ -70,6 +70,59 @@ export default function AboutUsPage() {
                 <p className="text-muted-foreground">
                   We believe in creating a platform for students to learn and become educated in a new, more intuitive way. The journey with AOLBEAM is just beginning. Our long-term vision is to evolve into a comprehensive, <strong className="text-foreground">search-based learning platform</strong>. Imagine a system where you can instantly find, understand, and master any concept or problem-solving technique you need, precisely when you need it, all powered by intelligent assistance.
                 </p>
+              </section>
+
+              <section className="mt-12">
+                <h2 className="text-2xl font-semibold mb-6 text-center text-primary">
+                  Meet the Founder
+                </h2>
+                <div className="bg-muted/50 p-6 rounded-lg">
+                  <div className="flex flex-col md:flex-row items-center gap-6">
+                    <div className="w-32 h-32 rounded-full bg-primary/10 flex items-center justify-center">
+                      <span className="text-4xl font-bold text-primary">KS</span>
+                    </div>
+                    <div className="text-center md:text-left">
+                      <h3 className="text-xl font-bold">Karan Sinha</h3>
+                      <p className="text-muted-foreground mb-3">
+                        🚀 Tech Founder | Full Stack Developer | AI + Web3 Enthusiast
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
+                        <a 
+                          href="https://www.linkedin.com/in/sinhakan-ra/" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          LinkedIn
+                        </a>
+                        <a 
+                          href="https://x.com/karan_knows" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Twitter/X
+                        </a>
+                        <a 
+                          href="mailto:aolbeam@outlook.com" 
+                          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+                        >
+                          <Mail className="h-4 w-4" />
+                          aolbeam@outlook.com
+                        </a>
+                        <a 
+                          href="tel:+16033240396" 
+                          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+                        >
+                          <Phone className="h-4 w-4" />
+                          +1 (603) 324-0396
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </section>
 
               <div className="text-center mt-10">
