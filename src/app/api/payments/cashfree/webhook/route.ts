@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { cookies, headers } from 'next/headers';
+import crypto from 'crypto';
 
 export async function POST(request: Request) {
   try {
@@ -8,12 +9,13 @@ export async function POST(request: Request) {
     const cookieStore = cookies();
     const supabase = await createClient();
     
-    // Verify webhook signature (important for security)
+    // Get the raw body and signature
     const body = await request.text();
-    const signature = (await headers()).get('x-webhook-signature');
+    const signature = request.headers.get('x-webhook-signature');
 
     // Verify the webhook signature
     if (!verifyWebhookSignature(body, signature)) {
+      console.error('Invalid webhook signature');
       return NextResponse.json(
         { error: 'Invalid signature' },
         { status: 401 }
@@ -31,7 +33,7 @@ export async function POST(request: Request) {
     }
 
     // Update the subscription status in your database
-    const { error } = await (await createClient())
+    const { error } = await supabase
       .from('subscriptions')
       .update({
         status: payment_status === 'SUCCESS' ? 'ACTIVE' : 'FAILED',
@@ -52,7 +54,7 @@ export async function POST(request: Request) {
     // If payment is successful, update the user's profile
     if (payment_status === 'SUCCESS') {
       // Get the subscription to get the user ID
-      const { data: subscription } = await (await createClient())
+      const { data: subscription } = await supabase
         .from('subscriptions')
         .select('user_id, plan_id')
         .eq('order_id', order_id)
@@ -60,7 +62,7 @@ export async function POST(request: Request) {
 
       if (subscription?.user_id) {
         // Update the user's profile to mark as subscribed
-        await (await createClient())
+        await supabase
           .from('user_profiles')
           .update({
             is_subscribed: true,
@@ -84,15 +86,20 @@ export async function POST(request: Request) {
 
 // Helper function to verify webhook signature
 function verifyWebhookSignature(body: string, signature: string | null): boolean {
-  if (!signature) return false;
+  if (!signature || !process.env.CASHFREE_WEBHOOK_SECRET) return false;
   
-  // Implement your signature verification logic here
-  // This is a placeholder - you should verify the signature using your webhook secret
-  // Example with crypto-js:
-  // const computedSignature = CryptoJS.HmacSHA256(body, process.env.CASHFREE_WEBHOOK_SECRET!)
-  //   .toString(CryptoJS.enc.Hex);
-  // return computedSignature === signature;
-  
-  // For now, we'll return true to allow testing, but make sure to implement proper verification in production
-  return true;
+  try {
+    const computedSignature = crypto
+      .createHmac('sha256', process.env.CASHFREE_WEBHOOK_SECRET)
+      .update(body)
+      .digest('hex');
+    
+    return crypto.timingSafeEqual(
+      Buffer.from(computedSignature),
+      Buffer.from(signature)
+    );
+  } catch (error) {
+    console.error('Error verifying webhook signature:', error);
+    return false;
+  }
 }

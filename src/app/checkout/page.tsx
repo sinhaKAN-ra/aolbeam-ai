@@ -217,7 +217,7 @@ function CheckoutPageContent() {
   return (
     <div className={cn(
       "min-h-screen py-12 transition-colors duration-200",
-      isDark ? "bg-gray-900" : "bg-gray-50"
+      isDark ? "bg-background" : "bg-background"
     )}>
       <div className="container mx-auto px-4">
         <Button 

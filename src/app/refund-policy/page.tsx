@@ -71,7 +71,7 @@ export default function RefundPolicy() {
                   If you experience any issues with payment processing or have questions about our refund and cancellation policy, please contact our support team at:
                 </p>
                 <p className="font-medium">
-                  Email: <a href="mailto:support@aolbeam.ai" className="text-primary hover:underline">support@aolbeam.ai</a>
+                  Email: <a href="mailto:aolbeam@outlook.com" className="text-primary hover:underline">aolbeam@outlook.com</a>
                 </p>
                 <p>
                   We typically respond to all inquiries within 24-48 hours.
