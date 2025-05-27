@@ -2,8 +2,19 @@ import { NextResponse } from 'next/server';
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 
+const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID;
+const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
+const CASHFREE_MODE = process.env.NEXT_PUBLIC_CASHFREE_MODE || 'sandbox';
+
 export async function POST(request: Request) {
   try {
+    if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
+      return NextResponse.json(
+        { error: 'Cashfree credentials not configured' },
+        { status: 500 }
+      );
+    }
+
     const cookieStore = cookies();
     const supabase = createServerComponentClient({ cookies: () => cookieStore });
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -36,44 +47,50 @@ export async function POST(request: Request) {
       );
     }
 
-    // Call Cashfree API to create order
-    const cashfreeResponse = await fetch('https://sandbox.cashfree.com/pg/orders', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-client-id': process.env.CASHFREE_APP_ID!,
-        'x-client-secret': process.env.CASHFREE_SECRET_KEY!,
-        'x-api-version': '2022-09-01',
+    // Create order payload
+    const orderPayload = {
+      order_id: orderId,
+      order_amount: orderAmount,
+      order_currency: orderCurrency,
+      customer_details: {
+        customer_id: user.id,
+        customer_name: customerName,
+        customer_email: customerEmail,
+        customer_phone: customerPhone,
       },
-      body: JSON.stringify({
-        order_id: orderId,
-        order_amount: orderAmount,
-        order_currency: orderCurrency,
-        customer_details: {
-          customer_id: user.id,
-          customer_name: customerName,
-          customer_email: customerEmail,
-          customer_phone: customerPhone,
-        },
-        order_meta: {
-          return_url: returnUrl,
-          notify_url: notifyUrl,
-          payment_methods: 'cc,dc,upi,netbanking,paylater,wallet',
-        },
-        order_note: orderNote,
-      }),
-    });
+      order_meta: {
+        return_url: returnUrl,
+        notify_url: notifyUrl,
+        payment_methods: 'cc,dc,upi,netbanking,paylater,wallet',
+      },
+      order_note: orderNote,
+    };
 
-    if (!cashfreeResponse.ok) {
-      const error = await cashfreeResponse.json();
+    // Create order in Cashfree
+    const response = await fetch(
+      `${CASHFREE_MODE === 'sandbox' ? 'https://sandbox.cashfree.com' : 'https://api.cashfree.com'}/pg/orders`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-version': '2022-09-01',
+          'x-client-id': CASHFREE_APP_ID,
+          'x-client-secret': CASHFREE_SECRET_KEY
+        },
+        body: JSON.stringify(orderPayload)
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
       console.error('Cashfree API error:', error);
       return NextResponse.json(
-        { error: 'Failed to create order', details: error },
-        { status: cashfreeResponse.status }
+        { error: 'Failed to create order in Cashfree' },
+        { status: response.status }
       );
     }
 
-    const data = await cashfreeResponse.json();
+    const data = await response.json();
     
     // Save the order details to your database
     const { error: dbError } = await supabase
@@ -103,7 +120,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error('Error creating order:', error);
+    console.error('Error creating Cashfree order:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

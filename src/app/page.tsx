@@ -32,6 +32,7 @@ import { PaywallModal } from '@/components/PaywallModal';
 import { UseCaseBanner } from '@/components/UseCaseBanner';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSupabase } from '@/hooks/useSupabase';
+import { useRouter } from 'next/navigation';
 
 // This is a client component that will be hydrated on the client
 // Server-side data fetching should be moved to a Server Component
@@ -44,6 +45,7 @@ export default function AOLBEAMPage() {
   const { toast } = useToast();
   const { user: currentUser, isLoading: isAuthLoading } = useAuth();
   const supabase = useSupabase();
+  const router = useRouter();
   
   // User profile state
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -260,48 +262,32 @@ export default function AOLBEAMPage() {
     };
   }, []);
 
-  const checkUsageLimit = useCallback((): boolean => {
-    if (currentUser && userProfile) { 
-      if (userProfile.is_subscribed) return false; 
-      if ((userProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT) {
-        setShowPaywall(true);
-        return true;
-      }
-    } else if (!currentUser) { 
-      if (guestInteractionCount >= FREE_INTERACTION_LIMIT) {
-        setShowPaywall(true);
-        return true;
-      }
+  const checkUsageLimit = useCallback(() => {
+    if (currentUser && userProfile) {
+      if (userProfile.is_subscribed) return false;
+      return (userProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT;
     }
-    return false; 
+    return guestInteractionCount >= FREE_INTERACTION_LIMIT;
   }, [currentUser, userProfile, guestInteractionCount]);
 
   const incrementInteraction = useCallback(async () => {
-    if (currentUser && userProfile && !userProfile.is_subscribed) {
-        const newCount = (userProfile.interaction_count || 0) + 1;
-        setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null); 
-        
-        try {
-            const { error } = await supabase
-                .from('user_profiles')
-                .update({ interaction_count: newCount })
-                .eq('id', currentUser.id);
-            if (error) {
-                console.error("Page: Error updating interaction count in Supabase:", error);
-                toast({ variant: "destructive", title: "Sync Error", description: "Could not save interaction count. Reverting UI." });
-                setUserProfile(prev => prev ? { ...prev, interaction_count: newCount - 1 } : null);
-            } else {
-               console.log("Page: Interaction count updated in Supabase to:", newCount);
-            }
-        } catch (error: any) {
-            console.error("Page: Exception updating interaction count in Supabase:", error);
-            toast({ variant: "destructive", title: "Sync Error", description: "Could not save interaction count. Reverting UI." });
-            setUserProfile(prev => prev ? { ...prev, interaction_count: newCount - 1 } : null); 
-        }
-    } else if (!currentUser) { 
-        setGuestInteractionCount(prev => prev + 1);
+    if (currentUser && userProfile) {
+      if (userProfile.is_subscribed) return;
+      const newCount = (userProfile.interaction_count || 0) + 1;
+      try {
+        const { error } = await supabase
+          .from('user_profiles')
+          .update({ interaction_count: newCount })
+          .eq('user_id', currentUser.id);
+        if (error) throw error;
+        setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null);
+      } catch (error) {
+        console.error('Error updating interaction count:', error);
+      }
+    } else {
+      setGuestInteractionCount(prev => prev + 1);
     }
-  }, [currentUser, userProfile, supabase, setGuestInteractionCount, toast]);
+  }, [currentUser, userProfile, supabase]);
 
   const addToHistory = useCallback(async (itemToAdd: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'> & { actualProblemType: Exclude<ProblemType, 'random'> }) => {
     const newHistoryItem: InteractionHistoryItem = {
@@ -418,7 +404,26 @@ export default function AOLBEAMPage() {
   }, [setHistory, supabase, currentUser, toast, history, saveHistoryToLocalStorage]);
 
   const handleGenerateProblem = async (topic: string, type: ProblemType, difficulty: DifficultyLevel) => {
-    if ((currentUser && isLoadingPageProfile) || checkUsageLimit()) return;
+    if ((currentUser && isLoadingPageProfile) || checkUsageLimit()) {
+      if (checkUsageLimit()) {
+        if (!currentUser) {
+          toast({ 
+            variant: "destructive", 
+            title: "Free Limit Reached", 
+            description: "Please sign up or log in to continue generating problems." 
+          });
+          router.push('/login?redirect=/');
+        } else {
+          toast({ 
+            variant: "destructive", 
+            title: "Free Limit Reached", 
+            description: "Please upgrade to continue generating problems." 
+          });
+          setShowPaywall(true);
+        }
+      }
+      return;
+    }
 
     setIsLoadingProblem(true);
     setCurrentTopic(topic);

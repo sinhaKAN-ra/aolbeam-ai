@@ -106,3 +106,20 @@ export interface UserSubscription {
   updated_at: string;
   metadata?: Record<string, any>;
 }
+
+export type PaymentProvider = 'cashfree' | 'paypal' | 'lemonsqueezy';
+export type PaymentStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
+
+export interface PaymentOrder {
+  id: string;
+  user_id: string;
+  plan_id: string;
+  amount: number;
+  currency: string;
+  payment_provider: PaymentProvider;
+  provider_order_id: string;
+  status: PaymentStatus;
+  created_at: string;
+  updated_at: string;
+  metadata?: Record<string, any>;
+}

@@ -53,29 +53,46 @@ export async function loadCashfree(): Promise<CashfreeInstance> {
   return new Promise((resolve, reject) => {
     // If already loaded
     if (window.Cashfree) {
-      return resolve(new window.Cashfree.Constructor({
-        mode: process.env.NEXT_PUBLIC_CASHFREE_MODE || 'sandbox',
-      }));
+      try {
+        const cashfree = new window.Cashfree.Constructor({
+          mode: 'sandbox',
+        });
+        return resolve(cashfree);
+      } catch (error) {
+        console.error('Error initializing Cashfree:', error);
+        return reject(new Error('Failed to initialize Cashfree'));
+      }
     }
 
     // Load the script
     const script = document.createElement('script');
-    script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+    // Use the latest SDK version
+    script.src = 'https://sdk.cashfree.com/js/ui/2.0.1/cashfree.js';
     script.async = true;
     
     script.onload = () => {
-      if (window.Cashfree && window.Cashfree.Constructor) {
-        const cashfree = new window.Cashfree.Constructor({
-          mode: process.env.NEXT_PUBLIC_CASHFREE_MODE || 'sandbox',
-        });
-        resolve(cashfree);
-      } else {
-        reject(new Error('Cashfree SDK failed to load'));
-      }
+      // Add a small delay to ensure the SDK is fully initialized
+      setTimeout(() => {
+        if (window.Cashfree && window.Cashfree.Constructor) {
+          try {
+            const cashfree = new window.Cashfree.Constructor({
+              mode: 'sandbox',
+            });
+            resolve(cashfree);
+          } catch (error) {
+            console.error('Error creating Cashfree instance:', error);
+            reject(new Error('Failed to create Cashfree instance'));
+          }
+        } else {
+          console.error('Cashfree SDK not found after loading');
+          reject(new Error('Cashfree SDK not found'));
+        }
+      }, 100);
     };
     
-    script.onerror = () => {
-      reject(new Error('Failed to load Cashfree SDK'));
+    script.onerror = (error) => {
+      console.error('Error loading Cashfree SDK:', error);
+      reject(new Error('Failed to load Cashfree SDK script'));
     };
     
     document.body.appendChild(script);
@@ -117,11 +134,14 @@ export async function initializePayment(
       },
     };
 
+    // Set up event listeners before redirecting
     cashfree.payment.on('paymentSuccess', (data: any) => {
+      console.log('Payment Success:', data);
       onSuccess(data);
     });
 
     cashfree.payment.on('paymentFailure', (data: any) => {
+      console.error('Payment Failure:', data);
       onFailure(data);
     });
 
@@ -129,6 +149,7 @@ export async function initializePayment(
       console.log('Payment Event:', data);
     });
 
+    // Initialize the payment
     cashfree.payment.redirect(checkoutOptions);
     return cashfree;
   } catch (error) {
