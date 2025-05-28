@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS payment_orders (
 -- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS payment_orders_user_id_idx ON payment_orders(user_id);
 CREATE INDEX IF NOT EXISTS payment_orders_provider_order_id_idx ON payment_orders(provider_order_id);
+CREATE INDEX IF NOT EXISTS payment_orders_status_idx ON payment_orders(status);
 
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
