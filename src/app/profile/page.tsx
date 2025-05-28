@@ -41,7 +41,8 @@ import {
   RefreshCw, 
   CheckCircle, 
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Settings
 } from 'lucide-react';
 
 // Types
@@ -135,12 +136,12 @@ export default function ProfilePage() {
   
   const fetchUserProfile = useCallback(async () => {
     if (!user?.id) {
-      setIsLoading(false);
-      return;
+      // setIsLoading(false); // Let loadData handle initial non-user state
+      return null; // Return null if no user
     }
 
     try {
-      setIsLoading(true);
+      // setIsLoading(true); // Let loadData handle the overall loading state
       console.log('Fetching profile for user:', user.id);
       
       // First check if profile exists
@@ -169,24 +170,25 @@ export default function ProfilePage() {
             .single();
 
           if (createError) throw createError;
-          setProfile(newProfile);
-          return newProfile;
+          setProfile(newProfile as AppUserProfile); // Set profile here on successful creation
+          return newProfile as AppUserProfile;
         }
         throw profileError;
       }
       
-      setProfile(profileData);
-      return profileData;
+      setProfile(profileData as AppUserProfile); // Set profile here on successful fetch
+      return profileData as AppUserProfile;
     } catch (error) {
       console.error('Error fetching user profile:', error);
-      toast({
+      toast({ 
         variant: "destructive",
         title: "Profile Load Error",
         description: error instanceof Error ? error.message : "Failed to load or create user profile.",
       });
-      throw error;
+      // Do not re-throw, let loadData handle it
+      return null; // Return null on error
     } finally {
-      // setIsLoading(false); // Will be set by the effect calling this function
+      // setIsLoading(false); // Still let loadData manage this
     }
   }, [user, supabase, toast]);
 
@@ -223,7 +225,7 @@ export default function ProfilePage() {
 
   // Fetch interaction history
   const fetchInteractionHistory = useCallback(async (): Promise<InteractionHistoryItem[]> => {
-    if (!user?.id) return [];
+     if (!user?.id) return [];
 
     try {
       const { data: historyData, error: historyError } = await supabase
@@ -261,38 +263,47 @@ export default function ProfilePage() {
         actualProblemType: item.problem_type as any
       }));
 
-      setUserHistory(formattedHistory);
+      setUserHistory(formattedHistory); // Set history here on successful fetch
       return formattedHistory;
     } catch (error) {
       console.error('Error fetching interaction history:', error);
-      toast({
+      toast({ 
         variant: "destructive",
         title: "History Load Error",
         description: error instanceof Error ? error.message : "Failed to load interaction history.",
       });
-      throw error;
+      // Do not re-throw, let loadData handle it
+      return []; // Return empty array on error
     } finally {
-      // setIsLoading(false); // Will be set by the effect calling this function
+      // setIsLoading(false); // Still let loadData manage this
     }
   }, [user, supabase, toast]);
 
   // Main effect to load data
   useEffect(() => {
     const loadData = async () => {
-      setIsLoading(true);
+      setIsLoading(true); // Start loading
       try {
         if (!user) {
+          // If no user, stop loading and redirect
           setIsLoading(false);
           router.push('/login?redirect=/profile');
           return;
         }
         
+        // Fetch profile and history concurrently
         const profileResult = await fetchUserProfile();
-        const historyResult = await fetchInteractionHistory();
+        // Only fetch history if profile is successfully loaded/created
+        const historyResult = profileResult ? await fetchInteractionHistory() : [];
+
+        // States are set within the fetch functions now
+        // setProfile(profileResult);
+        // setUserHistory(historyResult || []);
 
         if (profileResult) {
-          const displayHistory = (historyResult || []).map((item: InteractionHistoryItem) => ({
-            id: item.id.toString(),
+           // Calculate stats only if profile and history are available
+           const displayHistory = (historyResult || []).map((item: InteractionHistoryItem) => ({
+            id: item.id.toString(), // Ensure id is string for DisplayHistoryItem
             timestamp: item.timestamp,
             topic: item.topic,
             problemType: item.problemType,
@@ -305,19 +316,28 @@ export default function ProfilePage() {
             topicDetails: item.topicDetails,
             timeTakenSeconds: item.timeTakenSeconds,
           }));
-          setUserHistory(historyResult || []);
-          calculateStats(displayHistory);
+           calculateStats(displayHistory);
+        } else {
+          // If profile failed to load, reset stats
+          setStats(null);
         }
         
       } catch (error) {
-        console.error("Error loading profile page data:", error);
+        console.error("Error loading profile page data:", error); // Errors are already toasted in fetch functions
       } finally {
-        setIsLoading(false);
+        // Ensure loading is false after attempt, but only if profile state has been updated (or is null)
+        // Adding a slight delay might help ensure state updates are processed
+        setTimeout(() => {
+            setIsLoading(false);
+        }, 50); // Small delay
       }
     };
 
-    if (!authLoading) {
+    if (!authLoading) { // Only load data once auth state is known
         loadData();
+    } else {
+        // If auth is loading, keep profile loading state true
+        setIsLoading(true);
     }
   }, [user, authLoading, fetchUserProfile, fetchInteractionHistory, calculateStats, router]);
 
@@ -346,11 +366,36 @@ export default function ProfilePage() {
     <div className="container mx-auto px-4 py-8 space-y-8">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Profile</h1>
-        <Button variant="outline" onClick={() => {
+        <Button variant="outline" onClick={async () => {
           setIsRefreshing(true);
-          fetchUserProfile().then(() => {
+          try {
+             const profileResult = await fetchUserProfile(); // Fetch profile
+             if (profileResult) {
+               // Only fetch history and calculate stats if profile is successful
+               const historyResult = await fetchInteractionHistory();
+                const displayHistory = (historyResult || []).map((item: InteractionHistoryItem) => ({
+                  id: item.id.toString(),
+                  timestamp: item.timestamp,
+                  topic: item.topic,
+                  problemType: item.problemType,
+                  difficulty: item.difficulty,
+                  problem: item.problem,
+                  userAnswer: item.userAnswer,
+                  selectedOption: item.selectedOption,
+                  evaluation: item.evaluation,
+                  isTopicRevised: item.isTopicRevised,
+                  topicDetails: item.topicDetails,
+                  timeTakenSeconds: item.timeTakenSeconds,
+                }));
+                calculateStats(displayHistory);
+             } else {
+               setStats(null);
+             }
+          } catch (error) {
+            console.error("Error refreshing profile:", error); // Error toast already in fetch functions
+          } finally {
             setIsRefreshing(false);
-          });
+          }
         }} disabled={isRefreshing}>
           {isRefreshing ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -523,28 +568,28 @@ export default function ProfilePage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <h3 className="text-sm font-medium">Name</h3>
-                  <p className="text-sm">{profile.full_name || 'Not set'}</p>
+                  <p className="text-sm">{profile?.full_name || 'Not set'}</p>
                 </div>
                 <div className="space-y-2">
                   <h3 className="text-sm font-medium">Email</h3>
-                  <p className="text-sm">{profile.email || 'Not set'}</p>
+                  <p className="text-sm">{profile?.email || 'Not set'}</p>
                 </div>
                 <div className="space-y-2">
                   <h3 className="text-sm font-medium">Account Status</h3>
                   <div className="flex items-center">
                     <div className={`h-2.5 w-2.5 rounded-full mr-2 ${
-                      profile.is_subscribed ? 'bg-green-500' : 'bg-yellow-500'
+                      profile?.is_subscribed ? 'bg-green-500' : 'bg-yellow-500'
                     }`}></div>
                     <span className="text-sm">
-                      {profile.is_subscribed ? 'Premium Account' : 'Free Account'}
+                      {profile?.is_subscribed ? 'Premium Account' : 'Free Account'}
                     </span>
                   </div>
                 </div>
                 <div className="space-y-2">
                   <h3 className="text-sm font-medium">Interactions</h3>
-                  <p className="text-sm">{profile.interaction_count || 0} problems attempted</p>
+                  <p className="text-sm">{profile?.interaction_count || 0} problems attempted</p>
                 </div>
-                {profile.subscription_started_at && (
+                {profile?.subscription_started_at && (
                   <div className="space-y-2">
                     <h3 className="text-sm font-medium">Member Since</h3>
                     <p className="text-sm">

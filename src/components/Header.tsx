@@ -245,28 +245,30 @@ export default function Header() {
                   </div>
                   <DropdownMenuSeparator />
                   {userMenuItems.map((item) => (
-                    <DropdownMenuItem
-                      key={item.label}
-                      asChild={!!item.href}
-                      onClick={item.onClick}
-                      className="cursor-pointer"
-                      disabled={isSigningOut && item.label === 'Sign out'}
-                    >
-                      {item.href ? (
-                        <Link href={item.href} className="w-full flex items-center">
-                          {item.icon}
-                          <span>{item.label}</span>
-                        </Link>
-                      ) : (
-                        <div className="flex w-full items-center">
-                          {item.icon}
-                          <span>{item.label}</span>
-                          {isSigningOut && item.label === 'Sign out' && (
-                            <Loader2 className="ml-2 h-3 w-3 animate-spin" />
-                          )}
-                        </div>
-                      )}
-                    </DropdownMenuItem>
+                    item.label === 'Settings' ? null : (
+                      <DropdownMenuItem
+                        key={item.label}
+                        asChild={!!item.href}
+                        onClick={item.onClick}
+                        className="cursor-pointer"
+                        disabled={isSigningOut && item.label === 'Sign out'}
+                      >
+                        {item.href ? (
+                          <Link href={item.href} className="w-full flex items-center">
+                            {item.icon}
+                            <span>{item.label}</span>
+                          </Link>
+                        ) : (
+                          <div className="flex w-full items-center">
+                            {item.icon}
+                            <span>{item.label}</span>
+                            {isSigningOut && item.label === 'Sign out' && (
+                              <Loader2 className="ml-2 h-3 w-3 animate-spin" />
+                            )}
+                          </div>
+                        )}
+                      </DropdownMenuItem>
+                    )
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
