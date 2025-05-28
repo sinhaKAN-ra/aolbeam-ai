@@ -12,6 +12,8 @@ export async function GET(request: Request) {
     const code = requestUrl.searchParams.get('code');
     const error = requestUrl.searchParams.get('error');
     const errorDescription = requestUrl.searchParams.get('error_description');
+    const state = requestUrl.searchParams.get('state');
+    const redirectTo = requestUrl.searchParams.get('redirectTo') || '/';
 
     // Handle OAuth errors
     if (error) {
@@ -50,22 +52,16 @@ export async function GET(request: Request) {
       );
     }
 
-    // Get the redirect URL from the state parameter or default to home
-    const redirectTo = requestUrl.searchParams.get('redirectTo') || '/';
-    
-    // Set the session cookie
+    // Create a response that will redirect the user
     const response = NextResponse.redirect(`${requestUrl.origin}${redirectTo}`);
     
-    // Ensure the session cookie is set
-    const { data: { session: newSession } } = await supabase.auth.getSession();
-    if (newSession) {
-      response.cookies.set('sb-auth-token', newSession.access_token, {
-        path: '/',
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 60 * 60 * 24 * 7, // 1 week
-      });
-    }
+    // Set the session cookie
+    response.cookies.set('sb-auth-token', session.access_token, {
+      path: '/',
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 7, // 1 week
+    });
 
     return response;
   } catch (error) {

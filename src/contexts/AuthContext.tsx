@@ -124,14 +124,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Store the state in sessionStorage before the OAuth flow starts
       sessionStorage.setItem('oauth_state', state);
       
+      // Get the current path to redirect back after sign in
+      const redirectAfterSignIn = window.location.pathname + window.location.search;
+      
+      // Create a URLSearchParams object to handle the state parameter
+      const searchParams = new URLSearchParams();
+      searchParams.set('state', state);
+      searchParams.set('redirectTo', redirectAfterSignIn);
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo,
+          redirectTo: `${redirectTo}?${searchParams.toString()}`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
-            state: state // Pass the state parameter to the OAuth flow
           },
           skipBrowserRedirect: false,
         },
