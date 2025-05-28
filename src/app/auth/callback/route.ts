@@ -52,8 +52,21 @@ export async function GET(request: Request) {
       );
     }
 
+    // Handle localhost redirects in development
+    let redirectUrl = redirectTo;
+    const isLocalhost = requestUrl.hostname === 'localhost' || requestUrl.hostname === '127.0.0.1';
+    
+    if (isLocalhost && redirectTo.startsWith('http')) {
+      const url = new URL(redirectTo);
+      url.hostname = 'localhost';
+      url.port = process.env.PORT || '3000';
+      redirectUrl = url.toString();
+    } else if (!redirectTo.startsWith('http')) {
+      redirectUrl = `${isLocalhost ? `http://localhost:${process.env.PORT || '3000'}` : requestUrl.origin}${redirectTo}`;
+    }
+    
     // Create a response that will redirect the user
-    const response = NextResponse.redirect(`${requestUrl.origin}${redirectTo}`);
+    const response = NextResponse.redirect(redirectUrl);
     
     // Set the session cookie
     response.cookies.set('sb-auth-token', session.access_token, {

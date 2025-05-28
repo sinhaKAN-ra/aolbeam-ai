@@ -115,7 +115,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithGoogle = useCallback(async () => {
     try {
       setIsLoading(true);
-      const origin = window.location.origin;
+      // Always use localhost for development
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const origin = isLocalhost 
+        ? `http://localhost:${window.location.port || 9002}`
+        : window.location.origin;
       const redirectTo = `${origin}/auth/callback`;
       
       // Generate a random state parameter for security
