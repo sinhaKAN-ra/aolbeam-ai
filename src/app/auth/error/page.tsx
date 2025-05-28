@@ -1,18 +1,14 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 
-export default function AuthErrorPage() {
+function ErrorContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const error = searchParams.get('error');
-
-  useEffect(() => {
-    console.error('Auth Error Page: Error details:', error);
-  }, [error]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -42,5 +38,23 @@ export default function AuthErrorPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AuthErrorPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="max-w-md w-full mx-auto p-8">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-foreground mb-4">
+              Loading...
+            </h1>
+          </div>
+        </div>
+      </div>
+    }>
+      <ErrorContent />
+    </Suspense>
   );
 } 
