@@ -117,10 +117,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       console.log('AuthProvider: Starting Google sign in...');
       
+      // Get the current origin (handles both development and production)
+      const origin = window.location.origin;
+      console.log('AuthProvider: Using redirect URL:', `${origin}/auth/callback`);
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${origin}/auth/callback`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
