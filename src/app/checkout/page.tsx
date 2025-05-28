@@ -35,6 +35,13 @@ import type { ReactPayPalScriptOptions } from "@paypal/react-paypal-js";
 import { getCurrencyDetails, convertAmount, formatCurrency, getExchangeRates } from '@/lib/utils/currency';
 import { loadCashfree } from '@/services/cashfree';
 import { loadLemonSqueezy, initializeLemonSqueezy, openCheckout } from '@/services/lemonsqueezy';
+import dynamic from 'next/dynamic';
+
+// Dynamically import the toast wrapper with no SSR
+const CheckoutToastWrapper = dynamic(
+  () => import('@/components/CheckoutToastWrapper'),
+  { ssr: false }
+);
 
 // Base prices in INR
 const BASE_PLANS = {
@@ -307,6 +314,8 @@ function CheckoutPageContent() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [convertedPlans, setConvertedPlans] = useState<ConvertedPlans | null>(null);
   const [contactMethod, setContactMethod] = useState<'whatsapp' | 'email' | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [success, setSuccess] = useState<string | null>(null);
   
   // Get the plan based on the URL parameter
   const planId = searchParams.get('plan') as PlanId | null;
@@ -815,7 +824,12 @@ function CheckoutPageContent() {
     </div>
   );
 
-  return content;
+  return (
+    <div className="min-h-screen bg-background">
+      <CheckoutToastWrapper error={paymentError} success={success} />
+      {content}
+    </div>
+  );
 }
 
 // Simple AuthGuard component

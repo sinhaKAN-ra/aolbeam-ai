@@ -8,6 +8,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useAuth } from '@/contexts/AuthContext';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Database } from '@/lib/supabase/database.types'; // Import your database types
+import dynamic from 'next/dynamic';
+
+// Dynamically import the toast wrapper with no SSR
+const PaymentSuccessToastWrapper = dynamic(
+  () => import('@/components/PaymentSuccessToastWrapper'),
+  { ssr: false }
+);
 
 export default function PaymentSuccessPageContent() {
   const searchParams = useSearchParams();
@@ -16,6 +23,11 @@ export default function PaymentSuccessPageContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const supabase = createClientComponentClient<Database>();
+
+  // Get payment parameters
+  const paymentStatus = searchParams.get('payment_status');
+  const paymentMethod = searchParams.get('payment_method')?.toLowerCase() || null;
+  const orderId = searchParams.get('token');
 
   useEffect(() => {
     const handlePaymentSuccess = async () => {
@@ -27,12 +39,9 @@ export default function PaymentSuccessPageContent() {
         }
 
         // Validate required parameters
-        const paymentStatus = searchParams.get('payment_status');
-        const paymentMethod = searchParams.get('payment_method')?.toLowerCase();
-        const orderId = searchParams.get('token');
-        const planId = searchParams.get('plan_id'); // Assuming plan_id is passed as a search param
-        const amount = searchParams.get('amount'); // Assuming amount is passed as a search param
-        const currency = searchParams.get('currency')?.toUpperCase(); // Assuming currency is passed as a search param
+        const planId = searchParams.get('plan_id');
+        const amount = searchParams.get('amount');
+        const currency = searchParams.get('currency')?.toUpperCase();
         
         console.log('Payment success parameters:', {
           paymentStatus,
@@ -202,7 +211,7 @@ export default function PaymentSuccessPageContent() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">Processing your payment...</p>
+          <p className="text-muted-foreground">Processing payment...</p>
         </div>
       </div>
     );
@@ -210,21 +219,17 @@ export default function PaymentSuccessPageContent() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center">
         <Card className="max-w-md w-full">
           <CardHeader>
             <div className="flex justify-center mb-4">
-              <AlertCircle className="h-16 w-16 text-destructive" />
+              <AlertCircle className="h-12 w-12 text-red-500" />
             </div>
-            <CardTitle className="text-xl text-center">Payment Error</CardTitle>
-            <CardDescription className="text-center">
-              {error}
-            </CardDescription>
+            <CardTitle className="text-center">Payment Error</CardTitle>
+            <CardDescription className="text-center">{error}</CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center">
-            <Button onClick={() => router.push('/pricing')}>
-              Return to Pricing
-            </Button>
+            <Button onClick={() => router.push('/pricing')}>Return to Pricing</Button>
           </CardContent>
         </Card>
       </div>
@@ -232,34 +237,24 @@ export default function PaymentSuccessPageContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center">
+      <PaymentSuccessToastWrapper 
+        paymentStatus={paymentStatus}
+        paymentMethod={paymentMethod}
+        orderId={orderId}
+      />
       <Card className="max-w-md w-full">
         <CardHeader>
           <div className="flex justify-center mb-4">
-            <CheckCircle2 className="h-16 w-16 text-green-500" />
+            <CheckCircle2 className="h-12 w-12 text-green-500" />
           </div>
-          <CardTitle className="text-xl text-center">Payment Successful!</CardTitle>
+          <CardTitle className="text-center">Payment Successful!</CardTitle>
           <CardDescription className="text-center">
-            Thank you for your purchase. Your subscription is now active.
+            Thank you for your subscription. You now have full access to all features.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="text-center space-y-2">
-            <p className="text-sm text-muted-foreground">
-              Order ID: {searchParams.get('token')}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Payment Method: {searchParams.get('payment_method')}
-            </p>
-          </div>
-          <div className="flex justify-center gap-4">
-            <Button onClick={() => router.push('/profile')}>
-              Go to Profile
-            </Button>
-            <Button variant="outline" onClick={() => router.push('/')}>
-              Return Home
-            </Button>
-          </div>
+        <CardContent className="flex justify-center">
+          <Button onClick={() => router.push('/')}>Return to Home</Button>
         </CardContent>
       </Card>
     </div>

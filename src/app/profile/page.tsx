@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSupabase } from '@/hooks/useSupabase';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { formatDistanceToNow, format } from 'date-fns';
 import { HistoryView } from '@/components/HistoryView';
 import type { InteractionHistoryItem } from '@/types';

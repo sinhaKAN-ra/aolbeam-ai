@@ -4,10 +4,14 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
 // Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error('Missing required Supabase environment variables');
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export async function POST(request: Request) {
   try {
@@ -47,7 +51,7 @@ export async function POST(request: Request) {
         customer_details: {
           customer_id: session.user.id,
           customer_email: session.user.email!,
-          customer_phone: session.user.phone || '9999999999'
+          customer_phone: '9999999999' // Default phone number since it's not in session
         },
         order_meta: {
           return_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment-test?order_id={order_id}&order_token={order_token}`

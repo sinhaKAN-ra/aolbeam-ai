@@ -1,4 +1,3 @@
-
 "use client";
 
 import type * as React from 'react';
@@ -12,7 +11,7 @@ import { Send, Loader2, ThumbsUp, MessageCircleQuestion, PlayCircle, TimerIcon, 
 import type { GeneratePracticeProblemOutput } from '@/ai/flows/generate-practice-problem';
 import type { ProblemType } from '@/types';
 import MathRenderer from './MathRenderer';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 
 export type FeedbackRating = "" | "good" | "unclear" | "incorrect_ans" | "irrelevant";
 

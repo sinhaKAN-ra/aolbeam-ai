@@ -6,6 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+
+// Dynamically import the toast component
+const ToastWrapper = dynamic(() => import('@/components/ToastWrapper'), { ssr: false });
 
 function PaymentReturnContent() {
   const searchParams = useSearchParams();
@@ -36,6 +40,7 @@ function PaymentReturnContent() {
 
   return (
     <div className="container mx-auto px-4 py-16 text-center">
+      <ToastWrapper orderId={orderId} status={status} />
       <Card className="max-w-md mx-auto">
         <CardHeader>
           <div className="flex justify-center mb-4">

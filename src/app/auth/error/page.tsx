@@ -4,6 +4,13 @@ import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+// Dynamically import the toast wrapper with no SSR
+const AuthErrorToastWrapper = dynamic(
+  () => import('@/components/AuthErrorToastWrapper'),
+  { ssr: false }
+);
 
 function ErrorContent() {
   const searchParams = useSearchParams();
@@ -12,6 +19,7 @@ function ErrorContent() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
+      <AuthErrorToastWrapper error={error} />
       <div className="max-w-md w-full mx-auto p-8">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-foreground mb-4">

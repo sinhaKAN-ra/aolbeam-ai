@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { loadCashfree, type CashfreeInstance } from '@/services/cashfree';
-import { toast } from '@/hooks/use-toast';
+import { toast } from '@/components/ui/use-toast';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useSupabase } from './useSupabase';
 
