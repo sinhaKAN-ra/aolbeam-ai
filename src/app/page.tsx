@@ -244,15 +244,18 @@ export default function AOLBEAMPage() {
   useEffect(() => {
     if (!isAuthLoading) {
       if (currentUser) {
+        // Reset the fetch flag when user changes
+        hasFetchedProfile.current = false;
         fetchAndSetUserProfile(currentUser);
       } else {
         // If auth loading is done and there's no current user, profile loading is also done
         setUserProfile(null);
         setIsLoadingPageProfile(false);
+        hasFetchedProfile.current = false;
       }
     } else {
-       // Still loading auth, so profile loading is also ongoing
-       setIsLoadingPageProfile(true); // Keep loading state true while auth is loading
+      // Still loading auth, so profile loading is also ongoing
+      setIsLoadingPageProfile(true);
     }
   }, [currentUser, isAuthLoading, fetchAndSetUserProfile]);
 
@@ -262,9 +265,11 @@ export default function AOLBEAMPage() {
     );
   }, [isLoadingPageProfile, currentUser, userProfile]);
 
+  // Cleanup effect
   useEffect(() => {
     return () => {
       console.log("Page: Cleaning up AOLBEAMPage component");
+      hasFetchedProfile.current = false;
     };
   }, []);
 

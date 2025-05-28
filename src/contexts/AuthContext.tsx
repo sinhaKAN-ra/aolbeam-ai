@@ -35,17 +35,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('AuthProvider: Getting initial session');
         const { data: { session: initialSession }, error } = await supabase.auth.getSession();
         
-        if (error) throw error;
+        if (error) {
+          console.error('AuthProvider: Error getting initial session:', error);
+          throw error;
+        }
         
-        console.log('AuthProvider: Initial session:', initialSession ? 'Found' : 'Not found');
+        console.log('AuthProvider: Initial session:', initialSession ? {
+          user: initialSession.user?.email,
+          expires_at: initialSession.expires_at,
+          access_token: initialSession.access_token ? 'present' : 'missing'
+        } : 'Not found');
+
         if (mounted) {
-          setSession(initialSession);
-          setUser(initialSession?.user ?? null);
+          if (initialSession) {
+            setSession(initialSession);
+            setUser(initialSession.user);
+          } else {
+            setSession(null);
+            setUser(null);
+          }
+          setIsLoading(false);
         }
       } catch (error) {
         console.error('AuthProvider: Error getting initial session:', error);
-      } finally {
         if (mounted) {
+          setSession(null);
+          setUser(null);
           setIsLoading(false);
         }
       }
@@ -56,14 +71,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
-        console.log('AuthProvider: Auth state changed:', event);
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-        setIsLoading(false);
+        console.log('AuthProvider: Auth state changed:', {
+          event,
+          user: newSession?.user?.email,
+          expires_at: newSession?.expires_at,
+          access_token: newSession?.access_token ? 'present' : 'missing'
+        });
+        
+        if (mounted) {
+          if (newSession) {
+            setSession(newSession);
+            setUser(newSession.user);
+          } else {
+            setSession(null);
+            setUser(null);
+          }
+          setIsLoading(false);
 
-        // Handle specific auth events
-        if (event === 'SIGNED_IN') {
-          router.refresh(); // Refresh the page to update the UI
+          // Handle specific auth events
+          if (event === 'SIGNED_IN') {
+            console.log('AuthProvider: User signed in, refreshing page');
+            router.refresh();
+          } else if (event === 'SIGNED_OUT') {
+            console.log('AuthProvider: User signed out, clearing state');
+            setSession(null);
+            setUser(null);
+            router.refresh();
+          } else if (event === 'TOKEN_REFRESHED') {
+            console.log('AuthProvider: Token refreshed');
+            router.refresh();
+          }
         }
       }
     );
@@ -73,11 +110,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       subscription?.unsubscribe();
     };
-  }, [router]);
+  }, [router, supabase.auth]);
 
   const signInWithGoogle = useCallback(async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      setIsLoading(true);
+      console.log('AuthProvider: Starting Google sign in...');
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
@@ -85,9 +125,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             access_type: 'offline',
             prompt: 'consent',
           },
+          skipBrowserRedirect: false,
         },
       });
-      if (error) throw error;
+
+      if (error) {
+        console.error('AuthProvider: Google sign in error:', error);
+        throw error;
+      }
+
+      console.log('AuthProvider: Google sign in initiated:', data);
+      // The redirect will happen automatically
     } catch (error) {
       console.error('AuthProvider: Error signing in with Google:', error);
       toast({
@@ -95,9 +143,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: error instanceof Error ? error.message : 'Failed to sign in with Google',
         variant: 'destructive',
       });
+      setIsLoading(false);
       throw error;
     }
-  }, [toast]);
+  }, [toast, supabase.auth]);
 
   const signOut = useCallback(async () => {
     try {
