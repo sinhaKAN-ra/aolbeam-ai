@@ -114,17 +114,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = useCallback(async () => {
     try {
-      setIsLoading(true);
-      console.log('AuthProvider: Starting Google sign in...');
-      
-      // Get the current origin (handles both development and production)
-      const origin = window.location.origin;
-      console.log('AuthProvider: Using redirect URL:', `${origin}/auth/callback`);
-      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${origin}/auth/callback`,
+          redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -133,24 +126,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
 
-      if (error) {
-        console.error('AuthProvider: Google sign in error:', error);
-        throw error;
-      }
-
-      console.log('AuthProvider: Google sign in initiated:', data);
+      if (error) throw error;
       // The redirect will happen automatically
     } catch (error) {
-      console.error('AuthProvider: Error signing in with Google:', error);
-      toast({
-        title: 'Sign in failed',
-        description: error instanceof Error ? error.message : 'Failed to sign in with Google',
-        variant: 'destructive',
-      });
-      setIsLoading(false);
+      console.error('Error signing in with Google:', error);
       throw error;
     }
-  }, [toast, supabase.auth]);
+  }, [supabase.auth]);
 
   const signOut = useCallback(async () => {
     try {
