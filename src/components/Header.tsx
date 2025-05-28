@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -71,6 +71,7 @@ interface UserMenuItem {
 export default function Header() {
   const { toast } = useToast();
   const router = useRouter();
+  const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { user, isLoading, signInWithGoogle, signOut } = useAuth();
   const [userInitials, setUserInitials] = useState('');
@@ -274,13 +275,15 @@ export default function Header() {
               </DropdownMenu>
             ) : (
               <Button
-                onClick={handleSignIn}
+                asChild
                 variant="outline"
                 className="flex items-center gap-2"
                 disabled={isLoading}
               >
-                <GoogleIcon className="h-4 w-4" />
-                <span className="hidden sm:inline">Sign in</span>
+                <Link href={`/login?redirect=${encodeURIComponent(pathname)}`}>
+                  <GoogleIcon className="h-4 w-4" />
+                  <span className="hidden sm:inline">Sign in</span>
+                </Link>
               </Button>
             )}
             <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileNavOpen(!mobileNavOpen)}>
