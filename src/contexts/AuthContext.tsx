@@ -114,10 +114,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = useCallback(async () => {
     try {
+      setIsLoading(true);
+      const origin = window.location.origin;
+      const redirectTo = `${origin}/auth/callback`;
+      
+      // Generate a random state parameter for security
+      const state = Math.random().toString(36).substring(7);
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -126,13 +133,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('AuthProvider: Google sign in error:', error);
+        toast({
+          title: 'Sign in failed',
+          description: error.message,
+          variant: 'destructive',
+        });
+        throw error;
+      }
+
+      // Store the state in sessionStorage for verification
+      sessionStorage.setItem('oauth_state', state);
+      
+      console.log('AuthProvider: Google sign in initiated:', data);
       // The redirect will happen automatically
     } catch (error) {
-      console.error('Error signing in with Google:', error);
+      console.error('AuthProvider: Error signing in with Google:', error);
+      toast({
+        title: 'Sign in failed',
+        description: error instanceof Error ? error.message : 'Failed to sign in with Google',
+        variant: 'destructive',
+      });
       throw error;
+    } finally {
+      setIsLoading(false);
     }
-  }, [supabase.auth]);
+  }, [toast, supabase.auth]);
 
   const signOut = useCallback(async () => {
     try {
