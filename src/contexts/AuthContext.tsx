@@ -186,7 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('AuthProvider: Error refreshing session:', error);
       return null;
     }
-  }, []);
+  }, [supabase.auth]);
 
   const value = useMemo(() => ({
     user,
