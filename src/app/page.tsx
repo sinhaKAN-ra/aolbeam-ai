@@ -23,7 +23,7 @@ import {
 import { RefreshCw, FilePlus2, ArrowRight, Loader2 } from 'lucide-react';
 
 import type { InteractionHistoryItem, ProblemType, UserProfile, DifficultyLevel } from '@/types';
-import { ProblemGenerator } from '@/components/ProblemGenerator';
+import { ProblemGenerator, type ProblemGeneratorHandles } from '@/components/ProblemGenerator';
 import { ProblemDisplay } from '@/components/ProblemDisplay';
 import { EvaluationResult } from '@/components/EvaluationResult';
 import { ProblemInsights } from '@/components/ProblemInsights';
@@ -73,6 +73,7 @@ export default function AOLBEAMPage() {
 
   // Refs
   const problemGeneratorRef = useRef<HTMLDivElement>(null);
+  const problemGeneratorComponentRef = useRef<ProblemGeneratorHandles>(null);
   
   // Initialize client-side state and fetch initial data
   useEffect(() => {
@@ -89,17 +90,13 @@ export default function AOLBEAMPage() {
       }
     }
     
-    // Fetch user profile if authenticated
-    if (currentUser) {
-      fetchAndSetUserProfile(currentUser);
-    } else {
-      setIsLoadingPageProfile(false);
-    }
+    // Initial profile fetch handled by the useEffect below that watches isAuthLoading
+    // No need to call fetchAndSetUserProfile here based on initial currentUser state
     
     return () => {
       // Cleanup if needed
     };
-  }, [currentUser]);
+  }, []); // Empty dependency array to run only once on mount
   
   // Save history to localStorage when it changes
   const saveHistoryToLocalStorage = useCallback((newHistory: InteractionHistoryItem[]) => {
@@ -111,6 +108,10 @@ export default function AOLBEAMPage() {
   // Scroll to problem generator helper
   const scrollToProblemGenerator = useCallback(() => {
     problemGeneratorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // After scrolling, wait a bit for the scroll to finish, then focus the input
+    setTimeout(() => {
+      problemGeneratorComponentRef.current?.focusTopicInput();
+    }, 500); // Adjust timeout as needed
   }, []);
   
 
@@ -239,14 +240,19 @@ export default function AOLBEAMPage() {
     [supabase, toast]
   );
 
+  // Effect to handle auth state changes and fetch profile
   useEffect(() => {
     if (!isAuthLoading) {
       if (currentUser) {
         fetchAndSetUserProfile(currentUser);
       } else {
+        // If auth loading is done and there's no current user, profile loading is also done
         setUserProfile(null);
         setIsLoadingPageProfile(false);
       }
+    } else {
+       // Still loading auth, so profile loading is also ongoing
+       setIsLoadingPageProfile(true); // Keep loading state true while auth is loading
     }
   }, [currentUser, isAuthLoading, fetchAndSetUserProfile]);
 
@@ -263,8 +269,8 @@ export default function AOLBEAMPage() {
   }, []);
 
   const checkUsageLimit = useCallback(() => {
-    if (currentUser && userProfile) {
-      if (userProfile.is_subscribed) return false;
+    if (currentUser && userProfile) { 
+      if (userProfile.is_subscribed) return false; 
       return (userProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT;
     }
     return guestInteractionCount >= FREE_INTERACTION_LIMIT;
@@ -273,19 +279,19 @@ export default function AOLBEAMPage() {
   const incrementInteraction = useCallback(async () => {
     if (currentUser && userProfile) {
       if (userProfile.is_subscribed) return;
-      const newCount = (userProfile.interaction_count || 0) + 1;
-      try {
-        const { error } = await supabase
-          .from('user_profiles')
-          .update({ interaction_count: newCount })
+        const newCount = (userProfile.interaction_count || 0) + 1;
+        try {
+            const { error } = await supabase
+                .from('user_profiles')
+                .update({ interaction_count: newCount })
           .eq('user_id', currentUser.id);
         if (error) throw error;
         setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null);
       } catch (error) {
         console.error('Error updating interaction count:', error);
       }
-    } else {
-      setGuestInteractionCount(prev => prev + 1);
+            } else {
+        setGuestInteractionCount(prev => prev + 1);
     }
   }, [currentUser, userProfile, supabase]);
 
@@ -678,10 +684,24 @@ export default function AOLBEAMPage() {
             Beam into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
               Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
             </p>
-            <div className="mt-10">
-              <Button size="lg" onClick={scrollToProblemGenerator} className="text-lg px-8 py-3 shadow-lg hover:shadow-primary/30 transition-shadow">
-                Generate Your First Problem <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
+            <div className="mt-10 py-16 text-center">
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">Ready to Start Practicing?</h2>
+             
+              <Button
+  size="lg"
+  onClick={scrollToProblemGenerator}
+  className="group relative inline-flex items-center justify-center text-lg font-semibold px-8 py-3 
+             rounded-2xl bg-gradient-to-r from-primary to-primary/80 
+             text-white shadow-xl hover:shadow-2xl transition-all duration-300 ease-in-out 
+             hover:from-primary/90 hover:to-primary/70 
+             focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
+>
+  <span className="mr-2 transition-transform duration-300 group-hover:-translate-x-1">
+    Generate Your First Problem
+  </span>
+  <ArrowRight className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
+</Button>
+
             </div>
           </div>
         </div>
@@ -699,6 +719,7 @@ export default function AOLBEAMPage() {
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8 relative">
             <div className="lg:col-span-3 flex flex-col gap-6">
               <ProblemGenerator
+                ref={problemGeneratorComponentRef}
                 onGenerate={handleGenerateProblem}
                 isLoading={isLoadingProblem || (!!currentUser && isLoadingPageProfile)}
                 defaultTopic={currentTopic}

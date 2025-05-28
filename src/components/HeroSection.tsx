@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Brain, BookOpen, Lightbulb } from 'lucide-react';
+import { ArrowRight, BookOpen, Lightbulb } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export function HeroSection() {
   return (
@@ -35,7 +36,13 @@ export function HeroSection() {
               <div className="absolute inset-0 rounded-2xl border-2 border-dashed border-primary/20"></div>
               <div className="relative z-10 space-y-6 text-center">
                 <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                  <Brain className="h-8 w-8 text-primary" />
+                  <Image
+                    src="/assets/logo.png"
+                    alt="AOLBEAM Logo"
+                    width={40}
+                    height={40}
+                    className="h-10 w-10"
+                  />
                 </div>
                 <h3 className="text-xl font-semibold">Smart Learning</h3>
                 <p className="text-muted-foreground">

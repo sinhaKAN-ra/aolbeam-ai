@@ -1,6 +1,5 @@
-
 import type {Metadata} from 'next';
-import {Geist, Geist_Mono} from 'next/font/google';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import 'katex/dist/katex.min.css'; // Import KaTeX CSS
 import { Toaster } from "@/components/ui/toaster";
@@ -10,19 +9,19 @@ import HeaderWrapper from '@/components/HeaderWrapper';
 import Footer from '@/components/Footer'; // Import the Footer
 import { AuthProvider } from '@/contexts/AuthContext';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const inter = Inter({
   subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+  weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],
 });
 
 export const metadata: Metadata = {
-  title: 'AOLBEAM: Access of Learning',
-  description: 'AI-powered practice problems. Beam into the world of knowledge.',
+  title: 'Aolbeam AI - Your AI Learning Assistant',
+  description: 'Personalized AI learning assistant for students preparing for competitive exams',
+  icons: {
+    icon: '/assets/logo.png',
+  },
 };
 
 export default function RootLayout({
@@ -31,8 +30,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className="h-full">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-col h-full`}>
+    <html lang="en" suppressHydrationWarning className={`h-full ${inter.variable}`}>
+      <body className="antialiased flex flex-col h-full font-sans">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

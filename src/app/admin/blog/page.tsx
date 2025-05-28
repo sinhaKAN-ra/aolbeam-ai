@@ -1,4 +1,3 @@
-
 // src/app/admin/blog/page.tsx
 "use client";
 
@@ -9,9 +8,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { generateBlogPost, type GenerateBlogPostInput, type GenerateBlogPostOutput } from '@/ai/flows/generate-blog-post';
+// Removed: import { generateBlogPost, type GenerateBlogPostInput, type GenerateBlogPostOutput } from '@/ai/flows/generate-blog-post';
 import { Loader2, FileText, Link as LinkIcon, Wand2, Info } from 'lucide-react';
 // Footer is now global
+
+// Define the output type based on the expected API response
+interface BlogPostApiOutput {
+  title: string;
+  suggestedSlug: string;
+  metaDescription: string;
+  content: string;
+}
 
 export default function AdminBlogPage() {
   const { toast } = useToast();
@@ -21,7 +28,7 @@ export default function AdminBlogPage() {
   const [tone, setTone] = useState('informative and encouraging');
   
   const [isLoading, setIsLoading] = useState(false);
-  const [generatedPost, setGeneratedPost] = useState<GenerateBlogPostOutput | null>(null);
+  const [generatedPost, setGeneratedPost] = useState<BlogPostApiOutput | null>(null);
 
   const handleGeneratePost = async () => {
     if (!topic.trim()) {
@@ -36,13 +43,27 @@ export default function AdminBlogPage() {
     setIsLoading(true);
     setGeneratedPost(null);
     try {
-      const input: GenerateBlogPostInput = {
+      const input = {
         topic,
         keywords: keywords.split(',').map(k => k.trim()).filter(k => k),
         targetAudience,
         tone,
       };
-      const result = await generateBlogPost(input);
+      
+      const response = await fetch('/api/generate-blog-post', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || errorData.error || 'Failed to generate blog post');
+      }
+
+      const result: BlogPostApiOutput = await response.json();
       setGeneratedPost(result);
       toast({
         title: "Blog Post Draft Generated!",
@@ -53,7 +74,7 @@ export default function AdminBlogPage() {
       toast({
         variant: "destructive",
         title: "Generation Failed",
-        description: "Could not generate blog post draft. Please try again.",
+        description: error instanceof Error ? error.message : "Could not generate blog post draft. Please try again.",
       });
     } finally {
       setIsLoading(false);

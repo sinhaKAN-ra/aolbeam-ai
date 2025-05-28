@@ -1,4 +1,3 @@
-
 // src/components/Footer.tsx
 "use client"; // Make it a client component to fetch user session
 
@@ -8,6 +7,7 @@ import type { User } from '@supabase/supabase-js';
 import { useSupabase } from '@/hooks/useSupabase';
 import { Brain, FileText, ShieldCheck, DollarSign, Mail, Rss, Briefcase, BookOpen, Award, BriefcaseBusiness, GraduationCap, Scaling, Instagram, Linkedin } from 'lucide-react';
 import { Info as AboutIcon } from 'lucide-react';
+import Image from 'next/image';
 
 const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
 
@@ -74,8 +74,16 @@ export default function Footer() {
     <footer className="w-full py-8 border-t bg-card/50 mt-auto">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <div className="mb-4 flex justify-center items-center gap-2">
-          <Brain className="h-7 w-7 text-primary" />
-          <p className="text-xl font-semibold text-primary">AOLBEAM</p>
+          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <Image
+              src="/assets/logo.png"
+              alt="AOLBEAM Logo"
+              width={32}
+              height={32}
+              className="h-8 w-8"
+            />
+          </div>
+          <p className="text-2xl font-bold text-primary">AOLBEAM</p>
         </div>
         <p className="text-sm text-muted-foreground mb-6 max-w-xl mx-auto">
           Access of Learning: Beam into the world of knowledge. Your AI partner for acing competitive exams.

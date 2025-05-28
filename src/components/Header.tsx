@@ -32,6 +32,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import Image from 'next/image';
 
 const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
 
@@ -186,8 +187,17 @@ export default function Header() {
     <header className="sticky top-0 z-30 w-full border-b bg-background/95 backdrop-blur-sm">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-primary">
-            <Brain className="h-7 w-7" /> AOLBEAM
+          <Link href="/" className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <Image
+                src="/assets/logo.png"
+                alt="AOLBEAM Logo"
+                width={32}
+                height={32}
+                className="h-8 w-8"
+              />
+            </div>
+            <span className="text-2xl font-bold text-primary">AOLBEAM</span>
           </Link>
           
           <nav className="hidden md:flex items-center gap-1">

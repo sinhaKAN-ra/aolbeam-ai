@@ -40,7 +40,8 @@ import {
   Loader2, 
   RefreshCw, 
   CheckCircle, 
-  XCircle
+  XCircle,
+  AlertCircle
 } from 'lucide-react';
 
 // Types
@@ -178,8 +179,16 @@ export default function ProfilePage() {
       return profileData;
     } catch (error) {
       console.error('Error fetching user profile:', error);
+      toast({
+        variant: "destructive",
+        title: "Profile Load Error",
+        description: error instanceof Error ? error.message : "Failed to load or create user profile.",
+      });
+      throw error;
+    } finally {
+      // setIsLoading(false); // Will be set by the effect calling this function
     }
-  }, [user, supabase]);
+  }, [user, supabase, toast]);
 
   // Calculate statistics
   const calculateStats = useCallback((history: DisplayHistoryItem[]) => {
@@ -257,72 +266,60 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('Error fetching interaction history:', error);
       toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to load interaction history.',
+        variant: "destructive",
+        title: "History Load Error",
+        description: error instanceof Error ? error.message : "Failed to load interaction history.",
       });
-      return [];
+      throw error;
+    } finally {
+      // setIsLoading(false); // Will be set by the effect calling this function
     }
   }, [user, supabase, toast]);
 
-  // Handle refresh
-  const handleRefresh = useCallback(async () => {
-    try {
-      setIsRefreshing(true);
-      const [profileData, historyData] = await Promise.all([
-        fetchUserProfile(),
-        fetchInteractionHistory()
-      ]);
-
-      if (historyData && historyData.length > 0) {
-        calculateStats(historyData);
-      }
-      
-      toast({
-        title: "Profile Updated",
-        description: "Your profile has been refreshed successfully.",
-      });
-    } catch (error) {
-      console.error('Error refreshing profile:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to refresh profile. Please try again.",
-      });
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [fetchUserProfile, fetchInteractionHistory, calculateStats, toast]);
-
-  // Load data on mount
+  // Main effect to load data
   useEffect(() => {
     const loadData = async () => {
-      if (authLoading || !user?.id) return;
-      
+      setIsLoading(true);
       try {
-        setIsLoading(true);
-        const [profileData, historyData] = await Promise.all([
-          fetchUserProfile(),
-          fetchInteractionHistory()
-        ]);
-
-        if (historyData && historyData.length > 0) {
-          calculateStats(historyData);
+        if (!user) {
+          setIsLoading(false);
+          router.push('/login?redirect=/profile');
+          return;
         }
+        
+        const profileResult = await fetchUserProfile();
+        const historyResult = await fetchInteractionHistory();
+
+        if (profileResult) {
+          const displayHistory = (historyResult || []).map((item: InteractionHistoryItem) => ({
+            id: item.id.toString(),
+            timestamp: item.timestamp,
+            topic: item.topic,
+            problemType: item.problemType,
+            difficulty: item.difficulty,
+            problem: item.problem,
+            userAnswer: item.userAnswer,
+            selectedOption: item.selectedOption,
+            evaluation: item.evaluation,
+            isTopicRevised: item.isTopicRevised,
+            topicDetails: item.topicDetails,
+            timeTakenSeconds: item.timeTakenSeconds,
+          }));
+          setUserHistory(historyResult || []);
+          calculateStats(displayHistory);
+        }
+        
       } catch (error) {
-        console.error('Error loading profile data:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: 'Failed to load profile data. Please try again.',
-        });
+        console.error("Error loading profile page data:", error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadData();
-  }, [user, authLoading, fetchUserProfile, fetchInteractionHistory, calculateStats, toast]);
+    if (!authLoading) {
+        loadData();
+    }
+  }, [user, authLoading, fetchUserProfile, fetchInteractionHistory, calculateStats, router]);
 
   if (authLoading || (isLoading && !isRefreshing)) {
     return (
@@ -349,7 +346,12 @@ export default function ProfilePage() {
     <div className="container mx-auto px-4 py-8 space-y-8">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Profile</h1>
-        <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
+        <Button variant="outline" onClick={() => {
+          setIsRefreshing(true);
+          fetchUserProfile().then(() => {
+            setIsRefreshing(false);
+          });
+        }} disabled={isRefreshing}>
           {isRefreshing ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
@@ -359,7 +361,19 @@ export default function ProfilePage() {
         </Button>
       </div>
 
-      {profile && (
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+          <p className="text-muted-foreground">Loading your profile...</p>
+        </div>
+      ) : !user ? (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
+          <UserCircle className="h-12 w-12 text-muted-foreground mb-4" />
+          <h2 className="text-2xl font-bold text-foreground mb-2">Access Denied</h2>
+          <p className="text-muted-foreground mb-4">Please log in to view your profile.</p>
+          <Button onClick={() => router.push('/login?redirect=/profile')}>Login / Sign Up</Button>
+        </div>
+      ) : (profile && stats) ? (
         <Tabs defaultValue="overview" className="space-y-4">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -542,6 +556,13 @@ export default function ProfilePage() {
             </Card>
           </TabsContent>
         </Tabs>
+      ) : (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
+           <AlertCircle className="h-12 w-12 text-yellow-500 mb-4"/>
+           <h2 className="text-2xl font-bold text-foreground mb-2">Could not load profile data</h2>
+           <p className="text-muted-foreground mb-4">An unexpected error occurred while fetching your profile details. Please try reloading.</p>
+           <Button onClick={() => window.location.reload()}>Reload Page</Button>
+        </div>
       )}
     </div>
   );

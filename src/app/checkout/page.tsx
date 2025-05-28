@@ -157,34 +157,34 @@ function PayPalButtonWrapper({ plan }: { plan: ConvertedPlan }) {
 
             if (isNaN(usdAmount) || usdAmount <= 0) {
               throw new Error('Invalid USD amount after conversion');
-            }
-
-            return actions.order.create({
-              intent: 'CAPTURE',
-              purchase_units: [{
-                amount: {
+          }
+          
+          return actions.order.create({
+            intent: 'CAPTURE',
+            purchase_units: [{
+              amount: {
                   value: usdAmount.toFixed(2),
                   currency_code: 'USD',
                   breakdown: {
                     item_total: {
                       value: usdAmount.toFixed(2),
-                      currency_code: 'USD'
+                currency_code: 'USD'
                     }
                   }
-                },
+              },
                 description: `Subscription: ${plan.name} (₹${inrAmount})`,
-                items: [{
-                  name: plan.name || '',
+              items: [{
+                name: plan.name || '',
                   description: `${plan.description} (₹${inrAmount})`,
-                  quantity: '1',
-                  unit_amount: {
+                quantity: '1',
+                unit_amount: {
                     value: usdAmount.toFixed(2),
-                    currency_code: 'USD'
+                  currency_code: 'USD'
                   },
                   category: 'DIGITAL_GOODS'
-                }]
-              }],
-              application_context: {
+              }]
+            }],
+            application_context: {
                 shipping_preference: 'NO_SHIPPING',
                 brand_name: 'AOLBEAM',
                 landing_page: 'NO_PREFERENCE',
@@ -216,11 +216,11 @@ function PayPalButtonWrapper({ plan }: { plan: ConvertedPlan }) {
             
             // Store payment info in localStorage
             const paymentInfo = {
-              orderId: details.id,
+                orderId: details.id,
               paymentMethod: 'paypal',
               status: 'SUCCESS',
               timestamp: new Date().toISOString(),
-              amount: details.purchase_units?.[0]?.amount?.value || '0.00',
+                amount: details.purchase_units?.[0]?.amount?.value || '0.00',
               currency: 'USD',
               originalAmount: plan.price.replace(/[^0-9.]/g, ''),
               originalCurrency: 'INR'
@@ -253,7 +253,7 @@ function PayPalButtonWrapper({ plan }: { plan: ConvertedPlan }) {
           if (typeof err.message === 'string' && (err.message.includes('country') || err.message.includes('region'))) {
             setPaymentError('PayPal is not available in your region. Please use Cashfree or Credit Card payment instead.');
           } else {
-            setPaymentError('Payment failed. Please try again or use a different payment method.');
+          setPaymentError('Payment failed. Please try again or use a different payment method.');
           }
         }}
         onCancel={() => {
@@ -269,13 +269,13 @@ function PayPalButtonWrapper({ plan }: { plan: ConvertedPlan }) {
               <p className="text-sm font-medium text-destructive">Payment Error</p>
               <p className="text-sm text-muted-foreground mt-1">{paymentError}</p>
               <div className="flex gap-2 mt-2">
-                <Button 
-                  variant="link" 
+              <Button 
+                variant="link" 
                   className="h-auto p-0 text-sm"
-                  onClick={() => setPaymentError(null)}
-                >
-                  Try Again
-                </Button>
+                onClick={() => setPaymentError(null)}
+              >
+                Try Again
+              </Button>
                 <Button 
                   variant="link" 
                   className="h-auto p-0 text-sm"
@@ -624,7 +624,7 @@ function CheckoutPageContent() {
                         {userCountry !== 'IN' && (
                           <p className="text-xs text-muted-foreground">
                             Converted from ₹{plan.basePrice}
-                          </p>
+                        </p>
                         )}
                       </div>
                     </div>

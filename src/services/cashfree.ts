@@ -73,20 +73,20 @@ export async function loadCashfree(): Promise<CashfreeInstance> {
     script.onload = () => {
       // Add a small delay to ensure the SDK is fully initialized
       setTimeout(() => {
-        if (window.Cashfree && window.Cashfree.Constructor) {
+      if (window.Cashfree && window.Cashfree.Constructor) {
           try {
-            const cashfree = new window.Cashfree.Constructor({
+        const cashfree = new window.Cashfree.Constructor({
               mode: 'sandbox',
-            });
-            resolve(cashfree);
+        });
+        resolve(cashfree);
           } catch (error) {
             console.error('Error creating Cashfree instance:', error);
             reject(new Error('Failed to create Cashfree instance'));
           }
-        } else {
+      } else {
           console.error('Cashfree SDK not found after loading');
           reject(new Error('Cashfree SDK not found'));
-        }
+      }
       }, 100);
     };
     

@@ -49,21 +49,21 @@ export async function POST(request: Request) {
 
     // Create order payload
     const orderPayload = {
-      order_id: orderId,
-      order_amount: orderAmount,
-      order_currency: orderCurrency,
-      customer_details: {
-        customer_id: user.id,
-        customer_name: customerName,
-        customer_email: customerEmail,
-        customer_phone: customerPhone,
-      },
-      order_meta: {
-        return_url: returnUrl,
-        notify_url: notifyUrl,
-        payment_methods: 'cc,dc,upi,netbanking,paylater,wallet',
-      },
-      order_note: orderNote,
+        order_id: orderId,
+        order_amount: orderAmount,
+        order_currency: orderCurrency,
+        customer_details: {
+          customer_id: user.id,
+          customer_name: customerName,
+          customer_email: customerEmail,
+          customer_phone: customerPhone,
+        },
+        order_meta: {
+          return_url: returnUrl,
+          notify_url: notifyUrl,
+          payment_methods: 'cc,dc,upi,netbanking,paylater,wallet',
+        },
+        order_note: orderNote,
     };
 
     // Create order in Cashfree
