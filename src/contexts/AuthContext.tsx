@@ -121,6 +121,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Generate a random state parameter for security
       const state = Math.random().toString(36).substring(7);
       
+      // Store the state in sessionStorage before the OAuth flow starts
+      sessionStorage.setItem('oauth_state', state);
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -128,6 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
+            state: state // Pass the state parameter to the OAuth flow
           },
           skipBrowserRedirect: false,
         },
@@ -135,6 +139,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('AuthProvider: Google sign in error:', error);
+        // Clean up the state on error
+        sessionStorage.removeItem('oauth_state');
         toast({
           title: 'Sign in failed',
           description: error.message,
@@ -142,9 +148,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         throw error;
       }
-
-      // Store the state in sessionStorage for verification
-      sessionStorage.setItem('oauth_state', state);
       
       console.log('AuthProvider: Google sign in initiated:', data);
       // The redirect will happen automatically
