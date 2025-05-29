@@ -8,6 +8,7 @@ import { useSupabase } from '@/hooks/useSupabase';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow, format } from 'date-fns';
 import { HistoryView } from '@/components/HistoryView';
+import { InteractionUsage } from '@/components/InteractionUsage';
 import type { InteractionHistoryItem } from '@/types';
 
 // UI Components
@@ -588,6 +589,37 @@ export default function ProfilePage() {
                 <div className="space-y-2">
                   <h3 className="text-sm font-medium">Interactions</h3>
                   <p className="text-sm">{profile?.interaction_count || 0} problems attempted</p>
+                </div>
+                
+                <div className="space-y-4 mt-6">
+                  <h3 className="text-sm font-medium">Daily Usage Limits</h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <InteractionUsage 
+                      type="evaluate" 
+                      title="Problem Evaluation" 
+                      description="Daily limit for problem evaluations" 
+                    />
+                    <InteractionUsage 
+                      type="insight" 
+                      title="Topic Insights" 
+                      description="Daily limit for topic insights" 
+                    />
+                  </div>
+                  {!profile?.is_subscribed && (
+                    <div className="bg-muted/50 p-4 rounded-lg mt-2">
+                      <p className="text-sm font-medium mb-2">Need unlimited access?</p>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Upgrade to a premium plan for unlimited evaluations, insights, and more features.
+                      </p>
+                      <Button 
+                        onClick={() => router.push('/pricing')} 
+                        size="sm" 
+                        className="w-full sm:w-auto"
+                      >
+                        View Pricing Plans
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 {profile?.subscription_started_at && (
                   <div className="space-y-2">

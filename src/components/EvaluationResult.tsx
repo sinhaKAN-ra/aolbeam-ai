@@ -13,6 +13,45 @@ interface EvaluationResultProps {
   evaluation: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string; correctAnswer?: string } | null;
 }
 
+// Function to format the step-by-step solution and remove duplicated content
+const formatStepByStepSolution = (content: string): string => {
+  if (!content) return '';
+  
+  // Check if the content has duplicated sections (common in AI-generated content)
+  const lines = content.split('\n');
+  
+  // Look for patterns like 'Step-by-Step Solution' followed by duplicate content
+  const stepByStepIndex = lines.findIndex(line => 
+    line.toLowerCase().includes('step-by-step solution') || 
+    line.toLowerCase().includes('step by step solution')
+  );
+  
+  // If we find a section header, check if content is duplicated
+  if (stepByStepIndex >= 0) {
+    // Get the content after the header
+    const afterHeader = lines.slice(stepByStepIndex + 1).join('\n');
+    
+    // Check if the content after the header contains duplicated information
+    // like 'Correct Answer:' followed by the same answer again
+    const correctAnswerIndex = afterHeader.toLowerCase().indexOf('correct answer:');
+    if (correctAnswerIndex >= 0) {
+      // Get the explanation part after 'Correct Answer:'
+      const explanationIndex = afterHeader.toLowerCase().indexOf('explanation:', correctAnswerIndex);
+      if (explanationIndex >= 0) {
+        // Check if the explanation repeats the question or answer format
+        const explanation = afterHeader.substring(explanationIndex);
+        if (explanation.toLowerCase().includes('choose the correct') || 
+            explanation.toLowerCase().includes('explain the reasoning')) {
+          // Remove the duplicated explanation
+          return lines.slice(0, stepByStepIndex + 1 + explanationIndex).join('\n');
+        }
+      }
+    }
+  }
+  
+  return content;
+};
+
 export function EvaluationResult({ evaluation }: EvaluationResultProps) {
   const [showSolution, setShowSolution] = useState(false);
   
@@ -52,8 +91,8 @@ export function EvaluationResult({ evaluation }: EvaluationResultProps) {
             </Button>
             
             {showSolution && (
-              <div className="prose prose-sm max-w-none text-base bg-muted/50 p-3 rounded-md dark:prose-invert mt-2 border-l-4 border-amber-500">
-                <MathRenderer content={correctAnswer} />
+              <div className="prose prose-sm max-w-none text-base bg-muted/50 p-3 rounded-md dark:prose-invert mt-2 border-l-4 border-amber-500 overflow-x-auto">
+                <MathRenderer content={formatStepByStepSolution(correctAnswer)} />
               </div>
             )}
           </div>

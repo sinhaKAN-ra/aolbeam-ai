@@ -696,79 +696,76 @@ ${currentProblem.answerFormat}` : ''}`;
   };
 
   return (
-    <>
+    <div className="flex flex-col min-h-screen">
       <section className="py-16 md:py-24 text-center bg-background">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
-             <span className="text-black dark:text-primary">Access of Learning</span>
+              <span className="text-black dark:text-primary">Access of Learning</span>
             </h1>
             <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
-            Beam into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
+              Beam into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
               Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
             </p>
             <div className="mt-10 py-16 text-center">
               <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">Ready to Start Practicing?</h2>
-             
               <Button
-  size="lg"
-  onClick={scrollToProblemGenerator}
-  className="group relative inline-flex items-center justify-center text-lg font-semibold px-8 py-3 
-             rounded-2xl bg-gradient-to-r from-primary to-primary/80 
-             text-white shadow-xl hover:shadow-2xl transition-all duration-300 ease-in-out 
-             hover:from-primary/90 hover:to-primary/70 
-             focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
->
-  <span className="mr-2 transition-transform duration-300 group-hover:-translate-x-1">
-    Generate Your First Problem
-  </span>
-  <ArrowRight className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
-</Button>
-
+                size="lg"
+                onClick={scrollToProblemGenerator}
+                className="group relative inline-flex items-center justify-center text-lg font-semibold px-8 py-3 
+                  rounded-2xl bg-gradient-to-r from-primary to-primary/80 
+                  text-white shadow-xl hover:shadow-2xl transition-all duration-300 ease-in-out 
+                  hover:from-primary/90 hover:to-primary/70 
+                  focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
+              >
+                <span className="mr-2 transition-transform duration-300 group-hover:-translate-x-1">
+                  Generate Your First Problem
+                </span>
+                <ArrowRight className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
+              </Button>
             </div>
           </div>
         </div>
       </section>
       
       <UseCaseBanner />
-
-      <div ref={problemGeneratorRef} className="container mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">
-        {isLoadingPageProfile && currentUser && !userProfile ? (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground">Loading your profile...</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 xl:gap-8 relative">
-            <div className="lg:col-span-3 flex flex-col gap-6">
-              <ProblemGenerator
-                ref={problemGeneratorComponentRef}
-                onGenerate={handleGenerateProblem}
-                isLoading={isLoadingProblem || (!!currentUser && isLoadingPageProfile)}
-                defaultTopic={currentTopic}
-                defaultProblemType={currentProblemType}
-                defaultDifficulty={currentDifficulty}
-              />
+      
+      <div className="flex-1 bg-background">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6 w-full">
+              <div ref={problemGeneratorRef}>
+                <ProblemGenerator
+                  ref={problemGeneratorComponentRef}
+                  onGenerate={handleGenerateProblem}
+                  isLoading={isLoadingProblem || (!!currentUser && isLoadingPageProfile)}
+                  defaultTopic={currentTopic}
+                  defaultProblemType={currentProblemType}
+                  defaultDifficulty={currentDifficulty}
+                />
+              </div>
+              
               {currentProblem && (
                 <>
-                  <div className="flex gap-2 mt-0"> 
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <Button 
                       onClick={handleNewProblemSameTopic} 
                       variant="outline" 
-                      className="flex-1" 
+                      className="flex-1 text-sm whitespace-nowrap overflow-hidden text-ellipsis" 
                       disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
                     >
-                      <RefreshCw className="mr-2 h-4 w-4" /> Another (Same Topic)
+                      <RefreshCw className="mr-2 h-4 w-4 flex-shrink-0" /> <span>Another (Same Topic)</span>
                     </Button>
                     <Button 
                       onClick={handleStartNew} 
                       variant="outline" 
-                      className="flex-1" 
+                      className="flex-1 text-sm whitespace-nowrap overflow-hidden text-ellipsis" 
                       disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
                     >
-                      <FilePlus2 className="mr-2 h-4 w-4" /> Start New Topic
+                      <FilePlus2 className="mr-2 h-4 w-4 flex-shrink-0" /> <span>Start New Topic</span>
                     </Button>
                   </div>
+                  
                   <ProblemDisplay
                     problem={currentProblem}
                     problemType={currentProblemType} 
@@ -778,12 +775,16 @@ ${currentProblem.answerFormat}` : ''}`;
                     currentTopic={currentTopic}
                     evaluationSubmitted={!!evaluationResult} 
                   />
+                  
+                  {evaluationResult && (
+                    <EvaluationResult evaluation={evaluationResult} />
+                  )}
                 </>
               )}
-              {evaluationResult && <EvaluationResult evaluation={evaluationResult} />}
+              {isClientMounted && <HistoryView history={history} />}
             </div>
-
-            <div className="lg:col-span-2 flex flex-col gap-6 relative z-10">
+            
+            <div className="space-y-6">
               <ProblemInsights
                 problem={currentProblem} 
                 topic={currentTopic}    
@@ -791,10 +792,9 @@ ${currentProblem.answerFormat}` : ''}`;
                 onFetchInsights={handleGenerateProblemInsights}
                 isLoading={!!(isLoadingInsights || (!!currentUser && isLoadingPageProfile))}
               />
-              {isClientMounted && <HistoryView history={history} />} 
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       <PaywallModal
@@ -817,7 +817,7 @@ ${currentProblem.answerFormat}` : ''}`;
           {interactionsLeftText()}
         </p>
       </div>
-    </>
+    </div>
   );
 }
 

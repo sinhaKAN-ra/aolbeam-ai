@@ -134,19 +134,21 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
           <MathRenderer content={problem.problemStatement} />
         </div>
 
-        <div className="mb-4 flex flex-col sm:flex-row items-center justify-between gap-4 p-3 border rounded-lg bg-muted/50">
-          <div className="w-full sm:w-auto">
-            <p className="text-center text-sm text-muted-foreground">
-              This timer will help you to see how much time you take while solving the problem. Please start the timer when you are ready to solve the problem.
+        <div className="mb-4 flex flex-col sm:flex-row items-center justify-between gap-3 p-3 border rounded-lg bg-muted/50 overflow-hidden">
+          <div className="w-full sm:w-auto mb-2 sm:mb-0">
+            <p className="text-center sm:text-left text-xs sm:text-sm text-muted-foreground">
+              Start the timer when you're ready to solve the problem.
             </p>
           </div>
-          <Button onClick={handleStartTimer} variant="outline" size="lg" className="w-full sm:w-auto">
-            {isTimerActive && intervalRef.current ? <PauseCircle className="mr-2" /> : <PlayCircle className="mr-2" />}
-            {isTimerActive && intervalRef.current ? 'Pause Timer' : (elapsedTimeInSeconds > 0 ? 'Resume Timer' : 'Start Timer')}
-          </Button>
-          <div className="flex items-center text-2xl font-mono font-semibold text-primary">
-            <TimerIcon className="mr-2 h-7 w-7" />
-            <span>{formatDisplayTime(elapsedTimeInSeconds)}</span>
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+            <Button onClick={handleStartTimer} variant="outline" size="sm" className="w-full sm:w-auto">
+              {isTimerActive && intervalRef.current ? <PauseCircle className="mr-1 h-4 w-4" /> : <PlayCircle className="mr-1 h-4 w-4" />}
+              {isTimerActive && intervalRef.current ? 'Pause' : (elapsedTimeInSeconds > 0 ? 'Resume' : 'Start')}
+            </Button>
+            <div className="flex items-center text-lg sm:text-xl font-mono font-semibold text-primary">
+              <TimerIcon className="mr-1 h-5 w-5" />
+              <span>{formatDisplayTime(elapsedTimeInSeconds)}</span>
+            </div>
           </div>
         </div>
 

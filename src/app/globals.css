@@ -2,6 +2,140 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Prevent horizontal overflow on mobile without causing extra vertical scroll */
+html {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Ensure all elements respect their container's width */
+* {
+  box-sizing: border-box;
+}
+
+/* Make sure images and other media are responsive */
+img, video, iframe, canvas, svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Prevent long words from breaking layout */
+p, h1, h2, h3, h4, h5, h6, li, td, th, label, input, button, textarea, select {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Fix for code blocks and pre elements */
+pre, code {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+/* Ensure tables don't overflow */
+table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* History view specific styles to prevent overflow */
+.history-view {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.history-view .accordion-content {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+.history-view .accordion-trigger,
+.history-view .accordion-content {
+  padding-right: 1rem;
+}
+
+.history-view pre,
+.history-view code {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 100%;
+  overflow-x: auto;
+  display: block;
+  font-size: 0.875rem; /* Slightly smaller font for code on mobile */
+}
+
+/* Mobile-specific styles for screens smaller than 494px */
+@media (max-width: 494px) {
+  .history-view {
+    -webkit-hyphens: auto;
+    -ms-hyphens: auto;
+    hyphens: auto;
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .history-view * {
+    word-break: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
+  }
+
+  .history-view .accordion-trigger {
+    padding: 0.5rem 0.5rem 0.5rem 0.25rem;
+  }
+  
+  .history-view .accordion-content {
+    padding: 0.5rem 0.5rem 0.5rem 0.25rem;
+  }
+  
+  .history-view .text-sm {
+    font-size: 0.75rem;
+    line-height: 1.25;
+  }
+  
+  .history-view .text-xs {
+    font-size: 0.6875rem;
+  }
+  
+  .history-view .gap-3 {
+    gap: 0.5rem;
+  }
+  
+  .history-view .p-4 {
+    padding: 0.75rem;
+  }
+  
+  .history-view .space-y-3 > * + * {
+    margin-top: 0.5rem;
+  }
+  
+  /* Force break long words and URLs */
+  .history-view p,
+  .history-view span,
+  .history-view div,
+  .history-view li,
+  .history-view td,
+  .history-view th {
+    word-wrap: break-word;
+    word-break: break-word;
+    -ms-word-break: break-all;
+    -webkit-hyphens: auto;
+    -moz-hyphens: auto;
+    -ms-hyphens: auto;
+    hyphens: auto;
+  }
+}
+
 @layer base {
   :root {
     --background: 206 33% 95%; /* #F0F4F7 Light Gray */

@@ -656,7 +656,7 @@ const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
   }, []);
   
   return (
-    <div className="math-renderer-content" data-renderer-id={componentId} ref={containerRef}>
+    <div className="math-renderer-content overflow-hidden" data-renderer-id={componentId} ref={containerRef}>
       {parts.map((part, index) => renderPart(part, index))}
     </div>
   );

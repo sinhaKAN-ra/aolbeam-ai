@@ -49,7 +49,7 @@ export function ProblemInsights({ problem, topic, insights, onFetchInsights, isL
             Generate a problem first to get specific solving insights and pattern recognition tips.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex-1 overflow-y-auto p-6">
           <Button 
             variant="outline" 
             className="w-full"
@@ -70,16 +70,16 @@ export function ProblemInsights({ problem, topic, insights, onFetchInsights, isL
   });
 
   return (
-    <Card className="shadow-lg relative z-10">
-      <CardHeader>
+    <Card className="h-full flex flex-col">
+      <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-xl font-semibold">
           <Lightbulb className="text-primary" /> <span className="font-normal">Understand pattern</span> for - <span className="font-normal truncate" title={topic}>{topic}</span>
         </CardTitle>
-        <CardDescription className="text-sm mt-1">
+        <CardDescription className="text-base mt-2">
           {explanatoryMessage}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 overflow-y-auto p-6">
         {!insights ? (
           <Button 
             onClick={handleFetchInsights} 
@@ -96,15 +96,15 @@ export function ProblemInsights({ problem, topic, insights, onFetchInsights, isL
           </Button>
         ) : (
           <>
-            <ScrollArea className="h-auto max-h-[500px] w-full rounded-md border p-5 bg-muted/30">
-              <div className="prose prose-md max-w-none dark:prose-invert space-y-4">
+            <ScrollArea className="h-auto max-h-[600px] w-full rounded-md border p-6 bg-muted/30">
+              <div className="prose prose-sm max-w-none dark:prose-invert break-words">
                 <MathRenderer content={insights} />
               </div>
             </ScrollArea>
             <Button 
               onClick={handleFetchInsights} 
               disabled={isLoading} 
-              className="w-full mt-4 text-base py-3 cursor-pointer" 
+              className="w-full mt-5 text-base py-4 cursor-pointer" 
               variant="outline"
               data-testid="fetch-again-button"
             >
