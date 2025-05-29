@@ -44,7 +44,8 @@ export async function generatePracticeProblem(input: GeneratePracticeProblemInpu
 const prompt = ai.definePrompt({
   name: 'generatePracticeProblemPrompt',
   input: {schema: GeneratePracticeProblemInputSchema},
-  output: {schema: GeneratePracticeProblemOutputSchema.omit({ difficulty: true })}, // AI doesn't output difficulty, we add it post-call
+  output: {schema: GeneratePracticeProblemOutputSchema.omit({ difficulty: true })},
+  // AI doesn't output difficulty, we add it post-call
   prompt: `You are an expert in generating practice problems for students preparing for competitive exams. You MUST follow the exact format and requirements specified below.
 
 **CRITICAL: You must respond with a valid JSON object containing the required fields. Do not include any text before or after the JSON response.**
@@ -66,10 +67,11 @@ Difficulty: {{{difficulty}}}
 
 3. **Diagrams**: Use Mermaid.js syntax within code blocks EXACTLY as shown:
    \`\`\`mermaid
-   graph TD;
-   A[Start] --> B(Process);
-   B --> C{Decision};
+   graph TD
+   A[Start] --> B(Process)
+   B --> C{Decision}
    \`\`\`
+   IMPORTANT: DO NOT use semicolons (;) in Mermaid diagrams as they cause rendering issues. Use line breaks instead.
 
 **MANDATORY PROBLEM TYPE REQUIREMENTS:**
 
@@ -126,7 +128,7 @@ const generatePracticeProblemFlow = ai.defineFlow(
     inputSchema: GeneratePracticeProblemInputSchema,
     outputSchema: GeneratePracticeProblemOutputSchema.omit({ difficulty: true }),
   },
-  async input => {
+  async (input) => {
     const {output} = await prompt(input);
     return output!;
   }

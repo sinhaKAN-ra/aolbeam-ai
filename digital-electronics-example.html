@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Digital Electronics Diagram</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .problem-container {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      background-color: #f9f9f9;
+    }
+    .diagram-container {
+      padding: 20px;
+      margin: 20px 0;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h2 {
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    pre {
+      background-color: #f1f1f1;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    .fixed-notification {
+      background-color: #d4edda;
+      color: #155724;
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Digital Electronics Diagram Example</h1>
+  
+  <div class="problem-container">
+    <h2>Practice Problem: Digital Electronics</h2>
+    <p><strong>Type:</strong> diagram_based - <strong>Difficulty:</strong> medium</p>
+    <p>Consider the following logic gate circuit diagram:</p>
+    
+    <div id="fixed-notification" class="fixed-notification">
+      <strong>Diagram automatically fixed!</strong> The original diagram had syntax issues that have been corrected.
+    </div>
+    
+    <div class="diagram-container">
+      <div id="original-diagram"></div>
+      <pre id="original-code">graph LR; A[A] --> OR(OR Gate); B[B] --> OR; OR --> AND(AND Gate); C[C] --> AND; AND --> X[X];</pre>
+    </div>
+    
+    <p>Which of the following Boolean expressions correctly represents the output X of this circuit?</p>
+    <ol>
+      <li>X = A + B + C</li>
+      <li>X = (A + B) · C</li>
+      <li>X = A · B · C</li>
+      <li>X = A · B + C</li>
+    </ol>
+  </div>
+  
+  <div class="problem-container">
+    <h2>Fixed Version</h2>
+    <p>This is how the diagram should appear with proper formatting:</p>
+    
+    <div class="diagram-container">
+      <div id="fixed-diagram"></div>
+      <pre id="fixed-code">graph LR
+  A[A] --> OR((OR Gate))
+  B[B] --> OR
+  OR --> AND((AND Gate))
+  C[C] --> AND
+  AND --> X[X]</pre>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>
+    // Our digital electronics diagram fixer
+    function fixDigitalElectronicsDiagram(mermaidCode) {
+      // Check if this looks like a digital electronics diagram
+      if (mermaidCode.includes('graph LR;') || 
+          (mermaidCode.includes('OR') || mermaidCode.includes('AND')) && 
+          mermaidCode.includes('Gate')) {
+        
+        // Replace semicolons with newlines
+        let fixedCode = mermaidCode.replace(/;\s*/g, '\n');
+        
+        // Extract all nodes and connections
+        const nodes = new Map();
+        const connections = [];
+        
+        // Extract node definitions with labels: A[A], B[B], X[X]
+        const nodeRegex = /([A-Za-z0-9_]+)\s*\[([^\]]+)\]/g;
+        let nodeMatch;
+        while ((nodeMatch = nodeRegex.exec(fixedCode)) !== null) {
+          nodes.set(nodeMatch[1], { id: nodeMatch[1], label: nodeMatch[2] });
+        }
+        
+        // Extract gate definitions: OR(OR Gate), AND(AND Gate)
+        const gateRegex = /([A-Za-z0-9_]+)\s*\(([^\)]+)\)/g;
+        let gateMatch;
+        while ((gateMatch = gateRegex.exec(fixedCode)) !== null) {
+          nodes.set(gateMatch[1], { id: gateMatch[1], label: gateMatch[2], isGate: true });
+        }
+        
+        // Extract connections: A --> OR, OR --> AND, etc.
+        const connectionRegex = /([A-Za-z0-9_]+)\s*-->\s*([A-Za-z0-9_]+)/g;
+        let connMatch;
+        while ((connMatch = connectionRegex.exec(fixedCode)) !== null) {
+          connections.push({ from: connMatch[1], to: connMatch[2] });
+        }
+        
+        // Rebuild the diagram with proper syntax
+        let rebuiltCode = 'graph LR\n';
+        
+        // Add node definitions
+        for (const [id, node] of nodes.entries()) {
+          if (node.isGate) {
+            rebuiltCode += `  ${id}((${node.label}))\n`;
+          } else {
+            rebuiltCode += `  ${id}[${node.label}]\n`;
+          }
+        }
+        
+        // Add connections
+        for (const conn of connections) {
+          rebuiltCode += `  ${conn.from} --> ${conn.to}\n`;
+        }
+        
+        return rebuiltCode;
+      }
+      
+      // If it's not a digital electronics diagram, return the original code
+      return mermaidCode;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      // Initialize Mermaid
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'default',
+        securityLevel: 'loose'
+      });
+
+      // Get the original code
+      const originalCode = document.getElementById('original-code').textContent;
+      
+      // Try to render the original code (will likely fail)
+      try {
+        mermaid.render('original-diagram-id', originalCode)
+          .then(result => {
+            document.getElementById('original-diagram').innerHTML = result.svg;
+          })
+          .catch(error => {
+            console.error('Error rendering original diagram:', error);
+            
+            // Fix the diagram
+            const fixedCode = fixDigitalElectronicsDiagram(originalCode);
+            
+            // Show the fixed notification
+            document.getElementById('fixed-notification').style.display = 'block';
+            
+            // Render the fixed version in place of the original
+            mermaid.render('original-diagram-fixed', fixedCode)
+              .then(result => {
+                document.getElementById('original-diagram').innerHTML = result.svg;
+              })
+              .catch(innerError => {
+                console.error('Error rendering fixed diagram:', innerError);
+                document.getElementById('original-diagram').innerHTML = 
+                  `<div style="color: red; padding: 10px; background: #ffeeee; border: 1px solid #ffcccc;">
+                    Failed to render diagram: ${innerError.message}
+                  </div>`;
+              });
+          });
+      } catch (e) {
+        console.error('Exception in original diagram rendering:', e);
+      }
+
+      // Render the fixed version (known good format)
+      try {
+        const fixedCode = document.getElementById('fixed-code').textContent;
+        mermaid.render('fixed-diagram-id', fixedCode)
+          .then(result => {
+            document.getElementById('fixed-diagram').innerHTML = result.svg;
+          })
+          .catch(error => {
+            console.error('Error rendering fixed diagram:', error);
+            document.getElementById('fixed-diagram').innerHTML = 
+              `<div style="color: red; padding: 10px; background: #ffeeee; border: 1px solid #ffcccc;">
+                Failed to render diagram: ${error.message}
+              </div>`;
+          });
+      } catch (e) {
+        console.error('Exception in fixed diagram rendering:', e);
+      }
+    });
+  </script>
+</body>
+</html>

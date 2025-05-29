@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import katex from 'katex';
 import mermaid from 'mermaid';
 
@@ -10,6 +10,7 @@ import mermaid from 'mermaid';
 declare global {
   interface Window {
     mermaid?: typeof mermaid;
+    fixMermaidDiagram?: (id: string) => void;
   }
 }
 
@@ -49,6 +50,10 @@ interface MatchPart {
   codeContent?: string;
   mathContent?: string;
   mermaidContent?: string;
+  mermaidId?: string;
+  failed?: boolean;
+  isFixing?: boolean;
+  fixedContent?: string;
 }
 
 type Part = TextPart | MatchPart;
@@ -143,6 +148,53 @@ const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
   const componentId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const mermaidInitialized = useRef(false);
+  const [failedDiagrams, setFailedDiagrams] = useState<{[key: string]: boolean}>({});
+  const [fixingDiagrams, setFixingDiagrams] = useState<{[key: string]: boolean}>({});
+  const [fixedDiagrams, setFixedDiagrams] = useState<{[key: string]: string}>({});
+
+  // Function to fix a specific diagram
+  const fixDiagram = async (mermaidId: string) => {
+    setFixingDiagrams(prev => ({ ...prev, [mermaidId]: true }));
+    
+    try {
+      // Get the original diagram content
+      const element = containerRef.current?.querySelector(`[data-mermaid-id="${mermaidId}"]`);
+      const originalContent = element?.getAttribute('data-mermaid-code');
+      
+      if (!originalContent) {
+        console.error('Could not find original content for diagram:', mermaidId);
+        return;
+      }
+      
+      // Apply sanitization
+      const sanitizedContent = sanitizeMermaidContent(originalContent);
+      
+      // Store the fixed content
+      setFixedDiagrams(prev => ({ ...prev, [mermaidId]: sanitizedContent }));
+      
+      // Remove from failed diagrams
+      setFailedDiagrams(prev => {
+        const newFailed = { ...prev };
+        delete newFailed[mermaidId];
+        return newFailed;
+      });
+      
+      // Trigger a re-render by updating the element
+      setTimeout(() => {
+        if (element) {
+          element.removeAttribute('data-processed');
+          // Force re-render
+          const event = new CustomEvent('mermaid-rerender');
+          element.dispatchEvent(event);
+        }
+      }, 100);
+      
+    } catch (error) {
+      console.error('Error fixing diagram:', error);
+    } finally {
+      setFixingDiagrams(prev => ({ ...prev, [mermaidId]: false }));
+    }
+  };
 
   // Initialize mermaid when the component mounts or content changes
   useEffect(() => {
@@ -199,39 +251,33 @@ const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
 
     // Render all Mermaid diagrams
     const renderMermaid = async () => {
-      const isInitialized = await initializeMermaid();
-      if (!isInitialized) return;
-
+      if (!await initializeMermaid()) return;
+      
       const elements = containerRef.current?.querySelectorAll<HTMLElement>('.mermaid:not([data-processed])');
       if (!elements || elements.length === 0) return;
-
-      for (const element of Array.from(elements)) {
-        try {
-          const originalMermaidCode = element.getAttribute('data-mermaid-code') || element.textContent?.trim();
-          if (!originalMermaidCode) continue;
-
-          element.setAttribute('data-processed', 'true');
+      
+      try {
+        await Promise.all(Array.from(elements).map(async (element) => {
+          // Get the Mermaid code and ID from the data attributes
+          const mermaidCode = element.getAttribute('data-mermaid-code');
+          const mermaidId = element.getAttribute('data-mermaid-id') || '';
+          if (!mermaidCode) return;
           
-          // Create a container for the diagram
-          const container = document.createElement('div');
-          container.style.width = '100%';
-          container.style.overflow = 'auto';
+          // Check if we have a fixed version of this diagram
+          const fixedContent = fixedDiagrams[mermaidId];
+          const contentToRender = fixedContent || mermaidCode;
+          const sanitizedCode = sanitizeMermaidContent(contentToRender);
           
-          // Clear the element and append the container
-          element.innerHTML = '';
-          element.appendChild(container);
-          
-          // Validate and sanitize the Mermaid code
-          const sanitizedCode = sanitizeMermaidContent(originalMermaidCode);
-          
-          if (!validateMermaidSyntax(sanitizedCode)) {
-            throw new Error('Invalid Mermaid diagram syntax');
-          }
-          
-          // Render the diagram
           try {
-            // Generate a valid CSS ID by replacing invalid characters
-            const mermaidId = `mermaid-${componentId}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+            // Clear any previous content for re-rendering
+            element.innerHTML = '';
+            
+            // Create a container div for the diagram
+            const container = document.createElement('div');
+            container.style.display = 'flex';
+            container.style.justifyContent = 'center';
+            container.style.width = '100%';
+            element.appendChild(container);
             
             // Try to render directly without parse validation first (more permissive)
             let renderSuccess = false;
@@ -269,32 +315,30 @@ const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
                 svgElement.style.display = 'block';
                 svgElement.style.margin = '0 auto';
               }
+              
+              // Mark as processed
+              element.setAttribute('data-processed', 'true');
             } else {
               throw new Error('Failed to generate SVG');
             }
           } catch (renderError) {
             console.error('Mermaid render error:', renderError);
             
+            // Mark this diagram as failed
+            setFailedDiagrams(prev => ({ ...prev, [mermaidId]: true }));
+            
             // On error, show the original mermaid code in a clean code block
             const codeBlock = document.createElement('pre');
             codeBlock.className = 'bg-gray-100 p-3 rounded-md overflow-x-auto text-sm';
-            codeBlock.textContent = originalMermaidCode;
+            codeBlock.textContent = mermaidCode;
             
             // Clear the container and append just the code block
-            container.innerHTML = '';
-            container.appendChild(codeBlock);
+            element.innerHTML = '';
+            element.appendChild(codeBlock);
           }
-        } catch (e) {
-          console.error('Error processing Mermaid element:', e);
-          
-          // Fallback error display
-          const fallbackError = document.createElement('div');
-          fallbackError.className = 'text-xs text-red-500 p-2 bg-red-50 border border-red-200 rounded-md';
-          fallbackError.textContent = `Failed to process Mermaid diagram: ${e instanceof Error ? e.message : 'Unknown error'}`;
-          
-          element.innerHTML = '';
-          element.appendChild(fallbackError);
-        }
+        }));
+      } catch (e) {
+        console.error('Error processing Mermaid elements:', e);
       }
     };
 
@@ -306,7 +350,7 @@ const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [content, componentId]);
+  }, [content, componentId, fixedDiagrams]);
 
   if (typeof content !== 'string' || !content.trim()) {
     return <>{content || ''}</>;
@@ -479,11 +523,33 @@ const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
       case 'mermaid':
         if (!mermaidContent) return <span key={index}>{fullMatch}</span>;
         
+        // Generate a unique ID for this diagram
+        const mermaidId = `mermaid-${componentId}-${index}`;
+        const isFailed = failedDiagrams[mermaidId];
+        const isFixing = fixingDiagrams[mermaidId];
+        
         return (
           <div key={index} className="mermaid-diagram-container my-6 p-4 bg-card rounded-lg border shadow-sm">
+            {isFailed && (
+              <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <div className="flex items-center justify-between">
+                  <div className="text-yellow-800 text-sm">
+                    <strong>Mermaid Diagram Error:</strong> This diagram failed to render. You can try to fix it automatically.
+                  </div>
+                  <button
+                    onClick={() => fixDiagram(mermaidId)}
+                    disabled={isFixing}
+                    className="ml-3 px-3 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isFixing ? 'Fixing...' : 'Try Fix'}
+                  </button>
+                </div>
+              </div>
+            )}
             <div 
               className="mermaid flex justify-center" 
               data-mermaid-code={mermaidContent}
+              data-mermaid-id={mermaidId}
               style={{ minWidth: '100%', overflow: 'auto' }}
             >
               {mermaidContent}
@@ -517,6 +583,19 @@ const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
     }
   };
 
+  // Add window function for button click handler
+  useEffect(() => {
+    // Add the fix function to the window object for the button to call
+    window.fixMermaidDiagram = (mermaidId: string) => {
+      fixDiagram(mermaidId);
+    };
+    
+    return () => {
+      // Clean up when component unmounts
+      delete window.fixMermaidDiagram;
+    };
+  }, []);
+  
   return (
     <div className="math-renderer-content" data-renderer-id={componentId} ref={containerRef}>
       {parts.map((part, index) => renderPart(part, index))}

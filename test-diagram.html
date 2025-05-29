@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mermaid Diagram Test</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .diagram-container {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    h2 {
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Mermaid Diagram Test</h1>
+  
+  <div class="diagram-container">
+    <h2>Logic Gate Circuit</h2>
+    <div id="logic-gate-diagram"></div>
+    <pre id="logic-gate-code">graph LR; A[A] --> OR(OR Gate); B[B] --> OR; OR --> AND(AND Gate); C[C] --> AND; AND --> X[X];</pre>
+  </div>
+  
+  <div class="diagram-container">
+    <h2>Corrected Logic Gate Circuit</h2>
+    <div id="corrected-diagram"></div>
+    <pre id="corrected-code">graph LR
+  A[A] --> OR((OR))
+  B[B] --> OR
+  OR --> AND((AND))
+  C[C] --> AND
+  AND --> X[X]</pre>
+  </div>
+
+  <div class="diagram-container">
+    <h2>Multiple Diagrams Test</h2>
+    <div id="multiple-diagrams">
+      <div id="diagram1"></div>
+      <div id="diagram2"></div>
+      <div id="diagram3"></div>
+    </div>
+    <pre id="diagram1-code">graph TD
+  A[Start] --> B{Is it working?}
+  B -->|Yes| C[Great!]
+  B -->|No| D[Debug]
+  D --> A</pre>
+    <pre id="diagram2-code">sequenceDiagram
+  participant User
+  participant System
+  User->>System: Request diagram
+  System->>System: Process
+  System-->>User: Return result</pre>
+    <pre id="diagram3-code">classDiagram
+  class MathRenderer {
+    +render()
+    -fixDiagram()
+  }
+  class MermaidFixer {
+    +fix()
+  }</pre>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Initialize Mermaid
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'default',
+        securityLevel: 'loose'
+      });
+
+      // Render the original problematic diagram
+      try {
+        const logicGateCode = document.getElementById('logic-gate-code').textContent;
+        mermaid.render('logic-gate-id', logicGateCode)
+          .then(result => {
+            document.getElementById('logic-gate-diagram').innerHTML = result.svg;
+          })
+          .catch(error => {
+            console.error('Error rendering logic gate diagram:', error);
+            document.getElementById('logic-gate-diagram').innerHTML = 
+              `<div style="color: red; padding: 10px; background: #ffeeee; border: 1px solid #ffcccc;">
+                Error rendering diagram: ${error.message}<br>
+                <strong>This would trigger our AI fixer in the actual application</strong>
+              </div>`;
+          });
+      } catch (e) {
+        console.error('Exception in logic gate rendering:', e);
+      }
+
+      // Render the corrected diagram
+      try {
+        const correctedCode = document.getElementById('corrected-code').textContent;
+        mermaid.render('corrected-id', correctedCode)
+          .then(result => {
+            document.getElementById('corrected-diagram').innerHTML = result.svg;
+          })
+          .catch(error => {
+            console.error('Error rendering corrected diagram:', error);
+            document.getElementById('corrected-diagram').innerHTML = 
+              `<div style="color: red; padding: 10px; background: #ffeeee; border: 1px solid #ffcccc;">
+                Error rendering corrected diagram: ${error.message}
+              </div>`;
+          });
+      } catch (e) {
+        console.error('Exception in corrected diagram rendering:', e);
+      }
+
+      // Render multiple diagrams
+      const diagrams = [
+        { id: 'diagram1', codeId: 'diagram1-code' },
+        { id: 'diagram2', codeId: 'diagram2-code' },
+        { id: 'diagram3', codeId: 'diagram3-code' }
+      ];
+
+      diagrams.forEach((diagram, index) => {
+        try {
+          const code = document.getElementById(diagram.codeId).textContent;
+          mermaid.render(`${diagram.id}-rendered`, code)
+            .then(result => {
+              document.getElementById(diagram.id).innerHTML = result.svg;
+            })
+            .catch(error => {
+              console.error(`Error rendering diagram ${index + 1}:`, error);
+              document.getElementById(diagram.id).innerHTML = 
+                `<div style="color: red; padding: 10px; background: #ffeeee; border: 1px solid #ffcccc;">
+                  Error rendering diagram ${index + 1}: ${error.message}
+                </div>`;
+            });
+        } catch (e) {
+          console.error(`Exception in diagram ${index + 1} rendering:`, e);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
