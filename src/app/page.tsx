@@ -480,39 +480,57 @@ export default function AOLBEAMPage() {
     setEvaluationResult(null);
 
     try {
-      let evalOutput: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string };
+      let evalOutput: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string; correctAnswer: string };
       const updatesForHistory: Partial<InteractionHistoryItem> = { timeTakenSeconds };
       
       const isMcqStyleProblem = currentProblem.multipleChoiceOptions && currentProblem.multipleChoiceOptions.length > 0;
 
       if (!isMcqStyleProblem) { 
-          let insightsForEval = problemInsights;
-        if (!insightsForEval) {
-          const result = await generateProblemInsights({ 
-            problemStatement: currentProblem.problemStatement, 
-            topic: currentTopic 
-          });
-          insightsForEval = JSON.stringify(result, null, 2);
-        }
-        
-        const evalInput: EvaluateTheoryAnswerInput = {
-          question: currentProblem.problemStatement,
-          studentAnswer: answer,
-          answerFormat: currentProblem.answerFormat, 
-          topicDetails: insightsForEval,
-        };
-        evalOutput = await evaluateTheoryAnswer(evalInput);
-        updatesForHistory.userAnswer = answer;
-      } else { 
-        const isCorrect = answer === currentProblem.correctAnswer;
-        evalOutput = {
-          isCorrect,
-          feedback: isCorrect
-            ? `Correct! ${currentProblem.answerFormat}` 
-            : `Incorrect. ${currentProblem.answerFormat} The correct option was: ${currentProblem.correctAnswer}`,
-        };
-        updatesForHistory.selectedOption = answer;
+        let insightsForEval = problemInsights;
+      if (!insightsForEval) {
+        const result = await generateProblemInsights({ 
+          problemStatement: currentProblem.problemStatement, 
+          topic: currentTopic 
+        });
+        insightsForEval = JSON.stringify(result, null, 2);
       }
+      
+      const evalInput: EvaluateTheoryAnswerInput = {
+        question: currentProblem.problemStatement,
+        studentAnswer: answer,
+        answerFormat: currentProblem.answerFormat, 
+        topicDetails: insightsForEval,
+      };
+      evalOutput = await evaluateTheoryAnswer(evalInput);
+      
+      // Ensure correctAnswer exists and contains step-by-step solution
+      if (!evalOutput.correctAnswer) {
+        evalOutput.correctAnswer = currentProblem.correctAnswer;
+      }
+      
+      updatesForHistory.userAnswer = answer;
+    } else { 
+      const isCorrect = answer === currentProblem.correctAnswer;
+      
+      // Create a comprehensive step-by-step explanation for MCQ problems
+      const stepByStepSolution = `## Step-by-Step Solution
+
+${currentProblem.answerFormat}
+
+### Correct Answer: ${currentProblem.correctAnswer}
+
+${currentProblem.correctAnswer ? `### Explanation:
+${currentProblem.answerFormat}` : ''}`;
+      
+      evalOutput = {
+        isCorrect,
+        feedback: isCorrect
+          ? `Correct! ${currentProblem.answerFormat}` 
+          : `Incorrect. The correct option was: ${currentProblem.correctAnswer}`,
+        correctAnswer: stepByStepSolution
+      };
+      updatesForHistory.selectedOption = answer;
+    }  
       updatesForHistory.evaluation = evalOutput;
       await updateLastHistoryItem(updatesForHistory); 
       setEvaluationResult(evalOutput);
@@ -757,7 +775,8 @@ export default function AOLBEAMPage() {
                     onSubmitAnswer={handleEvaluateAnswer}
                     onFeedbackSubmit={handleProblemFeedback} 
                     isLoading={!!(isLoadingEvaluation || (!!currentUser && isLoadingPageProfile))}
-                    currentTopic={currentTopic} 
+                    currentTopic={currentTopic}
+                    evaluationSubmitted={!!evaluationResult} 
                   />
                 </>
               )}

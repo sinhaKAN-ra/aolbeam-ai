@@ -23,6 +23,7 @@ interface ProblemDisplayProps {
   onFeedbackSubmit: (rating: FeedbackRating, comment: string) => void;
   isLoading: boolean;
   currentTopic: string;
+  evaluationSubmitted?: boolean; // New prop to track if evaluation has been submitted
 }
 
 const formatDisplayTime = (totalSeconds: number): string => {
@@ -31,7 +32,7 @@ const formatDisplayTime = (totalSeconds: number): string => {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
-export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbackSubmit, isLoading, currentTopic }: ProblemDisplayProps) {
+export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbackSubmit, isLoading, currentTopic, evaluationSubmitted = false }: ProblemDisplayProps) {
   const [userAnswer, setUserAnswer] = useState<string>('');
   const [selectedOption, setSelectedOption] = useState<string>('');
   const [feedbackRating, setFeedbackRating] = useState<FeedbackRating>("");
@@ -134,6 +135,11 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
         </div>
 
         <div className="mb-4 flex flex-col sm:flex-row items-center justify-between gap-4 p-3 border rounded-lg bg-muted/50">
+          <div className="w-full sm:w-auto">
+            <p className="text-center text-sm text-muted-foreground">
+              This timer will help you to see how much time you take while solving the problem. Please start the timer when you are ready to solve the problem.
+            </p>
+          </div>
           <Button onClick={handleStartTimer} variant="outline" size="lg" className="w-full sm:w-auto">
             {isTimerActive && intervalRef.current ? <PauseCircle className="mr-2" /> : <PlayCircle className="mr-2" />}
             {isTimerActive && intervalRef.current ? 'Pause Timer' : (elapsedTimeInSeconds > 0 ? 'Resume Timer' : 'Start Timer')}
@@ -152,20 +158,20 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
                 value={selectedOption}
                 onValueChange={setSelectedOption}
                 className="space-y-2"
-                disabled={isTimerNeededToStart}
+                disabled={isTimerNeededToStart || evaluationSubmitted}
               >
                 {problem.multipleChoiceOptions?.map((option, index) => (
                   <div key={index} className={`flex items-center space-x-2 p-3 border rounded-md transition-colors 
-                                            ${(isTimerNeededToStart) ? 'cursor-not-allowed opacity-70' 
+                                            ${(isTimerNeededToStart || evaluationSubmitted) ? 'cursor-not-allowed opacity-70' 
                                               : 'hover:border-primary data-[state=checked]:border-primary data-[state=checked]:bg-primary/10'}`}>
                     <RadioGroupItem 
                       value={option} 
                       id={`option-${index}`} 
-                      disabled={isTimerNeededToStart}
+                      disabled={isTimerNeededToStart || evaluationSubmitted}
                     />
                     <Label 
                       htmlFor={`option-${index}`} 
-                      className={`cursor-pointer text-base flex-1 prose prose-sm max-w-none dark:prose-invert ${(isTimerNeededToStart) ? 'cursor-not-allowed' : ''}`}
+                      className={`cursor-pointer text-base flex-1 prose prose-sm max-w-none dark:prose-invert ${(isTimerNeededToStart || evaluationSubmitted) ? 'cursor-not-allowed' : ''}`}
                     >
                         <MathRenderer content={option}/>
                     </Label>
@@ -184,13 +190,13 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
                 rows={6}
                 required
                 className="text-base"
-                disabled={isTimerNeededToStart} 
+                disabled={isTimerNeededToStart || evaluationSubmitted} 
               />
             </div>
           )}
           <Button 
             type="submit" 
-            disabled={isLoading || !canSubmitAnswer || isTimerNeededToStart} 
+            disabled={isLoading || !canSubmitAnswer || isTimerNeededToStart || evaluationSubmitted} 
             className="w-full text-base py-3"
           >
             {isLoading ? <Loader2 className="animate-spin" /> : <><Send className="mr-2 h-4 w-4" /> Submit Answer</>}

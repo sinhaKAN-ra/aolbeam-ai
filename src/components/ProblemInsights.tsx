@@ -73,7 +73,7 @@ export function ProblemInsights({ problem, topic, insights, onFetchInsights, isL
     <Card className="shadow-lg relative z-10">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xl font-semibold">
-          <Lightbulb className="text-primary" /> Insights for: <span className="font-normal truncate" title={topic}>{topic}</span>
+          <Lightbulb className="text-primary" /> <span className="font-normal">Understand pattern</span> for - <span className="font-normal truncate" title={topic}>{topic}</span>
         </CardTitle>
         <CardDescription className="text-sm mt-1">
           {explanatoryMessage}
@@ -96,8 +96,8 @@ export function ProblemInsights({ problem, topic, insights, onFetchInsights, isL
           </Button>
         ) : (
           <>
-            <ScrollArea className="h-60 w-full rounded-md border p-4 bg-muted/30">
-              <div className="prose prose-sm max-w-none dark:prose-invert">
+            <ScrollArea className="h-auto max-h-[500px] w-full rounded-md border p-5 bg-muted/30">
+              <div className="prose prose-md max-w-none dark:prose-invert space-y-4">
                 <MathRenderer content={insights} />
               </div>
             </ScrollArea>

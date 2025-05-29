@@ -25,7 +25,12 @@ const EvaluateTheoryAnswerOutputSchema = z.object({
   isCorrect: z.boolean().describe('Whether the student answer is correct based on the question, expected answer format, and topic details.'),
   feedback: z.string().describe('Detailed feedback on the answer, including areas for improvement. Should use LaTeX for math (e.g., $E=mc^2$ or $$x^2$$), Markdown for code (e.g., ```python\nprint("Hello")\n```), and describe diagrams or use Mermaid syntax (e.g., ```mermaid\ngraph TD; A-->B;\n```).'),
   explanation: z.string().optional().describe('Detailed explanation of why the answer is correct or incorrect.'),
-  correctAnswer: z.string().optional().describe('The correct answer or solution to the problem.'),
+  correctAnswer: z.string().describe('The complete step-by-step solution to the problem. Must include the reasoning process, intermediate steps, and final answer. Should use LaTeX for math, Markdown for code, and Mermaid for diagrams as appropriate.'),
+  solutionSteps: z.array(z.object({
+    stepNumber: z.number(),
+    stepDescription: z.string(),
+    stepExplanation: z.string()
+  })).optional().describe('Breakdown of solution steps in sequential order.'),
   score: z.number().optional().describe('The score achieved for this answer.'),
   maxScore: z.number().optional().describe('The maximum possible score for this question.'),
   areasForImprovement: z.array(z.string()).optional().describe('Specific areas where the student can improve.'),
@@ -48,12 +53,12 @@ const prompt = ai.definePrompt({
   output: {schema: EvaluateTheoryAnswerOutputSchema},
   prompt: `You are an expert educator providing feedback on student answers to theory questions.
 
-Content Formatting Rules for your 'feedback' output:
-1.  **Mathematical Formulas**: Use LaTeX notation. For inline math, use single dollar signs (e.g., $E=mc^2$). For display/block math, use double dollar signs (e.g., $$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$).
-2.  **Code Snippets**: Use Markdown fenced code blocks with language identifiers (e.g., \`\`\`python\\nprint("Hello World")\\n\`\`\` or \`\`\`javascript\\nconsole.log("Hi");\\n\`\`\`).
-3.  **Diagrams**: If a diagram is relevant to the feedback, first try to represent it using Mermaid.js syntax within a Markdown code block (e.g., \`\`\`mermaid\\ngraph TD;\\nA[Start] --> B(Process);\\nB --> C{Decision};\\nC --> D[End];\\n\`\`\`). If Mermaid.js is not suitable, provide a clear textual description of the diagram.
+Content Formatting Rules for your outputs:
+1.  **Mathematical Formulas**: Use LaTeX notation. For inline math, use single dollar signs (e.g., $E=mc^2$). For display/block math, use double dollar signs (e.g., $$x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$$).
+2.  **Code Snippets**: Use Markdown fenced code blocks with language identifiers (e.g., \`\`\`python\nprint("Hello World")\n\`\`\` or \`\`\`javascript\nconsole.log("Hi");\n\`\`\`).
+3.  **Diagrams**: If a diagram is relevant, first try to represent it using Mermaid.js syntax within a Markdown code block (e.g., \`\`\`mermaid\ngraph TD;\nA[Start] --> B(Process);\nB --> C{Decision};\nC --> D[End];\n\`\`\`). If Mermaid.js is not suitable, provide a clear textual description of the diagram.
 
-Ensure the LaTeX, Markdown, and Mermaid syntax is syntactically correct and properly escaped within the JSON string for the 'feedback' field.
+Ensure the LaTeX, Markdown, and Mermaid syntax is syntactically correct and properly escaped within the JSON string for all fields.
 
 Evaluate the student's answer to the following question. Use the provided 'Expected Answer Guidelines/Format' and 'Topic Details' to form your evaluation.
 Determine if the answer is correct, and provide detailed feedback adhering to the formatting rules above. Set the isCorrect output field appropriately.
@@ -69,6 +74,15 @@ Expected Answer Guidelines/Format:
 
 Topic Details (for context, may contain formatted content):
 {{{topicDetails}}}
+
+**CRITICAL REQUIREMENT: For the 'correctAnswer' field, you MUST provide a comprehensive step-by-step solution that:**
+1. Breaks down the problem-solving process into clear sequential steps
+2. Explains the reasoning behind each step
+3. Shows all intermediate calculations or logical reasoning
+4. Arrives at the final answer with a clear conclusion
+5. Uses appropriate formatting (LaTeX for math, Markdown for code, Mermaid for diagrams)
+
+This step-by-step solution will be shown to the student to help them understand how to solve the problem correctly.
   `,
 });
 

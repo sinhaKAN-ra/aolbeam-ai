@@ -151,6 +151,26 @@ const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
   const [failedDiagrams, setFailedDiagrams] = useState<{[key: string]: boolean}>({});
   const [fixingDiagrams, setFixingDiagrams] = useState<{[key: string]: boolean}>({});
   const [fixedDiagrams, setFixedDiagrams] = useState<{[key: string]: string}>({});
+  const [copiedDiagrams, setCopiedDiagrams] = useState<{[key: string]: boolean}>({});
+
+  // Function to copy diagram code to clipboard
+  const copyDiagramCode = async (mermaidId: string, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedDiagrams(prev => ({ ...prev, [mermaidId]: true }));
+      
+      // Reset the copied state after 2 seconds
+      setTimeout(() => {
+        setCopiedDiagrams(prev => {
+          const newState = { ...prev };
+          delete newState[mermaidId];
+          return newState;
+        });
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to copy diagram code:', error);
+    }
+  };
 
   // Function to fix a specific diagram
   const fixDiagram = async (mermaidId: string) => {
@@ -531,17 +551,56 @@ const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
         return (
           <div key={index} className="mermaid-diagram-container my-6 p-4 bg-card rounded-lg border shadow-sm">
             {isFailed && (
-              <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                <div className="flex items-center justify-between">
+              <div className="mb-3 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                <div className="mb-3">
                   <div className="text-yellow-800 text-sm">
-                    <strong>Mermaid Diagram Error:</strong> This diagram failed to render. You can try to fix it automatically.
+                    <strong>Mermaid Diagram Error:</strong> This diagram couldn't be rendered. You can try to fix it automatically or copy the code to generate correct one and use in an external editor.
                   </div>
+                  <div className="mt-2 text-xs text-yellow-700">
+                    Tip: Some complex diagrams might work better in the <a href="https://mermaid.live/" target="_blank" rel="noopener noreferrer" className="text-yellow-800 underline hover:text-yellow-900">Mermaid Live Editor</a>.
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
                   <button
-                    onClick={() => fixDiagram(mermaidId)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      fixDiagram(mermaidId);
+                    }}
                     disabled={isFixing}
-                    className="ml-3 px-3 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-3 py-1.5 bg-yellow-600 text-white text-xs font-medium rounded hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
                   >
-                    {isFixing ? 'Fixing...' : 'Try Fix'}
+                    {isFixing ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Fixing...
+                      </>
+                    ) : 'Fix Automatically'}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      copyDiagramCode(mermaidId, mermaidContent);
+                    }}
+                    className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-medium rounded hover:bg-gray-50 transition-colors flex items-center"
+                  >
+                    {copiedDiagrams[mermaidId] ? (
+                      <>
+                        <svg className="w-3 h-3 mr-1.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        </svg>
+                        Copy Code
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

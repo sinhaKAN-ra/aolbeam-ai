@@ -16,7 +16,11 @@ import {z} from 'genkit';
 const GeneratePracticeProblemInputSchema = z.object({
   topic: z.string().describe('The topic for which to generate a practice problem.'),
   problemType: z.enum(['theory', 'practical', 'conceptual', 'numerical', 'diagram_based']).describe('The type of problem to generate.'),
-  difficulty: z.enum(['easy', 'medium', 'hard']).optional().default('medium').describe('The desired difficulty level for the problem (easy, medium, hard).'),
+  difficulty: z.enum(['easy', 'medium', 'hard'])
+    .describe('The desired difficulty level for the problem (easy, medium, hard).')
+    .refine(val => ['easy', 'medium', 'hard'].includes(val), {
+      message: "Difficulty must be one of: 'easy', 'medium', or 'hard'"
+    }),
 });
 export type GeneratePracticeProblemInput = z.infer<typeof GeneratePracticeProblemInputSchema>;
 
@@ -36,9 +40,22 @@ const GeneratePracticeProblemOutputSchema = z.object({
 export type GeneratePracticeProblemOutput = z.infer<typeof GeneratePracticeProblemOutputSchema>;
 
 export async function generatePracticeProblem(input: GeneratePracticeProblemInput): Promise<GeneratePracticeProblemOutput> {
-  const result = await generatePracticeProblemFlow(input);
-  // Ensure the output difficulty matches the input, or defaults to medium if input was undefined
-  return { ...result, difficulty: input.difficulty || 'medium' };
+  // Validate difficulty parameter explicitly
+  const difficulty = input.difficulty || 'medium';
+  if (!['easy', 'medium', 'hard'].includes(difficulty)) {
+    throw new Error("Invalid difficulty level. Must be 'easy', 'medium', or 'hard'.");
+  }
+
+  // Use the validated difficulty in the API call
+  const validatedInput = {
+    ...input,
+    difficulty
+  };
+  
+  const result = await generatePracticeProblemFlow(validatedInput);
+  
+  // Ensure the output difficulty matches the validated input
+  return { ...result, difficulty };
 }
 
 const prompt = ai.definePrompt({
@@ -108,8 +125,9 @@ Choose ONE format and follow it strictly:
 4. ✓ LaTeX math uses proper escaping (\\\\) in JSON strings
 5. ✓ Code blocks use proper Markdown syntax
 6. ✓ Mermaid diagrams use proper syntax within code blocks
-7. ✓ Problem matches the specified difficulty level
+7. ✓ Problem matches the specified difficulty level (easy, medium, hard)
 8. ✓ Content is appropriate for the given topic
+9. ✓ For ALL problem types, correctAnswer MUST include step-by-step solution process
 
 **EXAMPLE OUTPUT STRUCTURE:**
 {
