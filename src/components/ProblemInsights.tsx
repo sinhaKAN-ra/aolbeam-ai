@@ -96,7 +96,7 @@ export function ProblemInsights({ problem, topic, insights, onFetchInsights, isL
           </Button>
         ) : (
           <>
-            <ScrollArea className="h-auto max-h-[600px] w-full rounded-md border p-6 bg-muted/30">
+            <ScrollArea className="h-auto w-full rounded-md border p-6 bg-muted/30">
               <div className="prose prose-sm max-w-none dark:prose-invert break-words">
                 <MathRenderer content={insights} />
               </div>

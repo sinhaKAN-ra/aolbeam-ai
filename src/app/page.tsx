@@ -33,12 +33,13 @@ import { UseCaseBanner } from '@/components/UseCaseBanner';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSupabase } from '@/hooks/useSupabase';
 import { useRouter } from 'next/navigation';
+import { useInteractionLimit } from '@/hooks/useInteractionLimit';
 
 // This is a client component that will be hydrated on the client
 // Server-side data fetching should be moved to a Server Component
 // and passed as props to this component
 
-const FREE_INTERACTION_LIMIT = 5;
+const FREE_INTERACTION_LIMIT = 20;
 const ALL_CONCRETE_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
 
 export default function AOLBEAMPage() {
@@ -68,6 +69,7 @@ export default function AOLBEAMPage() {
   // History and interactions
   const [history, setHistory] = useState<InteractionHistoryItem[]>([]);
   const [guestInteractionCount, setGuestInteractionCount] = useLocalStorage<number>('aolbeamGuestInteractionCount', 0);
+  const { checkInteractionLimit, recordInteraction } = useInteractionLimit();
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [isClientMounted, setIsClientMounted] = useState(false);
 
@@ -273,32 +275,40 @@ export default function AOLBEAMPage() {
     };
   }, []);
 
-  const checkUsageLimit = useCallback(() => {
-    if (currentUser && userProfile) { 
-      if (userProfile.is_subscribed) return false; 
-      return (userProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT;
+  const hasReachedFreeLimit = useCallback(async () => {
+    if (currentUser) {
+      const result = await checkInteractionLimit('evaluate');
+      return !result.allowed;
     }
     return guestInteractionCount >= FREE_INTERACTION_LIMIT;
-  }, [currentUser, userProfile, guestInteractionCount]);
+  }, [currentUser, checkInteractionLimit, guestInteractionCount]);
 
-  const incrementInteraction = useCallback(async () => {
-    if (currentUser && userProfile) {
-      if (userProfile.is_subscribed) return;
-        const newCount = (userProfile.interaction_count || 0) + 1;
-        try {
-            const { error } = await supabase
-                .from('user_profiles')
-                .update({ interaction_count: newCount })
-          .eq('user_id', currentUser.id);
-        if (error) throw error;
-        setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null);
+  const incrementInteraction = useCallback(async (type: 'evaluate' | 'insight' = 'evaluate') => {
+    if (currentUser) {
+      try {
+        // Record the interaction using the new system
+        await recordInteraction(type);
+        
+        // Also update the old counter for backward compatibility
+        if (userProfile) {
+          const newCount = (userProfile.interaction_count || 0) + 1;
+          const { error } = await supabase
+            .from('user_profiles')
+            .update({ interaction_count: newCount })
+            .eq('user_id', currentUser.id);
+
+          setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null);
+          if (error) {
+            console.error('Error updating interaction count:', error);
+          }
+        }
       } catch (error) {
-        console.error('Error updating interaction count:', error);
+        console.error('Error incrementing interaction:', error);
       }
-            } else {
-        setGuestInteractionCount(prev => prev + 1);
+    } else {
+      setGuestInteractionCount(prev => prev + 1);
     }
-  }, [currentUser, userProfile, supabase]);
+  }, [currentUser, userProfile, supabase, setGuestInteractionCount, recordInteraction]);
 
   const addToHistory = useCallback(async (itemToAdd: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'> & { actualProblemType: Exclude<ProblemType, 'random'> }) => {
     const newHistoryItem: InteractionHistoryItem = {
@@ -415,8 +425,8 @@ export default function AOLBEAMPage() {
   }, [setHistory, supabase, currentUser, toast, history, saveHistoryToLocalStorage]);
 
   const handleGenerateProblem = async (topic: string, type: ProblemType, difficulty: DifficultyLevel) => {
-    if ((currentUser && isLoadingPageProfile) || checkUsageLimit()) {
-      if (checkUsageLimit()) {
+    if ((currentUser && isLoadingPageProfile) || await hasReachedFreeLimit()) {
+      if (await hasReachedFreeLimit()) {
         if (!currentUser) {
           toast({ 
             variant: "destructive", 
@@ -452,7 +462,7 @@ export default function AOLBEAMPage() {
     setCurrentProblemType(actualProblemTypeForAI); 
 
     try {
-      await incrementInteraction();
+      await incrementInteraction('evaluate');
       const result = await generatePracticeProblem({ topic, problemType: actualProblemTypeForAI, difficulty });
       const problemDifficulty = result.difficulty || difficulty; 
       const problemWithDifficulty = {...result, difficulty: problemDifficulty};
@@ -549,7 +559,7 @@ ${currentProblem.answerFormat}` : ''}`;
       
       // Check user and loading state
       const userCheck = currentUser && isLoadingPageProfile;
-      const usageLimitReached = checkUsageLimit();
+      const usageLimitReached = await hasReachedFreeLimit();
       console.log("User check:", { currentUser, isLoadingPageProfile, userCheck, usageLimitReached });
       
       if (userCheck || usageLimitReached) {
@@ -564,7 +574,7 @@ ${currentProblem.answerFormat}` : ''}`;
       console.log("Fetching insights for:", { problemStatement, topicToFetch });
       setIsLoadingInsights(true); 
       
-      await incrementInteraction();
+      await incrementInteraction('insight');
       const result = await generateProblemInsights({ 
         problemStatement, 
         topic: topicToFetch 
@@ -684,16 +694,36 @@ ${currentProblem.answerFormat}` : ''}`;
     }
   }, [currentUser, history, isLoadingProblem, currentProblem, isLoadingPageProfile, isClientMounted]);
 
-  const interactionsLeftText = () => {
-    if (isLoadingPageProfile && currentUser) return "Loading interactions...";
-    if (currentUser && userProfile) {
-        return userProfile.is_subscribed ? "You have unlimited interactions!" : `Free interactions remaining: ${Math.max(0, FREE_INTERACTION_LIMIT - (userProfile.interaction_count || 0))}`;
+  const [interactionsLeft, setInteractionsLeft] = useState<string>("Loading interactions...");
+
+  useEffect(() => {
+    async function updateInteractionsText() {
+      if (isLoadingPageProfile && currentUser) {
+        setInteractionsLeft("Loading interactions...");
+        return;
+      }
+      
+      if (currentUser) {
+        try {
+          const result = await checkInteractionLimit('evaluate');
+          if (result.limit === -1 || result.remaining === -1) {
+            setInteractionsLeft("You have unlimited interactions!");
+          } else {
+            setInteractionsLeft(`Free interactions remaining: ${result.remaining}`);
+          }
+        } catch (error) {
+          console.error('Error checking interaction limit:', error);
+          setInteractionsLeft("Interactions: N/A (Error loading limits)");
+        }
+      } else {
+        setInteractionsLeft(`Free interactions remaining: ${Math.max(0, FREE_INTERACTION_LIMIT - guestInteractionCount)}`);
+      }
     }
-    if (!currentUser) { 
-        return `Free interactions remaining: ${Math.max(0, FREE_INTERACTION_LIMIT - guestInteractionCount)}`;
-    }
-    return "Interactions: N/A (Error loading profile)"; 
-  };
+    
+    updateInteractionsText();
+  }, [currentUser, isLoadingPageProfile, checkInteractionLimit, guestInteractionCount]);
+
+  const interactionsLeftText = () => interactionsLeft;
 
   return (
     <div className="flex flex-col min-h-screen">

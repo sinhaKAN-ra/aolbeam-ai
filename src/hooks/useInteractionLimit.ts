@@ -106,10 +106,13 @@ export function useInteractionLimit() {
       console.warn('Failed to record interaction');
     }
 
+    // Get updated count after recording the interaction
+    const updatedResult = await checkInteractionLimit(interactionType);
+    
     return { 
       allowed: true, 
-      remaining: result.limit - 1, 
-      limit: result.limit, 
+      remaining: updatedResult.remaining, 
+      limit: updatedResult.limit, 
       isLoggedIn: true,
       requiresLogin: false,
       requiresUpgrade: false

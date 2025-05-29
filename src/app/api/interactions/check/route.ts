@@ -41,21 +41,35 @@ export async function POST(request: Request) {
     }
 
     const allowed = data as boolean;
-    const limit = 5; // This should match the limit in the database function
+    const limit = 20; // Updated limit from 5 to 20 to match the database function
     
     // Get the actual count to calculate remaining
-    const { count } = await supabase
+    const { count, error: countError } = await supabase
       .from('user_interactions')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .eq('interaction_type', interactionType)
       .eq('created_date', new Date().toISOString().split('T')[0]);
 
-    const remaining = allowed ? limit - (count || 0) : 0;
+    if (countError) {
+      console.error('Error getting interaction count:', countError);
+      // If there's an error counting, assume the user has all interactions available
+      return NextResponse.json({ 
+        allowed: true,
+        remaining: limit,
+        limit,
+        isLoggedIn: true 
+      } as InteractionCheckResponse);
+    }
 
+    // If allowed is true from the database function, calculate the remaining count
+    const remaining = allowed ? Math.max(0, limit - (count || 0)) : 0;
+
+    // For subscribed users, return unlimited (-1)
+    // For free users, return the actual count
     return NextResponse.json({ 
       allowed,
-      remaining: allowed ? remaining : 0,
+      remaining: data === true && count === 0 ? limit : remaining,
       limit,
       isLoggedIn: true 
     } as InteractionCheckResponse);
