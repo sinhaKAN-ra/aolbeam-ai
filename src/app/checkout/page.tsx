@@ -259,8 +259,8 @@ const [phoneError, setPhoneError] = useState<string | null>(null);
   }, [userCountry]);
 
   const handlePayment = async () => {
-  if (paymentMethod === 'cashfree' && (!customerPhone || customerPhone.trim().length < 10)) {
-    setPaymentError('A valid phone number is required for Cashfree payments.');
+  if (paymentMethod === 'cashfree' && (!customerPhone || !/^\d{10}$/.test(customerPhone.trim()))) {
+    setPaymentError('A valid 10-digit phone number is required for Cashfree payments.');
     setIsPaymentProcessing(false);
     return;
   }
@@ -863,7 +863,9 @@ if (!response.ok) {
                             type="tel"
                             value={customerPhone}
                             onChange={e => {
-                              setCustomerPhone(e.target.value);
+                              // Only allow digits and limit to 10 characters
+                              const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                              setCustomerPhone(value);
                               setPhoneSaved(false);
                               setPhoneError(null);
                             }}
@@ -872,11 +874,11 @@ if (!response.ok) {
                             required
                             autoComplete="tel"
                           />
-                          {user && customerPhone !== (user.phone || '') && (
+                          {user && customerPhone !== (user.phone || '') && /^\d{10}$/.test(customerPhone) && (
                             <Button
                               variant="secondary"
                               size="sm"
-                              disabled={savingPhone || !/^\d{10,}$/.test(customerPhone)}
+                              disabled={savingPhone}
                               onClick={async () => {
                                 setSavingPhone(true);
                                 setPhoneError(null);
@@ -906,7 +908,10 @@ if (!response.ok) {
                             <span className="text-red-600 text-xs ml-2">{phoneError}</span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">Required for Cashfree payments. 10+ digits.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Required for Cashfree payments. Must be exactly 10 digits.</p>
+                        {customerPhone && customerPhone.length !== 10 && (
+                          <p className="text-xs text-red-500 mt-1">{10 - customerPhone.length} {10 - customerPhone.length === 1 ? 'digit' : 'digits'} {customerPhone.length < 10 ? 'more' : 'less'} needed</p>
+                        )}
                       </div>
                     )}
                     {/* Payment Button */}

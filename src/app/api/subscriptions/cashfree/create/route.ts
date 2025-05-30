@@ -104,7 +104,7 @@ export async function POST(request: Request) {
         order_meta: {
           return_url: returnUrl,
           notify_url: notifyUrl,
-          payment_methods: 'cc,dc,upi,netbanking,paylater,wallet',
+          payment_methods: 'cc,dc,upi,nb,paylater',
         },
         order_note: `${orderNote} - ${subscriptionDetails.interval} subscription`,
     };
