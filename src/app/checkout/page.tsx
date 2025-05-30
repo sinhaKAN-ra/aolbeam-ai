@@ -131,6 +131,9 @@ function CheckoutPageContent() {
   const router = useRouter();
   const { user, session, isLoading: isAuthLoading } = useAuth();
   const [customerPhone, setCustomerPhone] = useState(user?.phone || '');
+const [savingPhone, setSavingPhone] = useState(false);
+const [phoneSaved, setPhoneSaved] = useState(false);
+const [phoneError, setPhoneError] = useState<string | null>(null);
   const { theme } = useTheme();
   
   const [isPageLoading, setIsPageLoading] = useState(true);
@@ -140,7 +143,7 @@ function CheckoutPageContent() {
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   const [convertedPlans, setConvertedPlans] = useState<Partial<ConvertedPlans>>({});
   const [selectedPlan, setSelectedPlan] = useState<PlanId | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cashfree'); // Default to cashfree
   const [paymentType, setPaymentType] = useState<PaymentType>('subscription');
   
   const isDark = theme === 'dark';
@@ -246,10 +249,12 @@ function CheckoutPageContent() {
 
   // Auto-select payment method based on country
   useEffect(() => {
-    if (userCountry === 'IN') {
-      setPaymentMethod('cashfree');
-    } else {
-      setPaymentMethod('lemonsqueezy');
+    if (userCountry) {
+      if (userCountry === 'IN') {
+        setPaymentMethod('cashfree');
+      } else {
+        setPaymentMethod('lemonsqueezy');
+      }
     }
   }, [userCountry]);
 
@@ -848,6 +853,62 @@ if (!response.ok) {
                       </div>
                     </div>
 
+                    {/* Phone input for Cashfree */}
+                    {paymentMethod === 'cashfree' && (
+                      <div className="mb-4">
+                        <Label htmlFor="customer-phone">Phone Number</Label>
+                        <div className="flex gap-2 items-center">
+                          <Input
+                            id="customer-phone"
+                            type="tel"
+                            value={customerPhone}
+                            onChange={e => {
+                              setCustomerPhone(e.target.value);
+                              setPhoneSaved(false);
+                              setPhoneError(null);
+                            }}
+                            placeholder="Enter your phone number"
+                            maxLength={15}
+                            required
+                            autoComplete="tel"
+                          />
+                          {user && customerPhone !== (user.phone || '') && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={savingPhone || !/^\d{10,}$/.test(customerPhone)}
+                              onClick={async () => {
+                                setSavingPhone(true);
+                                setPhoneError(null);
+                                try {
+                                  const { error } = await supabase.auth.updateUser({ phone: customerPhone });
+                                  if (error) {
+                                    setPhoneError('Failed to update phone: ' + error.message);
+                                    setPhoneSaved(false);
+                                  } else {
+                                    setPhoneSaved(true);
+                                    setPhoneError(null);
+                                  }
+                                } catch (err: any) {
+                                  setPhoneError('Failed to update phone: ' + (err.message || 'Unknown error'));
+                                  setPhoneSaved(false);
+                                }
+                                setSavingPhone(false);
+                              }}
+                            >
+                              {savingPhone ? 'Saving...' : 'Save to Profile'}
+                            </Button>
+                          )}
+                          {phoneSaved && (
+                            <span className="text-green-600 text-xs ml-2">Saved!</span>
+                          )}
+                          {phoneError && (
+                            <span className="text-red-600 text-xs ml-2">{phoneError}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">Required for Cashfree payments. 10+ digits.</p>
+                      </div>
+                    )}
                     {/* Payment Button */}
                     <div className="mt-6">
                       {paymentMethod === 'manual' ? (
