@@ -435,24 +435,44 @@ function CheckoutPageContent() {
     }
 
     return (
-      <Button 
-        onClick={handlePayment}
-        disabled={!paymentMethod || !paymentType || isPaymentProcessing}
-        className="w-full mt-4"
-        size="lg"
-      >
-        {isPaymentProcessing ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Processing...
-          </>
-        ) : (
-          <>
-            <CreditCard className="mr-2 h-4 w-4" />
-            Pay {paymentType === 'subscription' ? plan?.price : plan?.oneTimePrice}
-          </>
+      <>
+        {paymentMethod === 'cashfree' && (
+          <div className="flex items-center justify-center mb-2">
+            {/* Cashfree logo or badge, replace src with actual logo if available */}
+            <img src="https://assets.cashfree.com/prod/images/logo/cashfree-logo-icon.svg" alt="Cashfree Logo" className="h-5 w-5 mr-1" />
+            <span className="text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded">Cashfree</span>
+          </div>
         )}
-      </Button>
+        {paymentMethod === 'lemonsqueezy' && (
+          <div className="flex items-center justify-center mb-2">
+            {/* LemonSqueezy logo or badge */}
+            <img src="https://app.lemonsqueezy.com/apple-touch-icon.png" alt="LemonSqueezy Logo" className="h-5 w-5 mr-1 rounded" />
+            <span className="text-xs font-medium text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded">LemonSqueezy</span>
+          </div>
+        )}
+        <Button 
+          onClick={handlePayment}
+          disabled={!paymentMethod || !paymentType || isPaymentProcessing}
+          className="w-full mt-4"
+          size="lg"
+        >
+          {isPaymentProcessing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              <CreditCard className="mr-2 h-4 w-4" />
+              {paymentMethod === 'cashfree'
+                ? `Pay with Cashfree (${paymentType === 'subscription' ? plan?.price : plan?.oneTimePrice})`
+                : paymentMethod === 'lemonsqueezy'
+                ? `Pay with LemonSqueezy (${paymentType === 'subscription' ? plan?.price : plan?.oneTimePrice})`
+                : `Pay ${paymentType === 'subscription' ? plan?.price : plan?.oneTimePrice}`}
+            </>
+          )}
+        </Button>
+      </>
     );
   };
 
@@ -534,10 +554,14 @@ function CheckoutPageContent() {
 
   // Wrap the entire component with PayPalScriptProvider at the root
   const content = (
-    <div className={cn(
-      "min-h-screen py-12 transition-colors duration-200",
-      isDark ? "bg-background" : "bg-background"
-    )}>
+  <div className={cn(
+    "min-h-screen py-12 transition-colors duration-200",
+    isDark ? "bg-background" : "bg-background"
+  )}>
+    {/* Debug/Info Bar for country and payment method */}
+    <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 px-4 py-1 rounded bg-muted text-xs text-muted-foreground border border-border shadow">
+      <span>Country: <b>{userCountry || 'Detecting...'}</b> | Payment Method: <b>{paymentMethod || 'Detecting...'}</b></span>
+    </div>
       <div className="container mx-auto px-4">
         <Button 
           variant="ghost" 
