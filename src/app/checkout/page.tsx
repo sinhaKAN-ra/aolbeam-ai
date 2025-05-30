@@ -36,6 +36,7 @@ import { PayPalButton } from '@/components/PayPalButton';
 import { getCurrencyDetails, convertAmount, formatCurrency, getExchangeRates } from '@/lib/utils/currency';
 import { loadCashfree, initializePayment, createCashfreeOrder } from '@/services/cashfree';
 import { loadLemonSqueezy, initializeLemonSqueezy, openCheckout } from '@/services/lemonsqueezy';
+import { useSupabase } from '@/hooks/useSupabase';
 import { PayPalScriptProvider, ReactPayPalScriptOptions } from '@paypal/react-paypal-js';
 
 // Base prices in INR
@@ -125,6 +126,7 @@ const LEMON_SQUEEZY_CHECKOUT_URLS = {
 export type { ConvertedPlan };
 
 function CheckoutPageContent() {
+  const supabase = useSupabase();
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user, session, isLoading: isAuthLoading } = useAuth();
@@ -348,7 +350,9 @@ function CheckoutPageContent() {
           
           // Create the order/subscription
           // Initialize Supabase client for getting auth token
-const supabase = createClientComponentClient();
+
+
+
 // Get the session JWT token directly
 const { data: sessionData } = await supabase.auth.getSession();
 const token = sessionData?.session?.access_token;
