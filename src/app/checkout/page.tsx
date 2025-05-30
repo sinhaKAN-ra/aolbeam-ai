@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -340,12 +341,22 @@ function CheckoutPageContent() {
             : '/api/payments/cashfree/create-order';
           
           // Create the order/subscription
-          const response = await fetch(endpoint, {
+          // Initialize Supabase client for getting auth token
+const supabase = createClientComponentClient();
+// Get the session JWT token directly
+const { data: sessionData } = await supabase.auth.getSession();
+const token = sessionData?.session?.access_token;
+
+console.log('Auth token available:', !!token); // Debug log
+
+const response = await fetch(endpoint, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
+    // Pass the token explicitly in the Authorization header
+    'Authorization': `Bearer ${token}`,
   },
-  credentials: 'include',
+  credentials: 'include', // Keep this for cookies as well
   body: paymentType === 'subscription'
     ? JSON.stringify({
         orderId: `sub_${plan.id}_${Date.now()}`,
@@ -367,6 +378,15 @@ function CheckoutPageContent() {
         interval: plan.interval,
       }),
 });
+
+// Improved error logging
+if (!response.ok) {
+  console.error('API Response:', {
+    status: response.status,
+    statusText: response.statusText,
+    headers: Object.fromEntries([...response.headers]),
+  });
+}
           
           if (!response.ok) {
             const errorData = await response.json();
