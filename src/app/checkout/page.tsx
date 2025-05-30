@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+// Supabase client is managed by AuthContext. Do not initialize here.
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -127,7 +127,7 @@ export type { ConvertedPlan };
 function CheckoutPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { user, session, isLoading: isAuthLoading } = useAuth();
   const { theme } = useTheme();
   
   const [isPageLoading, setIsPageLoading] = useState(true);
@@ -251,6 +251,12 @@ function CheckoutPageContent() {
   }, [userCountry]);
 
   const handlePayment = async () => {
+  if (!user || !session) {
+    setPaymentError('You must be logged in to make a payment.');
+    setIsPaymentProcessing(false);
+    return;
+  }
+  const token = session.access_token;
     if (!paymentMethod || !plan) return;
     
     setIsPaymentProcessing(true);
@@ -962,9 +968,10 @@ if (!response.ok) {
               <div className="mt-6">
                 {paymentMethod === 'manual' ? (
                   <Button 
-                    onClick={handleManualPayment}
+                    onClick={handlePayment}
                     className="w-full transition-all duration-200 shadow-md hover:shadow-lg"
                     size="lg"
+                    disabled={isPaymentProcessing || isAuthLoading || !user || !session}
                   >
                     {paymentType === 'subscription' ? (
                       <>
