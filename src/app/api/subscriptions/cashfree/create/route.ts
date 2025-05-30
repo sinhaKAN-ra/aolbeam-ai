@@ -128,7 +128,7 @@ export async function POST(request: Request) {
       const error = await response.json();
       console.error('Cashfree API error:', error);
       return NextResponse.json(
-        { error: 'Failed to create order in Cashfree' },
+        { error: 'Failed to create order in Cashfree', cashfreeError: error },
         { status: response.status }
       );
     }

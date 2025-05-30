@@ -381,9 +381,9 @@ const response = await fetch(endpoint, {
   body: paymentType === 'subscription'
     ? JSON.stringify({
         orderId: `sub_${plan.id}_${Date.now()}`,
-        orderAmount: plan.basePrice,
+        orderAmount: plan.basePrice * 100, // Convert to paise for Cashfree
         orderCurrency: 'INR',
-        customerName: user?.email || 'User',
+        customerName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User',
         customerEmail: user?.email,
         customerPhone: customerPhone,
         returnUrl: `${window.location.origin}/payment/success`,
