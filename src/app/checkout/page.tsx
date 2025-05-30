@@ -130,6 +130,7 @@ function CheckoutPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user, session, isLoading: isAuthLoading } = useAuth();
+  const [customerPhone, setCustomerPhone] = useState(user?.phone || '');
   const { theme } = useTheme();
   
   const [isPageLoading, setIsPageLoading] = useState(true);
@@ -253,6 +254,11 @@ function CheckoutPageContent() {
   }, [userCountry]);
 
   const handlePayment = async () => {
+  if (paymentMethod === 'cashfree' && (!customerPhone || customerPhone.trim().length < 10)) {
+    setPaymentError('A valid phone number is required for Cashfree payments.');
+    setIsPaymentProcessing(false);
+    return;
+  }
   if (!user || !session) {
     setPaymentError('You must be logged in to make a payment.');
     setIsPaymentProcessing(false);
@@ -374,7 +380,7 @@ const response = await fetch(endpoint, {
         orderCurrency: 'INR',
         customerName: user?.email || 'User',
         customerEmail: user?.email,
-        customerPhone: user?.phone || '',
+        customerPhone: customerPhone,
         returnUrl: `${window.location.origin}/payment/success`,
         subscriptionDetails: {
           planId: plan.id,
