@@ -341,17 +341,32 @@ function CheckoutPageContent() {
           
           // Create the order/subscription
           const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              planId: plan.id,
-              amount: paymentType === 'subscription' ? plan.basePrice : plan.oneTimePrice,
-              currency: 'INR',
-              interval: plan.interval,
-            }),
-          });
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  credentials: 'include',
+  body: paymentType === 'subscription'
+    ? JSON.stringify({
+        orderId: `sub_${plan.id}_${Date.now()}`,
+        orderAmount: plan.basePrice,
+        orderCurrency: 'INR',
+        customerName: user?.email || 'User',
+        customerEmail: user?.email,
+        customerPhone: user?.phone || '',
+        returnUrl: `${window.location.origin}/payment/success`,
+        subscriptionDetails: {
+          planId: plan.id,
+          interval: plan.interval,
+        },
+      })
+    : JSON.stringify({
+        planId: plan.id,
+        amount: plan.oneTimePrice,
+        currency: 'INR',
+        interval: plan.interval,
+      }),
+});
           
           if (!response.ok) {
             const errorData = await response.json();
@@ -555,157 +570,403 @@ function CheckoutPageContent() {
   // Wrap the entire component with PayPalScriptProvider at the root
   const content = (
   <div className={cn(
-    "min-h-screen py-12 transition-colors duration-200",
-    isDark ? "bg-background" : "bg-background"
+    "min-h-screen py-8 md:py-12 transition-colors duration-300",
+    isDark ? "bg-background" : "bg-gray-50"
   )}>
-    {/* Debug/Info Bar for country and payment method */}
-    <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 px-4 py-1 rounded bg-muted text-xs text-muted-foreground border border-border shadow">
-      <span>Country: <b>{userCountry || 'Detecting...'}</b> | Payment Method: <b>{paymentMethod || 'Detecting...'}</b></span>
-    </div>
-      <div className="container mx-auto px-4">
+    {/* Debug/Info Bar for country and payment method - only in development */}
+    {process.env.NODE_ENV === 'development' && (
+      <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 px-4 py-1 rounded bg-muted text-xs text-muted-foreground border border-border shadow-sm">
+        <span>Country: <b>{userCountry || 'Detecting...'}</b> | Payment Method: <b>{paymentMethod || 'Detecting...'}</b></span>
+      </div>
+    )}
+    
+    <div className="container max-w-5xl mx-auto px-4">
+      <div className="flex items-center justify-between mb-8">
         <Button 
           variant="ghost" 
           onClick={() => router.back()} 
-          className="mb-6 hover:bg-accent/50"
+          className="hover:bg-accent/50 flex items-center"
+          size="sm"
         >
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Pricing
+          <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> Back
         </Button>
+        
+        {/* Checkout Steps Indicator */}
+        <div className="hidden md:flex items-center justify-center space-x-2">
+          <div className="flex items-center">
+            <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium">1</div>
+            <span className="ml-2 text-sm font-medium">Plan</span>
+          </div>
+          <div className="w-8 h-px bg-primary"></div>
+          <div className="flex items-center">
+            <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium">2</div>
+            <span className="ml-2 text-sm font-medium">Payment</span>
+          </div>
+          <div className="w-8 h-px bg-muted"></div>
+          <div className="flex items-center opacity-50">
+            <div className="h-6 w-6 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-xs font-medium">3</div>
+            <span className="ml-2 text-sm font-medium">Confirmation</span>
+          </div>
+        </div>
+        
+        <div className="w-10"></div> {/* Empty space for balance */}
+      </div>
 
-        <div className="max-w-4xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-2xl md:text-3xl font-bold text-center mb-6">Complete Your Purchase</h1>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
             {/* Order Summary */}
             <div className="lg:col-span-2">
-              <Card className="mb-6 border-border/50 shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-xl">Order Summary</CardTitle>
+              <Card className="mb-6 border-border/30 shadow-md overflow-hidden">
+                <CardHeader className="pb-3 bg-muted/30 border-b border-border/20">
+                  <CardTitle className="text-xl flex items-center">
+                    <CreditCard className="mr-2 h-5 w-5 text-primary" />
+                    Order Summary
+                  </CardTitle>
                   <CardDescription className="text-muted-foreground">Review your subscription details</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-6">
                   <div className="space-y-6">
-                    <div className="flex justify-between items-start border-b pb-4">
+                    {/* Selected Plan with Badge */}
+                    <div className="flex items-start justify-between bg-muted/20 p-4 rounded-lg border border-border/20">
                       <div>
-                        <h3 className="font-medium">{plan.name}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {plan.description}
-                        </p>
+                        <div className="flex items-center">
+                          <h3 className="font-medium text-lg">{plan.name}</h3>
+                          <Badge variant="outline" className="ml-2 bg-primary/10 text-primary border-primary/20">
+                            {plan.interval}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
+                        <ul className="mt-3 space-y-1">
+                          {plan.features.slice(0, 3).map((feature, index) => (
+                            <li key={index} className="text-sm flex items-start">
+                              <Check className="h-4 w-4 mr-2 text-green-500 flex-shrink-0 mt-0.5" />
+                              <span>{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                       <div className="text-right">
-                        <p className="font-medium">{paymentType === 'subscription' ? plan.price : plan.oneTimePrice}</p>
-                        {userCountry !== 'IN' && (
-                          <p className="text-xs text-muted-foreground">
-                            Converted from ₹{plan.basePrice}
-                          </p>
+                        <div className="text-xl font-semibold text-primary">
+                          {paymentType === 'subscription' ? plan.price : plan.oneTimePrice}
+                        </div>
+                        {paymentType === 'subscription' && (
+                          <p className="text-xs text-muted-foreground">per {plan.duration}</p>
                         )}
                       </div>
                     </div>
 
-                    {/* Payment Type Selection */}
-                    <div className="space-y-4">
-                      <h4 className="font-medium">Choose Payment Type:</h4>
-                      <RadioGroup
-                        value={paymentType || ''}
-                        onValueChange={(value) => setPaymentType(value as PaymentType)}
-                        className="space-y-3"
-                      >
-                        <div className="flex items-center space-x-3 rounded-lg border p-4 hover:bg-accent/50">
-                          <RadioGroupItem value="subscription" id="subscription" className="mt-0.5" />
-                          <Label htmlFor="subscription" className="flex-1 cursor-pointer">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-2">
-                                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                <span>Subscription</span>
-                                <Badge variant="outline" className="ml-2 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 border-green-200 dark:border-green-800">
-                                  Save up to 30%
-                                </Badge>
-                              </div>
-                              {paymentType === 'subscription' && <Check className="h-5 w-5 text-green-500" />}
+                    <Separator className="my-2" />
+
+                    {/* Payment Type Selection - Improved UI */}
+                    <div className="space-y-3">
+                      <Label className="text-base font-medium">Payment Type</Label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div 
+                          className={cn(
+                            "border rounded-lg p-4 cursor-pointer transition-all duration-200 hover:border-primary/70",
+                            paymentType === 'subscription' 
+                              ? "border-primary bg-primary/5" 
+                              : "border-border"
+                          )}
+                          onClick={() => setPaymentType('subscription')}
+                        >
+                          <div className="flex items-center">
+                            <div className={cn(
+                              "w-4 h-4 rounded-full border mr-2 flex items-center justify-center",
+                              paymentType === 'subscription' ? "border-primary" : "border-muted-foreground"
+                            )}>
+                              {paymentType === 'subscription' && (
+                                <div className="w-2 h-2 rounded-full bg-primary" />
+                              )}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {plan?.price} (auto-renews, cancel anytime)
-                            </p>
-                          </Label>
+                            <div>
+                              <div className="font-medium">Subscription</div>
+                              <div className="text-sm text-muted-foreground flex items-center">
+                                {plan.price}
+                                <span className="ml-2 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">
+                                  Save {Math.round((1 - Number(plan.basePrice) / Number(plan.oneTimePrice)) * 100)}%
+                                </span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                         
-                        <div className="flex items-center space-x-3 rounded-lg border p-4 hover:bg-accent/50">
-                          <RadioGroupItem value="one-time" id="one-time" className="mt-0.5" />
-                          <Label htmlFor="one-time" className="flex-1 cursor-pointer">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-2">
-                                <CreditCard className="h-5 w-5 text-blue-600" />
-                                <span>One-Time Payment</span>
-                              </div>
-                              {paymentType === 'one-time' && <Check className="h-5 w-5 text-green-500" />}
+                        <div 
+                          className={cn(
+                            "border rounded-lg p-4 cursor-pointer transition-all duration-200 hover:border-primary/70",
+                            paymentType === 'one-time' 
+                              ? "border-primary bg-primary/5" 
+                              : "border-border"
+                          )}
+                          onClick={() => setPaymentType('one-time')}
+                        >
+                          <div className="flex items-center">
+                            <div className={cn(
+                              "w-4 h-4 rounded-full border mr-2 flex items-center justify-center",
+                              paymentType === 'one-time' ? "border-primary" : "border-muted-foreground"
+                            )}>
+                              {paymentType === 'one-time' && (
+                                <div className="w-2 h-2 rounded-full bg-primary" />
+                              )}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {plan?.oneTimePrice} (one-time)
-                            </p>
-                          </Label>
+                            <div>
+                              <div className="font-medium">One-time payment</div>
+                              <div className="text-sm text-muted-foreground">{plan.oneTimePrice}</div>
+                            </div>
+                          </div>
                         </div>
-                      </RadioGroup>
+                      </div>
                     </div>
+
+                    <Separator className="my-2" />
+
+                    {/* Payment Method Selection - Improved UI */}
+                    <div className="space-y-3">
+                      <Label className="text-base font-medium">Payment Method</Label>
+                      <div className="grid grid-cols-1 gap-3">
+                        {userCountry === 'IN' && (
+                          <div 
+                            className={cn(
+                              "border rounded-lg p-4 cursor-pointer transition-all duration-200 hover:border-primary/70",
+                              paymentMethod === 'cashfree' 
+                                ? "border-primary bg-primary/5" 
+                                : "border-border"
+                            )}
+                            onClick={() => setPaymentMethod('cashfree')}
+                          >
+                            <div className="flex items-center">
+                              <div className={cn(
+                                "w-4 h-4 rounded-full border mr-2 flex items-center justify-center",
+                                paymentMethod === 'cashfree' ? "border-primary" : "border-muted-foreground"
+                              )}>
+                                {paymentMethod === 'cashfree' && (
+                                  <div className="w-2 h-2 rounded-full bg-primary" />
+                                )}
+                              </div>
+                              <div className="flex items-center">
+                                <img src="https://assets.cashfree.com/prod/images/logo/cashfree-logo-icon.svg" alt="Cashfree Logo" className="h-5 w-5 mr-2" />
+                                <div>
+                                  <div className="font-medium">Cashfree</div>
+                                  <div className="text-xs text-muted-foreground">Credit/Debit Card, UPI, Netbanking</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {userCountry !== 'IN' && (
+                          <div 
+                            className={cn(
+                              "border rounded-lg p-4 cursor-pointer transition-all duration-200 hover:border-primary/70",
+                              paymentMethod === 'lemonsqueezy' 
+                                ? "border-primary bg-primary/5" 
+                                : "border-border"
+                            )}
+                            onClick={() => setPaymentMethod('lemonsqueezy')}
+                          >
+                            <div className="flex items-center">
+                              <div className={cn(
+                                "w-4 h-4 rounded-full border mr-2 flex items-center justify-center",
+                                paymentMethod === 'lemonsqueezy' ? "border-primary" : "border-muted-foreground"
+                              )}>
+                                {paymentMethod === 'lemonsqueezy' && (
+                                  <div className="w-2 h-2 rounded-full bg-primary" />
+                                )}
+                              </div>
+                              <div className="flex items-center">
+                                <img src="https://app.lemonsqueezy.com/apple-touch-icon.png" alt="LemonSqueezy Logo" className="h-5 w-5 mr-2 rounded" />
+                                <div>
+                                  <div className="font-medium">Credit/Debit Card</div>
+                                  <div className="text-xs text-muted-foreground">Secure payment via LemonSqueezy</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        <div 
+                          className={cn(
+                            "border rounded-lg p-4 cursor-pointer transition-all duration-200 hover:border-primary/70",
+                            paymentMethod === 'manual' 
+                              ? "border-primary bg-primary/5" 
+                              : "border-border"
+                          )}
+                          onClick={() => setPaymentMethod('manual')}
+                        >
+                          <div className="flex items-center">
+                            <div className={cn(
+                              "w-4 h-4 rounded-full border mr-2 flex items-center justify-center",
+                              paymentMethod === 'manual' ? "border-primary" : "border-muted-foreground"
+                            )}>
+                              {paymentMethod === 'manual' && (
+                                <div className="w-2 h-2 rounded-full bg-primary" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="font-medium">Contact Support</div>
+                              <div className="text-xs text-muted-foreground">Get help with your payment</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Payment Button */}
+                    <div className="mt-6">
+                      {paymentMethod === 'manual' ? (
+                        <Button 
+                          onClick={handleManualPayment}
+                          className="w-full transition-all duration-200 shadow-md hover:shadow-lg"
+                          size="lg"
+                        >
+                          {paymentType === 'subscription' ? (
+                            <>
+                              <MessageSquare className="mr-2 h-4 w-4" />
+                              Contact via WhatsApp
+                            </>
+                          ) : (
+                            <>
+                              <Mail className="mr-2 h-4 w-4" />
+                              Contact via Email
+                            </>
+                          )}
+                        </Button>
+                      ) : (
+                        <div className="space-y-3">
+                          {renderPaymentButton()}
+                          <div className="flex items-center justify-center text-xs text-muted-foreground">
+                            <Lock className="h-3 w-3 mr-1.5" />
+                            Secure payment. Your information is encrypted.
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Payment Error */}
+                    {paymentError && (
+                      <div className="p-4 mt-4 text-sm text-red-700 bg-red-100 rounded-lg flex items-start animate-pulse">
+                        <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                        <div>{paymentError}</div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
             </div>
             <div>
-              <Card className="sticky top-6 border-border/50 shadow-sm">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-xl">Order Total</CardTitle>
+              <Card className="sticky top-6 border-border/30 shadow-md overflow-hidden transition-all duration-300 hover:shadow-lg">
+                <CardHeader className="pb-3 bg-muted/30 border-b border-border/20">
+                  <CardTitle className="text-xl flex items-center">
+                    <IndianRupee className="mr-2 h-5 w-5 text-primary" />
+                    Order Total
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-6">
                   <div className="space-y-4">
-                    <div className="flex justify-between text-lg font-medium">
+                    {/* Plan Details */}
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">{plan.name} ({paymentType === 'subscription' ? 'Subscription' : 'One-time'})</span>
+                      <span className="font-medium">{paymentType === 'subscription' ? plan.price : plan.oneTimePrice}</span>
+                    </div>
+                    
+                    {/* Original Price if discounted */}
+                    {plan.baseOriginalPrice > plan.basePrice && paymentType === 'subscription' && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">Original price</span>
+                        <span className="line-through text-muted-foreground">{plan.originalPrice}</span>
+                      </div>
+                    )}
+                    
+                    {/* Savings if applicable */}
+                    {paymentType === 'subscription' && plan.baseOriginalPrice > plan.basePrice && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-green-600">Your savings</span>
+                        <span className="text-green-600 font-medium">
+                          {/* Calculate savings without arithmetic operation to avoid type errors */}
+                          {userCountry === 'IN' ? `₹${Number(plan.baseOriginalPrice) - Number(plan.basePrice)}` : `$${((Number(plan.baseOriginalPrice) - Number(plan.basePrice)) / 80).toFixed(2)}`}
+                        </span>
+                      </div>
+                    )}
+                    
+                    <Separator className="my-2" />
+                    
+                    {/* Total with prominent styling */}
+                    <div className="flex justify-between font-medium">
                       <span>Total</span>
-                      <div className="text-right">
-                        <div>{paymentType === 'subscription' ? plan.price : plan.oneTimePrice}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {paymentType === 'subscription' ? 'Subscription' : 'One-time payment'}
-                          {userCountry !== 'IN' && (
-                            <span> (Converted from ₹{paymentType === 'subscription' ? plan.basePrice : plan.oneTimePrice})</span>
-                          )}
-                        </div>
+                      <span className="text-xl text-primary">{paymentType === 'subscription' ? plan.price : plan.oneTimePrice}</span>
+                    </div>
+                    
+                    {/* Currency conversion info */}
+                    {userCountry !== 'IN' && (
+                      <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded-md flex items-center">
+                        <Globe className="h-3 w-3 mr-1.5 flex-shrink-0" />
+                        <span>Converted from ₹{paymentType === 'subscription' ? plan.basePrice : plan.oneTimePrice}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Trust Badges */}
+                  <div className="mt-6 p-3 rounded-lg bg-muted/20 border border-border/30">
+                    <div className="flex items-center justify-center gap-4 mb-3">
+                      <div className="flex flex-col items-center">
+                        <Shield className="h-5 w-5 mb-1 text-green-500" />
+                        <span className="text-xs">Secure</span>
+                      </div>
+                      <div className="h-8 w-px bg-border/50" />
+                      <div className="flex flex-col items-center">
+                        <Lock className="h-5 w-5 mb-1 text-blue-500" />
+                        <span className="text-xs">Encrypted</span>
+                      </div>
+                      <div className="h-8 w-px bg-border/50" />
+                      <div className="flex flex-col items-center">
+                        <CheckCircle2 className="h-5 w-5 mb-1 text-purple-500" />
+                        <span className="text-xs">Verified</span>
                       </div>
                     </div>
+                  </div>
 
-                    {renderPaymentButton()}
-
-                    <div className="mt-6 text-center">
-                      <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5 mb-2">
-                        <Lock className="h-3 w-3 mb-6 mt-3 flex-shrink-0" />
-                        <span>Secure payment. Your information is encrypted.</span>
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        By completing your purchase, you agree to our{' '}
-                        <Link href="/terms-of-service" className="text-primary hover:underline">Terms of Service</Link>,{' '}
-                        <Link href="/privacy-policy" className="text-primary hover:underline">Privacy Policy</Link>, and{' '}
-                        <Link href="/refund-policy" className="text-primary hover:underline">Refund Policy</Link>.
-                      </p>
-                    </div>
+                  {/* Legal text */}
+                  <div className="mt-4 text-center">
+                    <p className="text-xs text-muted-foreground">
+                      By completing your purchase, you agree to our{' '}
+                      <Link href="/terms-of-service" className="text-primary hover:underline">Terms</Link>,{' '}
+                      <Link href="/privacy-policy" className="text-primary hover:underline">Privacy</Link>, and{' '}
+                      <Link href="/refund-policy" className="text-primary hover:underline">Refund</Link> policies.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Trust Badges */}
-              <div className="mt-6 text-center p-4 rounded-lg bg-muted/30">
-                <div className="flex items-center justify-center gap-6 mb-4">
-                  <div className="flex flex-col items-center">
-                    <Shield className={cn("h-7 w-7 mb-1", isDark ? "text-green-400" : "text-green-600")} />
-                    <span className="text-xs text-muted-foreground">Secure Payment</span>
+              {/* Payment Button */}
+              <div className="mt-6">
+                {paymentMethod === 'manual' ? (
+                  <Button 
+                    onClick={handleManualPayment}
+                    className="w-full transition-all duration-200 shadow-md hover:shadow-lg"
+                    size="lg"
+                  >
+                    {paymentType === 'subscription' ? (
+                      <>
+                        <MessageSquare className="mr-2 h-4 w-4" />
+                        Contact via WhatsApp
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="mr-2 h-4 w-4" />
+                        Contact via Email
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <div className="space-y-3">
+                    {renderPaymentButton()}
+                    <div className="flex items-center justify-center text-xs text-muted-foreground">
+                      <Lock className="h-3 w-3 mr-1.5" />
+                      Secure payment. Your information is encrypted.
+                    </div>
                   </div>
-                  <div className="h-8 w-px bg-border" />
-                  <div className="flex flex-col items-center">
-                    <Lock className={cn("h-7 w-7 mb-1", isDark ? "text-blue-400" : "text-blue-600")} />
-                    <span className="text-xs text-muted-foreground">SSL Encrypted</span>
-                  </div>
-                  <div className="h-8 w-px bg-border" />
-                  <div className="flex flex-col items-center">
-                    <CheckCircle2 className={cn("h-7 w-7 mb-1", isDark ? "text-purple-400" : "text-purple-600")} />
-                    <span className="text-xs text-muted-foreground">24/7 Support</span>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Your payment information is processed securely. We do not store credit card details.
-                </p>
+                )}
               </div>
             </div>
           </div>
