@@ -30,12 +30,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { detectUserCountry } from '@/lib/utils/country';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
-// Payment providers
-import { PayPalButton } from '@/components/PayPalButton';
+import { PayPalScriptProvider, PayPalButtons, usePayPalScriptReducer } from "@paypal/react-paypal-js";
+import type { ReactPayPalScriptOptions } from "@paypal/react-paypal-js";
 import { getCurrencyDetails, convertAmount, formatCurrency, getExchangeRates } from '@/lib/utils/currency';
-import { loadCashfree, initializePayment, createCashfreeOrder } from '@/services/cashfree';
+import { loadCashfree } from '@/services/cashfree';
 import { loadLemonSqueezy, initializeLemonSqueezy, openCheckout } from '@/services/lemonsqueezy';
-import { PayPalScriptProvider, ReactPayPalScriptOptions } from '@paypal/react-paypal-js';
 
 // Base prices in INR
 const BASE_PLANS = {
@@ -96,17 +95,15 @@ type PlanId = keyof typeof BASE_PLANS;
 type PaymentMethod = 'paypal' | 'lemonsqueezy' | 'cashfree' | 'manual' | null;
 type PaymentType = 'subscription' | 'one-time' | null;
 type PaymentProvider = 'cashfree' | 'lemonsqueezy';
-type SubscriptionInterval = 'weekly' | 'monthly' | 'quarterly';
+type SubscriptionInterval = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 
-interface ConvertedPlan extends Omit<typeof BASE_PLANS[PlanId], 'basePrice' | 'baseOriginalPrice' | 'oneTimePrice' | 'features'> {
+interface ConvertedPlan extends Omit<typeof BASE_PLANS[PlanId], 'basePrice' | 'baseOriginalPrice' | 'oneTimePrice'> {
   price: string;
   originalPrice: string;
   oneTimePrice: string;
   basePrice: number;
-  baseOriginalPrice: number;
-  subscriptionPrice: string;
+  subscriptionPrice?: string;
   provider: PaymentProvider;
-  features: readonly string[];
 }
 
 type ConvertedPlans = {
@@ -120,9 +117,189 @@ const LEMON_SQUEEZY_CHECKOUT_URLS = {
   quarterly: process.env.NEXT_PUBLIC_LEMON_SQUEEZY_QUARTERLY_URL || 'https://your-store.lemonsqueezy.com/checkout/buy/quarterly-variant-id',
 } as const;
 
-// Export the ConvertedPlan type for use in other components
-export type { ConvertedPlan };
+// PayPal button component with loading state
+function PayPalButtonWrapper({ plan }: { plan: ConvertedPlan }) {
+  const [{ isPending }] = usePayPalScriptReducer();
+  const router = useRouter();
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center p-4 bg-muted/50 rounded-lg">
+        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+        <span>Loading PayPal...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4">
+      <PayPalButtons
+        style={{
+          layout: 'vertical',
+          color: 'blue',
+          shape: 'rect',
+          label: 'paypal'
+        }}
+        createOrder={async (data, actions) => {
+          try {
+            // Extract numeric value from price string (handles both $ and ₹ formats)
+            const priceString = plan.price.replace(/[^0-9.]/g, '');
+            const inrAmount = parseFloat(priceString);
+            
+            if (isNaN(inrAmount)) {
+              console.error('Invalid price format:', plan.price);
+              throw new Error('Invalid price format');
+            }
+
+            // Convert INR to USD using the exchange rate
+            const rates = await getExchangeRates();
+            // Convert INR to USD (rates.USD is how many USD = 1 INR)
+            const usdAmount = inrAmount * rates.USD;
+            
+            console.log('Creating PayPal order with amounts:', {
+              inrAmount,
+              usdAmount,
+              exchangeRate: rates.USD,
+              originalPrice: plan.price
+            });
+
+            if (isNaN(usdAmount) || usdAmount <= 0) {
+              throw new Error('Invalid USD amount after conversion');
+          }
+          
+          return actions.order.create({
+            intent: 'CAPTURE',
+            purchase_units: [{
+              amount: {
+                  value: usdAmount.toFixed(2),
+                  currency_code: 'USD',
+                  breakdown: {
+                    item_total: {
+                      value: usdAmount.toFixed(2),
+                currency_code: 'USD'
+                    }
+                  }
+              },
+                description: `Subscription: ${plan.name} (₹${inrAmount})`,
+              items: [{
+                name: plan.name || '',
+                  description: `${plan.description} (₹${inrAmount})`,
+                quantity: '1',
+                unit_amount: {
+                    value: usdAmount.toFixed(2),
+                  currency_code: 'USD'
+                  },
+                  category: 'DIGITAL_GOODS'
+              }]
+            }],
+            application_context: {
+                shipping_preference: 'NO_SHIPPING',
+                brand_name: 'AOLBEAM',
+                landing_page: 'NO_PREFERENCE',
+                user_action: 'PAY_NOW',
+                return_url: `${window.location.origin}/payment/success?payment_method=paypal&plan_id=${plan.id}&amount=${usdAmount.toFixed(2)}&currency=USD&original_amount=${inrAmount}&original_currency=INR`,
+                cancel_url: `${window.location.origin}/checkout`
+              }
+            });
+          } catch (error) {
+            console.error('Error creating PayPal order:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to create order';
+            
+            // Handle specific error cases
+            if (errorMessage.includes('country') || errorMessage.includes('region')) {
+              setPaymentError('PayPal is not available in your region. Please use Cashfree or Credit Card payment instead.');
+            } else {
+              setPaymentError(errorMessage);
+            }
+            throw error;
+          }
+        }}
+        onApprove={async (data, actions) => {
+          try {
+            if (!actions.order) {
+              throw new Error('Order actions not available');
+            }
+            const details = await actions.order.capture();
+            console.log('Payment completed:', details);
+            
+            // Store payment info in localStorage
+            const paymentInfo = {
+                orderId: details.id,
+              paymentMethod: 'paypal',
+              status: 'SUCCESS',
+              timestamp: new Date().toISOString(),
+                amount: details.purchase_units?.[0]?.amount?.value || '0.00',
+              currency: 'USD',
+              originalAmount: plan.price.replace(/[^0-9.]/g, ''),
+              originalCurrency: 'INR'
+            };
+
+            // Get existing payments or initialize empty array
+            const existingPayments = JSON.parse(localStorage.getItem('payments') || '[]');
+            existingPayments.push(paymentInfo);
+            localStorage.setItem('payments', JSON.stringify(existingPayments));
+
+            // Store subscription status
+            const subscriptionInfo = {
+              orderId: details.id,
+              status: 'active',
+              startDate: new Date().toISOString(),
+              paymentMethod: 'paypal',
+              plan: plan.id,
+            };
+            localStorage.setItem('subscription', JSON.stringify(subscriptionInfo));
+
+            router.push(`/payment/success?token=${details.id}&payment_status=SUCCESS&payment_method=paypal&plan_id=${plan.id}&amount=${details.purchase_units?.[0]?.amount?.value || '0.00'}&currency=USD&original_amount=${plan.price.replace(/[^0-9.]/g, '')}&original_currency=INR`);
+          } catch (error) {
+            console.error('Payment capture error:', error);
+            setPaymentError('Payment processing failed. Please try again or use a different payment method.');
+          }
+        }}
+        onError={(err) => {
+          console.error('PayPal Checkout onError', err);
+          // Handle specific error cases
+          if (typeof err.message === 'string' && (err.message.includes('country') || err.message.includes('region'))) {
+            setPaymentError('PayPal is not available in your region. Please use Cashfree or Credit Card payment instead.');
+          } else {
+          setPaymentError('Payment failed. Please try again or use a different payment method.');
+          }
+        }}
+        onCancel={() => {
+          console.log('Payment cancelled by user');
+          setPaymentError('Payment was cancelled. Please try again if you wish to complete the purchase.');
+        }}
+      />
+      {paymentError && (
+        <div className="mt-4 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-destructive">Payment Error</p>
+              <p className="text-sm text-muted-foreground mt-1">{paymentError}</p>
+              <div className="flex gap-2 mt-2">
+              <Button 
+                variant="link" 
+                  className="h-auto p-0 text-sm"
+                onClick={() => setPaymentError(null)}
+              >
+                Try Again
+              </Button>
+                <Button 
+                  variant="link" 
+                  className="h-auto p-0 text-sm"
+                  onClick={() => router.push('/checkout?plan=' + plan.id)}
+                >
+                  Choose Different Payment Method
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 function CheckoutPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -134,7 +311,7 @@ function CheckoutPageContent() {
   const [isCountryLoading, setIsCountryLoading] = useState(true);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
-  const [convertedPlans, setConvertedPlans] = useState<Partial<ConvertedPlans>>({});
+  const [convertedPlans, setConvertedPlans] = useState<ConvertedPlans | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<PlanId | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
   const [paymentType, setPaymentType] = useState<PaymentType>('subscription');
@@ -160,16 +337,16 @@ function CheckoutPageContent() {
       
       // Convert prices based on user's location
       const currencyDetails = getCurrencyDetails(countryData);
-      const convertedPlans: Partial<ConvertedPlans> = {};
+      const convertedPlans: ConvertedPlans = {} as ConvertedPlans;
       
       for (const planId in BASE_PLANS) {
         const plan = BASE_PLANS[planId as PlanId];
-        const convertedAmount = await convertAmount(plan.basePrice, 'INR', currencyDetails.code);
-        const convertedOriginalAmount = await convertAmount(plan.baseOriginalPrice, 'INR', currencyDetails.code);
-        const convertedOneTimeAmount = await convertAmount(plan.oneTimePrice, 'INR', currencyDetails.code);
+        const convertedAmount = convertAmount(plan.basePrice, 'INR', currencyDetails.code, rates);
+        const convertedOriginalAmount = convertAmount(plan.baseOriginalPrice, 'INR', currencyDetails.code, rates);
+        const convertedOneTimeAmount = convertAmount(plan.oneTimePrice, 'INR', currencyDetails.code, rates);
         
         // Determine payment provider based on country
-        const provider = countryData === 'IN' ? 'cashfree' : 'lemonsqueezy' as const;
+        const provider = countryData === 'IN' ? 'cashfree' : 'lemonsqueezy';
         
         convertedPlans[planId as PlanId] = {
           ...plan,
@@ -177,10 +354,8 @@ function CheckoutPageContent() {
           originalPrice: formatCurrency(convertedOriginalAmount, currencyDetails.code, currencyDetails.locale),
           oneTimePrice: formatCurrency(convertedOneTimeAmount, currencyDetails.code, currencyDetails.locale),
           subscriptionPrice: formatCurrency(convertedAmount, currencyDetails.code, currencyDetails.locale),
-          basePrice: plan.basePrice,
-          baseOriginalPrice: plan.baseOriginalPrice,
-          provider,
-          features: [...plan.features] // Create a mutable copy of features
+          basePrice: plan.basePrice, // Keep the original INR price for reference
+          provider: provider,
         };
       }
       
@@ -212,12 +387,9 @@ function CheckoutPageContent() {
           price: `₹${plan.basePrice}`,
           originalPrice: `₹${plan.baseOriginalPrice}`,
           oneTimePrice: `₹${plan.oneTimePrice}`,
-          subscriptionPrice: `₹${plan.basePrice}`,
           basePrice: plan.basePrice,
-          baseOriginalPrice: plan.baseOriginalPrice,
           provider: 'cashfree',
-          features: [...plan.features]
-        } as ConvertedPlan;
+        };
         return acc;
       }, {} as ConvertedPlans);
       
@@ -256,7 +428,6 @@ function CheckoutPageContent() {
     setPaymentError(null);
     
     try {
-      // Handle LemonSqueezy payments for international users
       if (paymentMethod === 'lemonsqueezy') {
         try {
           // Load Lemon Squeezy SDK
@@ -277,7 +448,7 @@ function CheckoutPageContent() {
               paymentMethod: 'lemonsqueezy',
               status: 'SUCCESS',
               timestamp: new Date().toISOString(),
-              amount: orderAttributes.total / 100, // Convert from cents to dollars
+              amount: orderAttributes.total / 100, // Convert from paise to rupees
               currency: orderAttributes.currency,
               metadata: {
                 orderNumber: orderAttributes.order_number,
@@ -292,107 +463,33 @@ function CheckoutPageContent() {
             existingPayments.push(paymentInfo);
             localStorage.setItem('payments', JSON.stringify(existingPayments));
 
-            // If this is a subscription, store subscription info
-            if (paymentType === 'subscription') {
-              const subscriptionInfo = {
-                orderId: orderId,
-                status: 'active',
-                startDate: new Date().toISOString(),
-                paymentMethod: 'lemonsqueezy',
-                plan: plan.id,
-                interval: plan.interval,
-                isSubscription: true
-              };
-              localStorage.setItem('subscription', JSON.stringify(subscriptionInfo));
-            }
+            // Store subscription status
+            const subscriptionInfo = {
+              orderId: orderId,
+              status: 'active',
+              startDate: new Date().toISOString(),
+              paymentMethod: 'lemonsqueezy',
+              plan: plan.id,
+            };
+            localStorage.setItem('subscription', JSON.stringify(subscriptionInfo));
 
             // Set processing to false before redirect
             setIsPaymentProcessing(false);
 
             // Redirect to success page with all necessary parameters
-            router.push(`/payment/success?token=${orderId}&payment_status=SUCCESS&payment_method=lemonsqueezy&plan_id=${plan.id}&amount=${orderAttributes.total / 100}&currency=${orderAttributes.currency}&payment_type=${paymentType}`);
+            router.push(`/payment/success?token=${orderId}&payment_status=SUCCESS&payment_method=lemonsqueezy&plan_id=${plan.id}&amount=${orderAttributes.total / 100}&currency=${orderAttributes.currency}`);
           });
 
-          // Open checkout - use different URLs for subscription vs one-time payment
-          let checkoutUrl = LEMON_SQUEEZY_CHECKOUT_URLS[plan.id];
+          // Open checkout
+          const checkoutUrl = LEMON_SQUEEZY_CHECKOUT_URLS[plan.id];
           if (!checkoutUrl) {
             throw new Error('Checkout URL not found for this plan');
           }
-          
-          // For one-time payments, we can append a parameter or use a different URL
-          if (paymentType === 'one-time') {
-            checkoutUrl = `${checkoutUrl}?one_time=true`;
-          }
-          
           openCheckout(checkoutUrl);
         } catch (error) {
           console.error('Lemon Squeezy error:', error);
           setIsPaymentProcessing(false);
           throw new Error('Failed to initialize payment. Please try again.');
-        }
-      }
-      // Handle Cashfree payments for Indian users
-      else if (paymentMethod === 'cashfree') {
-        try {
-          // Determine the API endpoint based on payment type
-          const endpoint = paymentType === 'subscription' 
-            ? '/api/subscriptions/cashfree/create' 
-            : '/api/payments/cashfree/create-order';
-          
-          // Create the order/subscription
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              planId: plan.id,
-              amount: paymentType === 'subscription' ? plan.basePrice : plan.oneTimePrice,
-              currency: 'INR',
-              interval: plan.interval,
-            }),
-          });
-          
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Failed to create payment');
-          }
-          
-          const data = await response.json();
-          
-          // Initialize Cashfree payment
-          await loadCashfree();
-          
-          // For subscriptions, use the subscription API
-          if (paymentType === 'subscription') {
-            // Handle subscription payment - usually redirects to Cashfree's subscription page
-            window.location.href = data.paymentLink;
-          } else {
-            // For one-time payments, use the regular payment flow
-            await initializePayment(
-              data, // Payment data from the API
-              (successData) => {
-                // Success callback
-                console.log('Payment Success:', successData);
-                router.push(`/payment/success?token=${data.orderId}&payment_status=SUCCESS&payment_method=cashfree&plan_id=${plan.id}&amount=${plan.basePrice}&currency=INR&payment_type=one-time`);
-              },
-              (errorData) => {
-                // Error callback
-                console.error('Payment Error:', errorData);
-                setPaymentError('Payment failed. Please try again or use a different payment method.');
-                setIsPaymentProcessing(false);
-              },
-              false // Not a subscription payment
-            );
-          }
-        } catch (error) {
-          console.error('Cashfree error:', error);
-          setPaymentError(
-            error instanceof Error 
-              ? error.message 
-              : 'Failed to initialize Cashfree payment. Please try again.'
-          );
-          setIsPaymentProcessing(false);
         }
       }
       // PayPal is handled by the PayPalButtons component
@@ -424,20 +521,13 @@ function CheckoutPageContent() {
   // Wrap the PayPal button with PayPalScriptProvider
   const renderPaymentButton = () => {
     if (paymentMethod === 'paypal' && plan) {
-      if (!paymentType) {
-        return (
-          <div className="p-4 mb-4 text-sm text-yellow-700 bg-yellow-100 rounded-lg">
-            Please select a payment type (one-time or subscription)
-          </div>
-        );
-      }
-      return <PayPalButton plan={plan} paymentType={paymentType} />;
+      return <PayPalButtonWrapper plan={plan} />;
     }
 
     return (
       <Button 
         onClick={handlePayment}
-        disabled={!paymentMethod || !paymentType || isPaymentProcessing}
+        disabled={!paymentMethod || isPaymentProcessing}
         className="w-full mt-4"
         size="lg"
       >
@@ -616,13 +706,6 @@ function CheckoutPageContent() {
                               {plan?.oneTimePrice} (one-time)
                             </p>
                           </Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
             <div>
               <Card className="sticky top-6 border-border/50 shadow-sm">
                 <CardHeader className="pb-3">
@@ -633,11 +716,11 @@ function CheckoutPageContent() {
                     <div className="flex justify-between text-lg font-medium">
                       <span>Total</span>
                       <div className="text-right">
-                        <div>{paymentType === 'subscription' ? plan.price : plan.oneTimePrice}</div>
+                        <div>{plan.price}</div>
                         <div className="text-xs text-muted-foreground">
-                          {paymentType === 'subscription' ? 'Subscription' : 'One-time payment'}
+                          One-time payment
                           {userCountry !== 'IN' && (
-                            <span> (Converted from ₹{paymentType === 'subscription' ? plan.basePrice : plan.oneTimePrice})</span>
+                            <span> (Converted from ₹{plan.basePrice})</span>
                           )}
                         </div>
                       </div>
@@ -694,11 +777,7 @@ function CheckoutPageContent() {
 }
 
 // Simple AuthGuard component
-interface AuthGuardProps {
-  children: React.ReactNode;
-}
-
-const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
+const AuthGuard = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
   const router = useRouter();
 

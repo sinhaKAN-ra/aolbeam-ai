@@ -14,7 +14,7 @@ export interface CashfreeInstance {
   };
 }
 
-interface CreateOrderParams {
+export interface CreateOrderParams {
   orderId: string;
   orderAmount: number;
   orderCurrency: string;
@@ -24,12 +24,21 @@ interface CreateOrderParams {
   returnUrl: string;
   notifyUrl?: string;
   orderNote?: string;
-  // Add any other parameters you need
+  isSubscription?: boolean;
+  subscriptionDetails?: {
+    planId: string;
+    interval: 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+    firstChargeDate?: string;
+  };
 }
 
 export async function createCashfreeOrder(params: CreateOrderParams) {
   try {
-    const response = await fetch('/api/payments/cashfree/create-order', {
+    const endpoint = params.isSubscription 
+      ? '/api/subscriptions/cashfree/create'
+      : '/api/payments/cashfree/create-order';
+    
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -108,7 +117,8 @@ interface PaymentData {
 export async function initializePayment(
   paymentData: PaymentData,
   onSuccess: (response: any) => void,
-  onFailure: (error: any) => void
+  onFailure: (error: any) => void,
+  isSubscription: boolean = false
 ) {
   try {
     const cashfree = await loadCashfree();
@@ -137,7 +147,17 @@ export async function initializePayment(
     // Set up event listeners before redirecting
     cashfree.payment.on('paymentSuccess', (data: any) => {
       console.log('Payment Success:', data);
-      onSuccess(data);
+      // Store additional subscription info if needed
+      if (isSubscription) {
+        // Add subscription metadata to the success data
+        const enhancedData = {
+          ...data,
+          isSubscription,
+        };
+        onSuccess(enhancedData);
+      } else {
+        onSuccess(data);
+      }
     });
 
     cashfree.payment.on('paymentFailure', (data: any) => {
@@ -154,6 +174,29 @@ export async function initializePayment(
     return cashfree;
   } catch (error) {
     console.error('Error initializing payment:', error);
+    throw error;
+  }
+}
+
+// Function to cancel a subscription with Cashfree
+export async function cancelCashfreeSubscription(subscriptionId: string) {
+  try {
+    const response = await fetch('/api/subscriptions/cashfree/cancel', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ subscriptionId }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to cancel subscription');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error cancelling Cashfree subscription:', error);
     throw error;
   }
 }

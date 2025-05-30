@@ -90,94 +90,123 @@ export const getExchangeRates = cache(async (): Promise<Record<string, number>> 
 
 export interface CurrencyDetails {
   currency: string;
+  code: string;  // ISO currency code (e.g., 'USD', 'INR')
   symbol: string;
   minAmount: number;
   maxAmount: number;
   supported: boolean;
+  locale?: string;  // Optional locale for formatting
 }
 
 export const getCurrencyDetails = (country: string): CurrencyDetails => {
   const currencies: Record<string, CurrencyDetails> = {
     IN: {
       currency: 'INR',
+      code: 'INR',
       symbol: '₹',
       minAmount: 10,
       maxAmount: 100000,
-      supported: true
+      supported: true,
+      locale: 'en-IN'
     },
     US: {
       currency: 'USD',
+      code: 'USD',
       symbol: '$',
       minAmount: 0.50,
       maxAmount: 10000,
-      supported: true
+      supported: true,
+      locale: 'en-US'
     },
     GB: {
       currency: 'GBP',
+      code: 'GBP',
       symbol: '£',
       minAmount: 0.40,
       maxAmount: 8000,
-      supported: true
+      supported: true,
+      locale: 'en-GB'
     },
     EU: {
       currency: 'EUR',
+      code: 'EUR',
       symbol: '€',
       minAmount: 0.45,
       maxAmount: 9000,
-      supported: true
+      supported: true,
+      locale: 'en-150' // Europe
     },
     AU: {
       currency: 'AUD',
+      code: 'AUD',
       symbol: 'A$',
       minAmount: 0.75,
       maxAmount: 15000,
-      supported: true
+      supported: true,
+      locale: 'en-AU'
     },
     CA: {
       currency: 'CAD',
+      code: 'CAD',
       symbol: 'C$',
       minAmount: 0.65,
       maxAmount: 13000,
-      supported: true
+      supported: true,
+      locale: 'en-CA'
     },
     SG: {
       currency: 'SGD',
+      code: 'SGD',
       symbol: 'S$',
       minAmount: 0.65,
       maxAmount: 13000,
-      supported: true
+      supported: true,
+      locale: 'en-SG'
     },
     JP: {
       currency: 'JPY',
+      code: 'JPY',
       symbol: '¥',
       minAmount: 50,
       maxAmount: 1000000,
-      supported: true
+      supported: true,
+      locale: 'ja-JP'
     },
     AE: {
       currency: 'AED',
+      code: 'AED',
       symbol: 'د.إ',
       minAmount: 2,
       maxAmount: 40000,
-      supported: true
+      supported: true,
+      locale: 'ar-AE'
     },
     SA: {
       currency: 'SAR',
+      code: 'SAR',
       symbol: '﷼',
       minAmount: 2,
       maxAmount: 40000,
-      supported: true
+      supported: true,
+      locale: 'ar-SA'
     },
     MY: {
       currency: 'MYR',
+      code: 'MYR',
       symbol: 'RM',
       minAmount: 2,
       maxAmount: 40000,
-      supported: true
+      supported: true,
+      locale: 'ms-MY'
     }
   };
 
-  return currencies[country] || currencies['US']; // Default to USD if country not found
+  // Default to USD if country not found
+  return currencies[country] || {
+    ...currencies['US'],
+    code: 'USD',
+    locale: 'en-US'
+  };
 };
 
 export const convertAmount = async (
