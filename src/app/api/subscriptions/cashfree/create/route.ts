@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -16,55 +16,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Try to authenticate user in multiple ways
-    let user;
-    
-    // Initialize Supabase client ONCE for all operations in this handler
-    const dbSupabase = createServerComponentClient({ cookies: () => cookies() });
-    // Use dbSupabase for ALL Supabase operations below
-    
-    // Check Authorization header first (Bearer token)
-    const authHeader = request.headers.get('Authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-      console.log('Got token from header:', !!token); // Debug log
-      
-      try {
-        // Initialize Supabase with the token
-        const supabase = createServerComponentClient({ cookies: () => cookies() });
-        const { data, error } = await supabase.auth.getUser(token);
-        if (!error && data.user) {
-          user = data.user;
-          console.log('User authenticated via header token');
-        } else {
-          console.error('Auth error with header token:', error);
-        }
-      } catch (err) {
-        console.error('Error validating token from header:', err);
-      }
+    // Initialize Supabase client for route handler
+    const supabase = createRouteHandlerClient({ cookies });
+    // Get user session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized - Valid authentication required' }, { status: 401 });
     }
-    
-    // If no user yet, try cookies as fallback
-    if (!user) {
-      const cookieStore = cookies();
-      const supabase = createServerComponentClient({ cookies: () => cookieStore });
-      const { data, error: authError } = await supabase.auth.getUser();
-      if (!authError && data.user) {
-        user = data.user;
-        console.log('User authenticated via cookies');
-      } else {
-        console.error('Auth error with cookies:', authError);
-      }
-    }
-
-    // Still no user? Return 401
-    if (!user) {
-      console.error('Authentication failed via all methods');
-      return NextResponse.json(
-        { error: 'Unauthorized - Valid authentication required' },
-        { status: 401 }
-      );
-    }
+    const user = session.user;
 
     const body = await request.json();
     const {
@@ -160,7 +119,7 @@ export async function POST(request: Request) {
     let subscriptionId = uuidv4();
     let subscription = null;
     let subError = null;
-    const { data: existingSub, error: findSubError } = await dbSupabase
+    const { data: existingSub, error: findSubError } = await supabase
       .from('subscriptions')
       .select('*')
       .eq('user_id', user.id)
@@ -172,7 +131,7 @@ export async function POST(request: Request) {
       subscription = existingSub;
       subscriptionId = existingSub.id;
     } else {
-      const insertResult = await dbSupabase
+      const insertResult = await supabase
         .from('subscriptions')
         .insert({
           id: subscriptionId,
@@ -202,14 +161,14 @@ export async function POST(request: Request) {
     }
 
     // Check for existing payment order (by provider_order_id)
-    const { data: existingOrder, error: findOrderError } = await dbSupabase
+    const { data: existingOrder, error: findOrderError } = await supabase
       .from('payment_orders')
       .select('*')
       .eq('provider_order_id', data.order_id)
       .maybeSingle();
 
     if (!existingOrder) {
-      const { error: dbError } = await dbSupabase
+      const { error: dbError } = await supabase
         .from('payment_orders')
         .insert({
           user_id: user.id,
