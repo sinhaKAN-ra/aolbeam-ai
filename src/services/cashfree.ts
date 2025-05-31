@@ -81,7 +81,6 @@ export async function loadCashfree(): Promise<CashfreeInstance> {
       mode === 'production'
         ? 'https://sdk.cashfree.com/js/ui/2.0.0/cashfree.js'
         : 'https://sdk.cashfree.com/js/ui/2.0.0-beta.5/cashfree.js';
-    script.src = 'https://sdk.cashfree.com/js/ui/2.0.1/cashfree.js';
     script.async = true;
     
     script.onload = () => {
