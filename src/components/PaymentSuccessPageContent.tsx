@@ -6,7 +6,7 @@ import { CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import { Database } from '@/lib/supabase/database.types'; // Import your database types
 
 export default function PaymentSuccessPageContent() {
@@ -15,7 +15,9 @@ export default function PaymentSuccessPageContent() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const supabase = createClientComponentClient<Database>();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
 
   useEffect(() => {
     const handlePaymentSuccess = async () => {

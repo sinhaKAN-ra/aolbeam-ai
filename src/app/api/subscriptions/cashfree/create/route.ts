@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -16,25 +16,33 @@ export async function POST(request: Request) {
       );
     }
 
-    // Debug: Log cookies received (safe, Next.js version compatible)
-    try {
-      const cookieStore = await cookies();
-      const allCookies = cookieStore.getAll();
-      console.log('Cookies received:', allCookies);
-    } catch (e) {
-      console.log('Error reading cookies:', e);
-    }
+    // Debug: Log cookies received
+    // Awaiting cookies() here to satisfy linter, which indicates it's a Promise in this context.
+    const cookieStore = await cookies();
+    console.log('Cookies received:', cookieStore.getAll());
 
     // Initialize Supabase client for route handler
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value;
+          },
+          set(name: string, value: string, options: CookieOptions) {
+            cookieStore.set({ name, value, ...options });
+          },
+          remove(name: string, options: CookieOptions) {
+            cookieStore.set({ name, value: '', ...options });
+          },
+        },
+      }
+    );
     // Get user session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     // Debug: Log session data (safe)
-    try {
-      console.log('Supabase session:', session, 'Session error:', sessionError);
-    } catch (e) {
-      console.log('Error logging session:', e);
-    }
+    console.log('Supabase session:', session, 'Session error:', sessionError);
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized - Valid authentication required' }, { status: 401 });
     }
@@ -62,25 +70,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create initial order payload (similar to one-time payment)
-    // This is a workaround since Cashfree doesn't have a native subscription API for their payment gateway
-    // We'll handle the recurring billing on our side using webhooks and the user's saved payment method
+    // Create initial order payload (no duplicate properties)
     const orderPayload = {
-        order_id: orderId,
-        order_amount: orderAmount,
-        order_currency: orderCurrency,
-        customer_details: {
-          customer_id: user.id,
-          customer_name: customerName,
-          customer_email: customerEmail,
-          customer_phone: customerPhone,
-        },
-        order_meta: {
-          return_url: returnUrl,
-          notify_url: notifyUrl,
-          payment_methods: 'cc,dc,upi,nb,paylater',
-        },
-        order_note: `${orderNote} - ${subscriptionDetails.interval} subscription`,
+      order_id: orderId,
+      order_amount: orderAmount,
+      order_currency: orderCurrency,
+      customer_details: {
+        customer_id: user.id,
+        customer_name: customerName,
+        customer_email: customerEmail,
+        customer_phone: customerPhone,
+      },
+      order_meta: {
+        return_url: returnUrl,
+        notify_url: notifyUrl,
+        payment_methods: 'cc,dc,upi,nb,paylater',
+      },
+      order_note: `${orderNote} - ${subscriptionDetails.interval} subscription`,
     };
 
     // Create order in Cashfree
