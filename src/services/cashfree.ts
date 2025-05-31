@@ -75,7 +75,12 @@ export async function loadCashfree(): Promise<CashfreeInstance> {
 
     // Load the script
     const script = document.createElement('script');
-    // Use the latest SDK version
+    // Dynamically select SDK URL based on mode
+    const mode = process.env.NEXT_PUBLIC_CASHFREE_MODE || 'sandbox';
+    script.src =
+      mode === 'production'
+        ? 'https://sdk.cashfree.com/js/ui/2.0.0/cashfree.js'
+        : 'https://sdk.cashfree.com/js/ui/2.0.0-beta.5/cashfree.js';
     script.src = 'https://sdk.cashfree.com/js/ui/2.0.1/cashfree.js';
     script.async = true;
     
@@ -107,6 +112,7 @@ export async function loadCashfree(): Promise<CashfreeInstance> {
     document.body.appendChild(script);
   });
 }
+
 
 interface PaymentData {
   payment_session_id: string;
