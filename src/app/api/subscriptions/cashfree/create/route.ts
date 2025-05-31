@@ -16,10 +16,25 @@ export async function POST(request: Request) {
       );
     }
 
+    // Debug: Log cookies received (safe, Next.js version compatible)
+    try {
+      const cookieStore = await cookies();
+      const allCookies = cookieStore.getAll();
+      console.log('Cookies received:', allCookies);
+    } catch (e) {
+      console.log('Error reading cookies:', e);
+    }
+
     // Initialize Supabase client for route handler
     const supabase = createRouteHandlerClient({ cookies });
     // Get user session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // Debug: Log session data (safe)
+    try {
+      console.log('Supabase session:', session, 'Session error:', sessionError);
+    } catch (e) {
+      console.log('Error logging session:', e);
+    }
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized - Valid authentication required' }, { status: 401 });
     }
