@@ -94,34 +94,45 @@ async function handleSubscriptionCreated(data: any) {
     .eq('provider', 'lemonsqueezy')
     .single();
   
-  if (userError) {
+  if (userError || !userData?.user_id) {
     console.error('Error finding user for subscription:', userError);
     return;
   }
   
-  // If subscription exists, update it. Otherwise, create a new one (this should be rare)
-  const { error: upsertError } = await supabase
+  const userId = userData.user_id;
+  const status = mapLemonSqueezyStatus(attributes.status);
+  const planId = `${attributes.product_id}`;
+  const periodEnd = attributes.renews_at || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // Default to 30 days if not provided
+  
+  // Update or create the subscription
+  const { data: subscription, error: upsertError } = await supabase
     .from('subscriptions')
     .upsert({
-      user_id: userData?.user_id,
-      plan_id: `${attributes.product_id}`, // Convert to string
+      user_id: userId,
+      plan_id: planId,
       provider: 'lemonsqueezy',
       provider_subscription_id: subscriptionId,
-      status: mapLemonSqueezyStatus(attributes.status),
+      status: status,
       amount: attributes.urls?.customer_portal ? parseFloat(attributes.urls.customer_portal) : 0,
-      currency: 'USD', // LemonSqueezy uses USD by default
+      currency: 'USD',
       interval: mapInterval(attributes),
       current_period_start: new Date().toISOString(),
-      current_period_end: attributes.renews_at,
+      current_period_end: periodEnd,
       cancel_at_period_end: attributes.cancelled,
       trial_start: attributes.trial_ends_at ? new Date(new Date(attributes.trial_ends_at).getTime() - (30 * 24 * 60 * 60 * 1000)).toISOString() : null,
       trial_end: attributes.trial_ends_at,
       metadata: attributes,
-    });
+    })
+    .select()
+    .single();
   
   if (upsertError) {
     console.error('Error upserting subscription:', upsertError);
+    return;
   }
+  
+  // Update the user profile with subscription information
+  await updateUserProfile(supabase, userId, status, planId, periodEnd);
 }
 
 async function handleSubscriptionUpdated(data: any) {
@@ -129,11 +140,26 @@ async function handleSubscriptionUpdated(data: any) {
   
   const attributes = data.attributes;
   const subscriptionId = data.id;
+  const status = mapLemonSqueezyStatus(attributes.status);
   
+  // First get the current subscription to get the user ID
+  const { data: subscriptionData } = await supabase
+    .from('subscriptions')
+    .select('user_id, plan_id')
+    .eq('provider_subscription_id', subscriptionId)
+    .eq('provider', 'lemonsqueezy')
+    .single();
+  
+  if (!subscriptionData) {
+    console.error('Subscription not found:', subscriptionId);
+    return;
+  }
+  
+  // Update the subscription
   const { error } = await supabase
     .from('subscriptions')
     .update({
-      status: mapLemonSqueezyStatus(attributes.status),
+      status: status,
       current_period_end: attributes.renews_at,
       cancel_at_period_end: attributes.cancelled,
       metadata: attributes,
@@ -143,6 +169,18 @@ async function handleSubscriptionUpdated(data: any) {
   
   if (error) {
     console.error('Error updating subscription:', error);
+    return;
+  }
+  
+  // Update the user profile if the subscription is active
+  if (status === 'ACTIVE' || status === 'TRIAL') {
+    await updateUserProfile(
+      supabase,
+      subscriptionData.user_id,
+      status,
+      subscriptionData.plan_id,
+      attributes.renews_at
+    );
   }
 }
 
@@ -152,9 +190,24 @@ async function handleSubscriptionCancelled(data: any) {
   const subscriptionId = data.id;
   const attributes = data.attributes;
   
+  // First get the current subscription to get the user ID
+  const { data: subscriptionData } = await supabase
+    .from('subscriptions')
+    .select('user_id, plan_id')
+    .eq('provider_subscription_id', subscriptionId)
+    .eq('provider', 'lemonsqueezy')
+    .single();
+  
+  if (!subscriptionData) {
+    console.error('Subscription not found:', subscriptionId);
+    return;
+  }
+  
+  // Update the subscription
   const { error } = await supabase
     .from('subscriptions')
     .update({
+      status: 'CANCELED',
       cancel_at_period_end: true,
       canceled_at: new Date().toISOString(),
       metadata: attributes,
@@ -164,7 +217,17 @@ async function handleSubscriptionCancelled(data: any) {
   
   if (error) {
     console.error('Error cancelling subscription:', error);
+    return;
   }
+  
+  // Update the user profile to mark as unsubscribed
+  await updateUserProfile(
+    supabase,
+    subscriptionData.user_id,
+    'CANCELED',
+    subscriptionData.plan_id,
+    attributes.ends_at || new Date().toISOString()
+  );
 }
 
 async function handleSubscriptionResumed(data: any) {
@@ -173,12 +236,27 @@ async function handleSubscriptionResumed(data: any) {
   const subscriptionId = data.id;
   const attributes = data.attributes;
   
+  // First get the current subscription to get the user ID and plan
+  const { data: subscriptionData } = await supabase
+    .from('subscriptions')
+    .select('user_id, plan_id')
+    .eq('provider_subscription_id', subscriptionId)
+    .eq('provider', 'lemonsqueezy')
+    .single();
+  
+  if (!subscriptionData) {
+    console.error('Subscription not found:', subscriptionId);
+    return;
+  }
+  
+  // Update the subscription
   const { error } = await supabase
     .from('subscriptions')
     .update({
       status: 'ACTIVE',
       cancel_at_period_end: false,
       canceled_at: null,
+      current_period_end: attributes.renews_at,
       metadata: attributes,
     })
     .eq('provider_subscription_id', subscriptionId)
@@ -186,7 +264,17 @@ async function handleSubscriptionResumed(data: any) {
   
   if (error) {
     console.error('Error resuming subscription:', error);
+    return;
   }
+  
+  // Update the user profile
+  await updateUserProfile(
+    supabase,
+    subscriptionData.user_id,
+    'ACTIVE',
+    subscriptionData.plan_id,
+    attributes.renews_at
+  );
 }
 
 async function handleSubscriptionExpired(data: any) {
@@ -266,6 +354,38 @@ function mapLemonSqueezyStatus(status: string): string {
       return 'TRIAL';
     default:
       return 'ACTIVE';
+  }
+}
+
+// Helper function to update user profile with subscription information
+async function updateUserProfile(
+  supabase: any,
+  userId: string,
+  status: string,
+  planId: string,
+  periodEnd: string
+) {
+  try {
+    const isSubscribed = status === 'ACTIVE' || status === 'TRIAL';
+    
+    const { error } = await supabase
+      .from('user_profiles')
+      .upsert({
+        id: userId,
+        is_subscribed: isSubscribed,
+        subscription_plan_id: isSubscribed ? planId : null,
+        subscription_started_at: isSubscribed ? new Date().toISOString() : null,
+        subscription_ends_at: isSubscribed ? periodEnd : null,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+      
+    if (error) {
+      console.error('Error updating user profile:', error);
+    } else {
+      console.log(`User profile updated for user ${userId} with subscription status: ${status}`);
+    }
+  } catch (error) {
+    console.error('Error in updateUserProfile:', error);
   }
 }
 

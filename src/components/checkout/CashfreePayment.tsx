@@ -13,10 +13,9 @@ interface CashfreePaymentProps extends PaymentHandlerProps {
   setCustomerPhone: (phone: string) => void;
 }
 
-// Example: List of plans (ideally fetched from your backend or Supabase, but here hardcoded for demo)
 const AVAILABLE_PLANS = [
   {
-    id: 'premium_monthly', // Use this as planId in Cashfree
+    id: 'premium_monthly',
     name: 'Premium Monthly',
     price: 199,
     interval: 'monthly',
@@ -40,457 +39,358 @@ export const CashfreePayment: React.FC<CashfreePaymentProps> = ({
   setIsPaymentProcessing,
   user,
   session,
-}): React.ReactNode => {
+}) => {
   const router = useRouter();
   const supabase = useSupabase();
   const [savingPhone, setSavingPhone] = useState(false);
   const [phoneSaved, setPhoneSaved] = useState(false);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [isCashfreeLoading, setIsCashfreeLoading] = useState(false);
+  const [isSubscribing, setIsSubscribing] = useState(false);
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [isCashfreeSdkLoaded, setIsCashfreeSdkLoaded] = useState(false);
   const [sdkLoadAttempts, setSdkLoadAttempts] = useState(0);
 
-  const [selectedPlanId, setSelectedPlanId] = useState<string>(AVAILABLE_PLANS[0].id);
-  const [isSubscribing, setIsSubscribing] = useState(false);
-  const [subscriptionError, setSubscriptionError] = useState<string|null>(null);
-
-  const handleSubscribe = async () => {
-    setIsSubscribing(true);
-    setSubscriptionError(null);
-    setPaymentError?.(null);
+  // Initialize Cashfree checkout
+  const initializeCashfreeCheckout = async (cashfreeSubscriptionSessionId: string, dbSubscriptionId: string) => {
+    console.log('[CashfreePayment] initializeCashfreeCheckout called with:', { cashfreeSubscriptionSessionId, dbSubscriptionId });
     
-    // First check if SDK is loaded
-    if (!isCashfreeSdkLoaded) {
-      console.log('Cashfree SDK not loaded yet, attempting to load...');
-      // Trigger a reload of the SDK
-      setSdkLoadAttempts(prev => prev + 1);
-      
-      // Wait for SDK to load before proceeding
-      const maxWaitTime = 5000; // 5 seconds max wait
-      const startTime = Date.now();
-      
-      while (!isCashfreeSdkLoaded && (Date.now() - startTime < maxWaitTime)) {
-        // Wait 500ms and check again
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // @ts-ignore
-        if (window.Cashfree) {
-          console.log('Cashfree SDK detected during wait loop');
-          setIsCashfreeSdkLoaded(true);
-          break;
-        }
-      }
-      
-      // If SDK still not loaded after waiting, show error
-      // @ts-ignore
-      if (!window.Cashfree) {
-        setSubscriptionError('Payment gateway not loaded. Please refresh the page and try again.');
-        setIsSubscribing(false);
-        return;
-      }
+    if (!cashfreeSubscriptionSessionId) {
+      console.error('[CashfreePayment] initializeCashfreeCheckout: cashfreeSubscriptionSessionId is missing!');
+      setSubscriptionError('Failed to get payment session. Please try again.');
+      setIsSubscribing(false);
+      return;
+    }
+    
+    if (!dbSubscriptionId) {
+      console.error('[CashfreePayment] initializeCashfreeCheckout: dbSubscriptionId (our internal ID) is missing!');
+      setSubscriptionError('Payment session obtained, but there might be an issue updating subscription status later.');
+      // We'll still proceed with payment
     }
     
     try {
-      // Call backend to create subscription
-      const response = await fetch("/api/subscriptions/cashfree/create-subscription", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          planId: selectedPlanId,
-          customerPhone,
-          customerDetails: {
-            name: user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User",
-            email: user?.email,
-            phone: customerPhone
-          }
-        })
+      // Log the raw subscription session ID for debugging
+      console.log('[CashfreePayment] Raw subscription_session_id:', cashfreeSubscriptionSessionId);
+      
+      // Clean and validate the subscription session ID
+      const cleanedSessionId = cashfreeSubscriptionSessionId.trim();
+      if (!cleanedSessionId) {
+        throw new Error('Subscription session ID is empty after cleaning');
+      }
+      
+      // @ts-ignore - Cashfree is loaded dynamically
+      const cashfree = new window.Cashfree({
+        mode: process.env.NEXT_PUBLIC_CASHFREE_MODE === 'production' ? 'production' : 'sandbox',
       });
       
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error?.message || data.error || "Failed to create subscription");
-      }
+      console.log('[CashfreePayment] Initializing Cashfree checkout with:', {
+        sessionId: cleanedSessionId,
+        dbSubscriptionId: dbSubscriptionId || 'missing',
+        mode: process.env.NEXT_PUBLIC_CASHFREE_MODE || 'sandbox'
+      });
 
-      // Use Cashfree JS SDK to open the subscription checkout
-      if (data.subscriptionSessionId) {
-        console.log('Subscription session ID received:', data.subscriptionSessionId);
-        
-        // Get a fresh reference to the SDK
-        // @ts-ignore
-        const cashfreeSDK = window.Cashfree;
-        
-        if (!cashfreeSDK) {
-          throw new Error('Cashfree SDK not available. Please refresh the page and try again.');
-        }
-        
-        // Create a new instance with proper mode
+      // Update subscription status to PENDING using our internal DB ID
+      if (dbSubscriptionId) {
         try {
-          // @ts-ignore
-          const cashfree = new cashfreeSDK({
-            mode: process.env.NEXT_PUBLIC_CASHFREE_MODE || 'sandbox'
-          });
-          
-          console.log('Cashfree SDK initialized for checkout');
-          
-          // Check which method is available and use it
-          if (typeof cashfree.subscriptionsCheckout === 'function') {
-            console.log('Using cashfree.subscriptionsCheckout');
-            // @ts-ignore
-            await cashfree.subscriptionsCheckout({
-              subsSessionId: data.subscriptionSessionId,
-              redirectTarget: '_blank'
-            });
-          } else if (cashfreeSDK.subscriptionsCheckout && typeof cashfreeSDK.subscriptionsCheckout === 'function') {
-            console.log('Using Cashfree.subscriptionsCheckout directly');
-            // @ts-ignore
-            await cashfreeSDK.subscriptionsCheckout({
-              subsSessionId: data.subscriptionSessionId,
-              redirectTarget: '_blank'
-            });
-          } else {
-            // Last resort, try the global function
-            // @ts-ignore
-            if (typeof window.CashfreeSubscriptionsCheckout === 'function') {
-              console.log('Using global CashfreeSubscriptionsCheckout function');
-              // @ts-ignore
-             // @ts-ignore
-            await window.CashfreeSubscriptionsCheckout({
-                subsSessionId: data.subscriptionSessionId,
-                redirectTarget: '_blank'
-              });
-            } else {
-              throw new Error('Cashfree subscriptions checkout method not found');
-            }
-          }
-        } catch (error: any) {
-          console.error('Error during Cashfree checkout:', error);
-          setSubscriptionError(error.message || 'Error launching payment checkout');
+          console.log('[CashfreePayment] Updating subscription status to PENDING...');
+          await updateSubscriptionStatus(dbSubscriptionId, 'PENDING');
+          console.log('[CashfreePayment] Subscription status updated to PENDING');
+        } catch (updateError) {
+          console.error('[CashfreePayment] Error updating subscription status:', updateError);
+          // Don't block the payment flow for this error
+          setSubscriptionError('Warning: Could not update subscription status, but continuing with payment...');
         }
       } else {
-        throw new Error("No subscription session ID received from server");
+        console.warn('[CashfreePayment] dbSubscriptionId is missing, skipping updateSubscriptionStatus');
       }
-    } catch (error: any) {
-      console.error('Subscription error:', error);
-      setSubscriptionError(error.message || "Failed to create subscription");
-    }
-    
-    setIsSubscribing(false);
-  };
-
-  // Load Cashfree SDK with improved loading mechanism
-  useEffect(() => {
-    const loadCashfreeSDK = () => {
-      // First remove any existing script to avoid conflicts
-      const existingScript = document.getElementById('cashfree-sdk');
-      if (existingScript) {
-        existingScript.remove();
-      }
-
-      // Clear any existing global Cashfree object
-      if (typeof window !== 'undefined') {
-        // @ts-ignore
-        if (window.Cashfree) {
-          console.log('Clearing existing Cashfree SDK instance');
-          // @ts-ignore
-          window.Cashfree = undefined;
-        }
-      }
-
-      console.log('Loading Cashfree SDK (attempt ' + (sdkLoadAttempts + 1) + ')');
-      const script = document.createElement('script');
-      script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
-      script.id = 'cashfree-sdk';
-      script.async = true;
-      script.defer = true; // Add defer to ensure proper loading
       
-      // Define onload handler before appending to DOM
-      script.onload = () => {
-        console.log('Cashfree SDK loaded successfully');
-        // Verify the SDK is actually available
-        setTimeout(() => {
-          // @ts-ignore
-          if (window.Cashfree) {
-            console.log('Cashfree SDK initialized and available globally');
-            setIsCashfreeSdkLoaded(true);
-            
-            // Initialize the SDK with mode
-            try {
-              // @ts-ignore
-              const cashfree = new window.Cashfree({
-                mode: process.env.NEXT_PUBLIC_CASHFREE_MODE || 'sandbox'
-              });
-              console.log('Cashfree SDK initialized:', cashfree);
-            } catch (err) {
-              console.error('Error initializing Cashfree SDK:', err);
-            }
-          } else {
-            console.error('Cashfree SDK loaded but not available globally');
-            if (sdkLoadAttempts < 3) {
-              setSdkLoadAttempts(prev => prev + 1);
-            }
-          }
-        }, 1000); // Wait 1 second to ensure SDK is fully initialized
-      };
+      // Add a small delay to ensure any state updates are processed
+      await new Promise(resolve => setTimeout(resolve, 100));
       
-      script.onerror = (error) => {
-        console.error('Error loading Cashfree SDK:', error);
-        // Retry loading if failed (up to 3 attempts)
-        if (sdkLoadAttempts < 3) {
-          setSdkLoadAttempts(prev => prev + 1);
-          setTimeout(loadCashfreeSDK, 2000); // Retry after 2 seconds
-        } else {
-          setSubscriptionError('Failed to load payment gateway. Please refresh the page and try again.');
-        }
-      };
+      console.log('[CashfreePayment] Calling cashfree.redirect with paymentSessionId:', cleanedSessionId);
       
-      // Add to head instead of body for better loading performance
-      document.head.appendChild(script);
-    };
-
-    loadCashfreeSDK();
-    
-    // Cleanup function to remove script when component unmounts
-    return () => {
-      const script = document.getElementById('cashfree-sdk');
-      if (script) {
-        script.remove();
-      }
-    };
-  }, [sdkLoadAttempts]);
-
-  // Original Cashfree payment handler
-  const handleCashfreePayment = async () => {
-    if (!customerPhone || !/^\d{10}$/.test(customerPhone.trim())) {
-      setPaymentError('A valid 10-digit phone number is required for Cashfree payments.');
-      setIsPaymentProcessing(false);
-      return;
-    }
-
-    if (!user || !session) {
-      setPaymentError('You must be logged in to make a payment.');
-      setIsPaymentProcessing(false);
-      return;
-    }
-
-    if (!plan) {
-      setPaymentError('Please select a plan to continue.');
-      setIsPaymentProcessing(false);
-      return;
-    }
-
-    setIsPaymentProcessing(true);
-    setIsCashfreeLoading(true);
-    setPaymentError(null);
-
-    try {
-      // Create unique order ID
-      const orderId = `order_${plan.id}_${Date.now()}`;
-      
-      // Create order via API
-      const orderResponse = await createCashfreeOrder({
-        orderId,
-        orderAmount: plan.basePrice,
-        orderCurrency: 'INR',
-        customerName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User',
-        customerEmail: user?.email || "",
-        customerPhone: customerPhone,
-        returnUrl: `${window.location.origin}/payment/success?orderId=${orderId}&amount=${plan.basePrice}&planId=${plan.id}&paymentMethod=cashfree`,
-        isSubscription: paymentType === 'subscription',
-        subscriptionDetails: paymentType === 'subscription' ? {
-          planId: plan.id,
-          interval: plan.interval || 'monthly',
-        } : undefined,
-      }, session.access_token);
-
-      if (!orderResponse.success) {
-        throw new Error(orderResponse.error || 'Failed to create Cashfree order');
-      }
-
-      console.log('Order created successfully:', orderResponse);
-      
-      // If we have a payment link, redirect to it immediately
-      if (orderResponse.data?.payment_link) {
-        window.location.href = orderResponse.data.payment_link;
-        return;
-      }
-
-      // Store payment info in localStorage for fallback
-      localStorage.setItem('pendingPayment', JSON.stringify({
-        orderId,
-        amount: plan.basePrice,
-        planId: plan.id,
-        paymentMethod: 'cashfree',
-        paymentStatus: 'PENDING',
-        userId: user.id,
-        isSubscription: paymentType === 'subscription',
-        timestamp: new Date().toISOString(),
-      }));
-
-      // Store subscription info in localStorage before redirecting
-      localStorage.setItem('lastPayment', JSON.stringify({
-        orderId,
-        amount: plan.basePrice,
-        planId: plan.id,
-        paymentMethod: 'cashfree',
-        paymentStatus: 'PENDING',
-        userId: user.id,
-        isSubscription: paymentType === 'subscription',
-        subscriptionId: orderResponse.data?.subscription_id || null,
-        interval: plan.interval || 'monthly'
-      }));
-      
-      // If we have a payment link, redirect to it
-      if (orderResponse.data?.payment_link || orderResponse.data?.paymentLink) {
-        window.location.href = orderResponse.data.payment_link || orderResponse.data.paymentLink;
-        return;
-      }
-
-      // For one-time payments, initialize the widget
-      await initializeCashfreeWidget({
-        amount: plan.basePrice,
-        appId: process.env.NEXT_PUBLIC_CASHFREE_APP_ID || '',
-        orderId: orderId,
-        customerName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User',
-        customerEmail: user?.email || '',
-        customerPhone: customerPhone,
-        returnUrl: `${window.location.origin}/payment/success?orderId=${orderId}&amount=${plan.basePrice}&planId=${plan.id}&paymentMethod=cashfree`,
+      cashfree.redirect({
+        paymentSessionId: cleanedSessionId, // Use the cleaned session ID
+        redirectTarget: '_blank',
+        components: ['card', 'netbanking', 'wallet', 'upi', 'paylater'],
         theme: {
-          widgetColor: '#2d2d2d',
-          linkColor: '#4a90e2',
-          cfLogoTheme: 'light',
-          isLogoActive: true
-        },
-        onSuccess: (data) => {
-          console.log('Payment successful:', data);
-          // Store payment info in localStorage for success page
-          localStorage.setItem('lastPayment', JSON.stringify({
-            ...data,
-            orderId,
-            amount: plan.basePrice,
-            planId: plan.id,
-            paymentMethod: 'cashfree',
-            paymentStatus: 'SUCCESS',
-            userId: user.id,
-          }));
-          router.push(`/payment/success?orderId=${orderId}&amount=${plan.basePrice}&planId=${plan.id}&paymentMethod=cashfree&paymentStatus=SUCCESS`);
-        },
-        onFailure: (error) => {
-          console.error('Payment failed:', error);
-          setPaymentError(error?.message || 'Payment failed. Please try again or contact support.');
-          setIsPaymentProcessing(false);
-          setIsCashfreeLoading(false);
+          color: '#7c3aed',
+          backgroundColor: '#ffffff',
+          errorColor: '#dc2626',
+          themeColor: '#7c3aed',
+          iconBackground: '#f5f3ff',
+          hideHeader: false,
+          hideOrderSummary: true,
+          hidePaymentModes: false,
         },
       });
     } catch (error) {
-      console.error('Cashfree payment error:', error);
-      setPaymentError(
-        error instanceof Error 
-          ? error.message 
-          : 'An unexpected error occurred while processing your payment. Please try again.'
-      );
-    } finally {
-      setIsCashfreeLoading(false);
-      setIsPaymentProcessing(false);
+      console.error('Error initializing Cashfree checkout:', error);
+      setSubscriptionError('Failed to initialize payment. Please try again.');
+      setIsSubscribing(false);
     }
   };
 
-    // Helper function to render the subscription plan selection UI
-  const renderSubscriptionUI = () => {
-    return (
-      <div className="mt-4 border rounded-lg p-4">
-        <h3 className="text-lg font-semibold mb-4">Choose a Subscription Plan</h3>
+  // Function to update subscription status in the backend
+  const updateSubscriptionStatus = async (subscriptionId: string, status: string) => {
+    console.log('[CashfreePayment] updateSubscriptionStatus called with:', { subscriptionId, status, accessTokenPresent: !!session?.access_token });
+    if (!subscriptionId || !status) {
+      console.error('[CashfreePayment] updateSubscriptionStatus: Missing subscriptionId or status. Aborting update.');
+      return false;
+    }
+    try {
+      const response = await fetch('/api/subscriptions/update-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          subscription_id: subscriptionId,
+          status: status
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Failed to update subscription status:', errorData);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error updating subscription status:', error);
+      return false;
+    }
+  };
+
+  // Set default selected plan if not set
+  useEffect(() => {
+    if (paymentType === 'subscription' && !selectedPlanId && AVAILABLE_PLANS.length > 0) {
+      setSelectedPlanId(AVAILABLE_PLANS[0].id);
+    }
+  }, [paymentType, selectedPlanId]);
+
+  const handleSubscribe = async () => {
+    if (!selectedPlanId) {
+      setSubscriptionError('Please select a subscription plan');
+      return;
+    }
+
+    const isPhoneValid = customerPhone && /^\d{10}$/.test(customerPhone);
+    if (!isPhoneValid) {
+      setSubscriptionError('Please enter a valid 10-digit phone number');
+      return;
+    }
+
+    setIsSubscribing(true);
+    setSubscriptionError(null);
+
+    try {
+      console.log('Initiating subscription with plan:', selectedPlanId);
+      
+      // Get the current session to include the auth token
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      
+      if (!currentSession) {
+        throw new Error('No active session. Please sign in again.');
+      }
+
+      const response = await fetch('/api/subscriptions/cashfree/create-subscription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          planId: selectedPlanId,
+          customer_phone: customerPhone
+        })
+      });
+
+      const data = await response.json();
+      console.log('[CashfreePayment] Subscription API response data:', JSON.stringify(data, null, 2));
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create subscription');
+      }
+
+      // Handle the response from the subscription creation
+      if (data.subscription_session_id) {
+        console.log('Loading Cashfree SDK...');
         
-        <div className="space-y-4">
-          {AVAILABLE_PLANS.map((planItem) => (
-            <div 
-              key={planItem.id} 
-              className={`border rounded-lg p-4 cursor-pointer transition-all ${selectedPlanId === planItem.id ? 'border-blue-500 bg-blue-50' : 'hover:border-gray-400'}`}
-              onClick={() => setSelectedPlanId(planItem.id)}
-            >
-              <div className="flex justify-between items-center">
-                <div>
-                  <h4 className="font-medium">{planItem.name}</h4>
-                  <p className="text-sm text-gray-600">{planItem.description}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold">₹{planItem.price}</p>
-                  <p className="text-xs text-gray-500">{planItem.interval}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        
-        {/* Phone input for subscription */}
-        <div className="mt-6 space-y-2">
-          <Label htmlFor="subscription-phone">
-            Phone Number (required for payment)
+        // First, check if script is already loaded
+        if (!window.Cashfree) {
+          const script = document.createElement('script');
+          script.src = 'https://sdk.cashfree.com/js/ui/2.0.0/cashfree.sandbox.js';
+          script.async = true;
+          
+          script.onload = () => {
+            console.log('Cashfree SDK loaded successfully');
+            console.log('[CashfreePayment] SDK loaded. Calling initializeCashfreeCheckout with:', { cashfreeSessId: data.subscription_session_id, dbSubId: data.subscription_id });
+            if (data.subscription_session_id && data.subscription_id) {
+              initializeCashfreeCheckout(data.subscription_session_id, data.subscription_id);
+            } else {
+              console.error('[CashfreePayment] Missing subscription_session_id or subscription_id from API response after SDK load.');
+              setSubscriptionError('Critical error: Payment session details missing. Cannot proceed.');
+              setIsSubscribing(false);
+            }
+          };
+          
+          script.onerror = () => {
+            console.error('Failed to load Cashfree SDK');
+            setSubscriptionError('Failed to load payment processor. Please refresh and try again.');
+            setIsSubscribing(false);
+          };
+          
+          document.head.appendChild(script);
+        } else {
+          console.log('Cashfree SDK already loaded');
+          console.log('[CashfreePayment] SDK already loaded. Calling initializeCashfreeCheckout with:', { cashfreeSessId: data.subscription_session_id, dbSubId: data.subscription_id });
+          if (data.subscription_session_id && data.subscription_id) {
+            initializeCashfreeCheckout(data.subscription_session_id, data.subscription_id);
+          } else {
+            console.error('[CashfreePayment] Missing subscription_session_id or subscription_id from API response (SDK already loaded path).');
+            setSubscriptionError('Critical error: Payment session details missing. Cannot proceed.');
+            setIsSubscribing(false);
+          }
+        }
+
+
+      } else if (data.auth_url) {
+        // Fallback to auth_url if subscription_session_id is not available
+        console.log('Redirecting to auth URL:', data.auth_url);
+        window.location.href = data.auth_url;
+      } else {
+        console.error('No payment URL in response:', data);
+        throw new Error('No payment URL received from server');
+      }
+    } catch (error) {
+      console.error('Subscription error:', error);
+      setSubscriptionError(
+        error instanceof Error ? error.message : 'Failed to create subscription. Please try again.'
+      );
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
+
+  // Render phone number input section
+  const renderPhoneNumberSection = () => (
+    <div className="mb-6 p-4 bg-muted/30 rounded-lg border">
+      <h4 className="font-medium mb-3">Contact Information</h4>
+      <div className="space-y-4">
+        <div>
+          <Label htmlFor="customer-phone" className="block text-sm font-medium mb-1">
+            Phone Number <span className="text-red-500">*</span>
           </Label>
-          <div className="flex gap-2 items-center">
-            <Input
-              type="tel"
-              id="subscription-phone"
-              placeholder="10-digit phone number"
-              value={customerPhone || ''}
-              onChange={(e) => {
-                const value = e.target.value.replace(/\D/g, '').slice(0, 10);
-                setCustomerPhone(value);
-                setPhoneError(null);
-              }}
-              maxLength={10}
-              pattern="[0-9]{10}"
-              required
-              autoComplete="tel"
-            />
+          <div className="flex gap-2 items-start">
+            <div className="flex-1">
+              <Input
+                id="customer-phone"
+                type="tel"
+                value={customerPhone}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                  setCustomerPhone(value);
+                  setPhoneError(null);
+                  setPhoneSaved(false);
+                }}
+                placeholder="Enter your 10-digit phone number"
+                className={phoneError ? 'border-red-500' : ''}
+                maxLength={10}
+                required
+                autoComplete="tel"
+              />
+              {phoneError && (
+                <p className="mt-1 text-sm text-red-600">{phoneError}</p>
+              )}
+              {customerPhone && customerPhone.length !== 10 && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {10 - customerPhone.length} digit{10 - customerPhone.length === 1 ? '' : 's'} needed
+                </p>
+              )}
+              <p className="mt-1 text-xs text-muted-foreground">
+                Required for payment verification. Standard messaging rates may apply.
+              </p>
+            </div>
             {user && customerPhone !== (user.phone || '') && /^\d{10}$/.test(customerPhone) && (
               <Button
-                variant="secondary"
+                variant="outline"
                 size="sm"
+                className="h-10 whitespace-nowrap"
                 disabled={savingPhone}
                 onClick={async () => {
                   setSavingPhone(true);
                   setPhoneError(null);
                   try {
                     const { error } = await supabase.auth.updateUser({ phone: customerPhone });
-                    if (error) {
-                      setPhoneError('Failed to update phone: ' + error.message);
-                      setPhoneSaved(false);
-                    } else {
-                      setPhoneSaved(true);
-                      setPhoneError(null);
-                    }
+                    if (error) throw error;
+                    setPhoneSaved(true);
                   } catch (err: any) {
                     setPhoneError('Failed to update phone: ' + (err.message || 'Unknown error'));
                     setPhoneSaved(false);
+                  } finally {
+                    setSavingPhone(false);
                   }
-                  setSavingPhone(false);
                 }}
               >
-                {savingPhone ? 'Saving...' : 'Save to Profile'}
+                {savingPhone ? 'Saving...' : 'Save'}
               </Button>
             )}
           </div>
-          
           {phoneSaved && (
-            <span className="text-green-600 text-xs ml-2">Saved!</span>
-          )}
-          {phoneError && (
-            <span className="text-red-600 text-xs ml-2">{phoneError}</span>
-          )}
-          
-          <p className="text-xs text-muted-foreground">Required for Cashfree payments. Must be exactly 10 digits.</p>
-          {customerPhone && customerPhone.length !== 10 && (
-            <p className="text-xs text-red-500">{10 - customerPhone.length} {10 - customerPhone.length === 1 ? 'digit' : 'digits'} {customerPhone.length < 10 ? 'more' : 'less'} needed</p>
+            <div className="mt-2 text-sm text-green-600 flex items-center">
+              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              Phone number saved to your profile
+            </div>
           )}
         </div>
+      </div>
+    </div>
+  );
 
-        {/* Subscription button */}
+  // Helper function to render the subscription plan selection UI
+  const renderSubscriptionUI = () => {
+    const isPhoneValid = customerPhone && /^\d{10}$/.test(customerPhone);
+    
+    return (
+      <div className="border rounded-lg p-4">
+        <h4 className="font-medium mb-4">Subscription Plan</h4>
+        <div className="space-y-4">
+          {AVAILABLE_PLANS.map((planItem) => (
+            <div 
+              key={planItem.id}
+              className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                selectedPlanId === planItem.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
+              }`}
+              onClick={() => setSelectedPlanId(planItem.id)}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h5 className="font-medium">{planItem.name}</h5>
+                  <p className="text-sm text-muted-foreground">{planItem.description}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium">₹{planItem.price}/{planItem.interval === 'monthly' ? 'mo' : 'yr'}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {planItem.interval === 'monthly' ? 'Billed monthly' : 'Billed annually'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
         <div className="mt-6">
           <Button 
-            className="w-full transition-all duration-200 shadow-md hover:shadow-lg"
+            className="w-full" 
             size="lg"
             onClick={handleSubscribe}
-            disabled={isSubscribing || !customerPhone || !/^\d{10}$/.test(customerPhone)}
+            disabled={isSubscribing || !isPhoneValid}
           >
             {isSubscribing ? (
               <>
@@ -498,90 +398,43 @@ export const CashfreePayment: React.FC<CashfreePaymentProps> = ({
                 Processing...
               </>
             ) : (
-              <>Subscribe Now</>
+              <>
+                <CreditCard className="mr-2 h-4 w-4" />
+                Subscribe Now
+              </>
             )}
           </Button>
+          {!isPhoneValid && customerPhone.length > 0 && (
+            <p className="mt-2 text-sm text-red-600 text-center">
+              Please enter a valid 10-digit phone number
+            </p>
+          )}
+          {subscriptionError && (
+            <p className="mt-2 text-sm text-red-600">{subscriptionError}</p>
+          )}
         </div>
-
-        {subscriptionError && (
-          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-sm text-red-600">{subscriptionError}</p>
-          </div>
-        )}
       </div>
     );
   };
 
+  // Helper function to handle one-time payment
+  const handleOneTimePayment = async () => {
+    // Implement your one-time payment logic here
+    console.log('Initiating one-time payment');
+    // Add your payment processing logic
+  };
 
   // Helper function to render the one-time payment UI
   const renderOneTimePaymentUI = () => {
+    const isPhoneValid = customerPhone && /^\d{10}$/.test(customerPhone);
+    
     return (
-      <div className="mt-4">
-        <div className="mb-4">
-          <Label htmlFor="customer-phone">Phone Number</Label>
-          <div className="flex gap-2 items-center">
-            <Input
-              id="customer-phone"
-              type="tel"
-              value={customerPhone}
-              onChange={e => {
-                // Only allow digits and limit to 10 characters
-                const value = e.target.value.replace(/\D/g, '').slice(0, 10);
-                setCustomerPhone(value);
-                setPhoneError(null);
-              }}
-              placeholder="Enter your phone number"
-              maxLength={10}
-              required
-              autoComplete="tel"
-            />
-            {user && customerPhone !== (user.phone || '') && /^\d{10}$/.test(customerPhone) && (
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={savingPhone}
-                onClick={async () => {
-                  setSavingPhone(true);
-                  setPhoneError(null);
-                  try {
-                    const { error } = await supabase.auth.updateUser({ phone: customerPhone });
-                    if (error) {
-                      setPhoneError('Failed to update phone: ' + error.message);
-                      setPhoneSaved(false);
-                    } else {
-                      setPhoneSaved(true);
-                      setPhoneError(null);
-                    }
-                  } catch (err: any) {
-                    setPhoneError('Failed to update phone: ' + (err.message || 'Unknown error'));
-                    setPhoneSaved(false);
-                  }
-                  setSavingPhone(false);
-                }}
-              >
-                {savingPhone ? 'Saving...' : 'Save to Profile'}
-              </Button>
-            )}
-          </div>
-          
-          {phoneSaved && (
-            <span className="text-green-600 text-xs ml-2">Saved!</span>
-          )}
-          {phoneError && (
-            <span className="text-red-600 text-xs ml-2">{phoneError}</span>
-          )}
-          
-          <p className="text-xs text-muted-foreground mt-1">Required for Cashfree payments. Must be exactly 10 digits.</p>
-          {customerPhone && customerPhone.length !== 10 && (
-            <p className="text-xs text-red-500 mt-1">{10 - customerPhone.length} {10 - customerPhone.length === 1 ? 'digit' : 'digits'} {customerPhone.length < 10 ? 'more' : 'less'} needed</p>
-          )}
-        </div>
-
+      <div className="space-y-4">
         <Button
-          onClick={handleCashfreePayment}
-          className="w-full transition-all duration-200 shadow-md hover:shadow-lg"
+          onClick={handleOneTimePayment}
+          className="w-full"
           size="lg"
-          disabled={isCashfreeLoading || !user || !session || (!/^\d{10}$/.test(customerPhone.trim()))}
+          disabled={isCashfreeLoading || !user || !session || !isPhoneValid}
         >
           {isCashfreeLoading ? (
             <>
@@ -595,13 +448,19 @@ export const CashfreePayment: React.FC<CashfreePaymentProps> = ({
             </>
           )}
         </Button>
+        
+        {!isPhoneValid && customerPhone.length > 0 && (
+          <p className="text-sm text-red-600 text-center">
+            Please enter a valid 10-digit phone number
+          </p>
+        )}
 
-        <div className="flex items-center justify-center text-xs text-muted-foreground mt-2">
+        <div className="flex items-center justify-center text-xs text-muted-foreground">
           <Lock className="h-3 w-3 mr-1.5" />
           Secure payment. Your information is encrypted.
         </div>
 
-        <div id="payment-container" className="mt-4 p-4 border rounded-lg bg-white">
+        <div id="payment-container" className="p-4 border rounded-lg bg-white">
           {isCashfreeLoading ? (
             <div className="flex items-center justify-center min-h-[100px]">
               <Loader2 className="animate-spin h-6 w-6 text-primary mr-2" />
@@ -616,14 +475,23 @@ export const CashfreePayment: React.FC<CashfreePaymentProps> = ({
       </div>
     );
   };
-  
+
   return (
-    <div className="space-y-4">
-      {/* Select the appropriate UI based on payment type */}
-      {paymentType === 'subscription' ? 
-        renderSubscriptionUI() : 
-        renderOneTimePaymentUI()
-      }
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <h3 className="text-lg font-medium">Payment Method</h3>
+        <p className="text-sm text-muted-foreground">
+          Complete your payment using Cashfree
+        </p>
+      </div>
+
+      {/* Phone number input - shown for both payment types */}
+      {renderPhoneNumberSection()}
+
+      {/* Payment type specific UI */}
+      <div className="space-y-4">
+        {paymentType === 'subscription' ? renderSubscriptionUI() : renderOneTimePaymentUI()}
+      </div>
     </div>
   );
 };

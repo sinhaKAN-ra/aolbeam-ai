@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/lib/supabase';
 
 export async function POST(req: Request) {
   try {
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = createSupabaseServerClient();
     
     // Get the current user
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -25,7 +24,7 @@ export async function POST(req: Request) {
     const { error: dbError } = await supabase
       .from('payment_orders')
       .insert({
-        user_id: session.user.id,
+        user_id: user.id,
         plan_id: planId,
         amount: amount,
         currency: currency,

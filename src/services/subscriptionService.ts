@@ -1,5 +1,11 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import { Database } from '@/types/supabase';
+
+// Initialize Supabase client
+const createClient = () => createBrowserClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export interface Subscription {
   id: string;
@@ -23,7 +29,7 @@ export interface Subscription {
 }
 
 export async function getUserSubscription(): Promise<Subscription | null> {
-  const supabase = createClientComponentClient<Database>();
+  const supabase = createClient();
   
   // Get the current user
   const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -57,7 +63,7 @@ export async function getUserSubscription(): Promise<Subscription | null> {
 
 export async function cancelSubscription(subscriptionId: string): Promise<{ success: boolean; message: string }> {
   try {
-    const supabase = createClientComponentClient<Database>();
+    const supabase = createClient();
     
     // Get subscription details
     const { data: subscription, error: fetchError } = await supabase

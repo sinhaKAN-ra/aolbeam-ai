@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/lib/supabase';
 
 const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID;
 const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
@@ -16,13 +15,12 @@ export async function POST(request: Request) {
     }
 
     // Initialize Supabase client for route handler
-    const supabase = createRouteHandlerClient({ cookies });
+    const supabase = createSupabaseServerClient();
     // Get user session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (!session?.user) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized - Valid authentication required' }, { status: 401 });
     }
-    const user = session.user;
 
     const body = await request.json();
     const {

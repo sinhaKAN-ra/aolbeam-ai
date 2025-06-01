@@ -33,14 +33,12 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
-  // Auto-select payment method based on country
+  // Set default payment method to Cashfree if not set
   useEffect(() => {
-    if (countryCode === 'IN') {
+    if (!paymentMethod) {
       setPaymentMethod('cashfree');
-    } else if (countryCode) {
-      setPaymentMethod('lemonsqueezy');
     }
-  }, [countryCode]);
+  }, [paymentMethod]);
 
   // Set default payment type based on plan
   useEffect(() => {
