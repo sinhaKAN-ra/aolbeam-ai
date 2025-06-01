@@ -27,11 +27,33 @@ export function middleware(req: NextRequest) {
   }
 
   // Check for Supabase auth session
-  const cookieName = 'sb-jfgaaboxjjkbxjnqtzln-auth-token';
-  const hasAuthCookie = req.cookies.has(cookieName);
+  const cookieBaseName = 'sb-jfgaaboxjjkbxjnqtzln-auth-token';
+  const allCookies = req.cookies.getAll();
+  
+  // Check for any cookie that starts with the base name
+  const hasAuthCookie = allCookies.some(cookie => 
+    cookie.name.startsWith(cookieBaseName)
+  );
+  
+  // Debug logging
+  console.log('=== Middleware Debug ===');
+  console.log('Request URL:', req.url);
+  console.log('All cookies:', allCookies.map(c => ({
+    name: c.name,
+    value: c.value.length > 50 ? c.value.substring(0, 50) + '...' : c.value
+  })));
+  console.log('Looking for cookie base:', cookieBaseName);
+  console.log('Has auth cookie:', hasAuthCookie);
+  console.log('=======================');
 
   // If no auth cookie, redirect to login with return URL
   if (!hasAuthCookie) {
+    // Skip auth check for API routes
+    if (req.nextUrl.pathname.startsWith('/api/')) {
+      return NextResponse.next();
+    }
+    
+    console.log('No auth cookie found, redirecting to login');
     const loginUrl = new URL('/login', req.nextUrl.origin);
     loginUrl.searchParams.set('redirectedFrom', req.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);

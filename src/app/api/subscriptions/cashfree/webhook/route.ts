@@ -75,16 +75,29 @@ export async function POST(request: Request) {
     const orderStatus = order.order_status;
 
     // Find the associated subscription
-    const { data: subscriptionData, error: subscriptionError } = await supabase
+    // Note: The webhook might contain either the order_id or the subscription_id
+    // Try to find by provider_subscription_id first
+    let { data: subscriptionData, error: subscriptionError } = await supabase
       .from('subscriptions')
       .select('*')
       .eq('provider', 'cashfree')
       .eq('provider_subscription_id', orderId)
-      .single();
+      .maybeSingle(); // Use maybeSingle instead of single to avoid errors
+      
+    // If not found by order_id, try to find by subscription_id if it exists in the payload
+    if (!subscriptionData && data.subscription && data.subscription.subscription_id) {
+      const subscriptionId = data.subscription.subscription_id;
+      ({ data: subscriptionData, error: subscriptionError } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('provider', 'cashfree')
+        .eq('provider_subscription_id', subscriptionId)
+        .maybeSingle());
+    }
 
-    if (subscriptionError) {
-      console.error('Error finding subscription:', subscriptionError);
-      // This could be a one-time payment, not a subscription
+    if (!subscriptionData) {
+      console.log('Subscription not found for webhook event:', orderId);
+      // This could be a one-time payment, not a subscription, or a test webhook
       return NextResponse.json({ success: true });
     }
 
@@ -92,8 +105,10 @@ export async function POST(request: Request) {
     let newStatus = subscriptionData.status;
     if (orderStatus === 'PAID') {
       newStatus = 'ACTIVE';
-    } else if (orderStatus === 'EXPIRED' || orderStatus === 'CANCELLED') {
-      newStatus = orderStatus;
+    } else if (orderStatus === 'EXPIRED') {
+      newStatus = 'EXPIRED';
+    } else if (orderStatus === 'CANCELLED') {
+      newStatus = 'CANCELLED'; // Using exact spelling from the database constraint
     } else if (orderStatus === 'FAILED') {
       newStatus = 'PAST_DUE';
     }

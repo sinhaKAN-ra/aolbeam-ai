@@ -90,19 +90,29 @@ export async function POST(request: Request) {
     };
 
     // Create order in Cashfree
+    const cashfreeBaseUrl = CASHFREE_MODE === 'sandbox' 
+      ? 'https://sandbox.cashfree.com' 
+      : 'https://api.cashfree.com';
+      
+    console.log('Creating Cashfree order with app ID:', CASHFREE_APP_ID ? '***' + CASHFREE_APP_ID.slice(-4) : 'undefined');
+    console.log('Cashfree API URL:', `${cashfreeBaseUrl}/pg/orders`);
+    
     const response = await fetch(
-      `${CASHFREE_MODE === 'sandbox' ? 'https://sandbox.cashfree.com' : 'https://api.cashfree.com'}/pg/orders`,
+      `${cashfreeBaseUrl}/pg/orders`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-version': '2022-09-01',
-          'x-client-id': CASHFREE_APP_ID,
-          'x-client-secret': CASHFREE_SECRET_KEY
+          'x-client-id': CASHFREE_APP_ID || '',
+          'x-client-secret': CASHFREE_SECRET_KEY || '',
+          'Accept': 'application/json'
         },
         body: JSON.stringify(orderPayload)
       }
     );
+    
+    console.log('Cashfree API response status:', response.status);
 
     if (!response.ok) {
       const error = await response.json();
@@ -139,7 +149,8 @@ export async function POST(request: Request) {
     // Check for existing subscription (by user, plan, and provider_order_id)
     let subscriptionId = uuidv4();
     let subscription = null;
-    let subError = null;
+    
+    // First, try to find an existing subscription
     const { data: existingSub, error: findSubError } = await supabase
       .from('subscriptions')
       .select('*')
@@ -152,33 +163,45 @@ export async function POST(request: Request) {
       subscription = existingSub;
       subscriptionId = existingSub.id;
     } else {
-      const insertResult = await supabase
+      // Create a new subscription with proper status values
+      const subscriptionData = {
+        id: subscriptionId,
+        user_id: user.id,
+        plan_id: subscriptionDetails.planId,
+        provider: 'cashfree',
+        provider_subscription_id: data.order_id,
+        status: 'TRIAL', // Will be updated to 'ACTIVE' after successful payment
+        amount: orderAmount,
+        currency: orderCurrency,
+        interval: subscriptionDetails.interval,
+        current_period_start: now.toISOString(),
+        current_period_end: currentPeriodEnd.toISOString(),
+        created_at: now.toISOString(),
+        updated_at: now.toISOString(),
+        metadata: { 
+          ...data,
+          subscription_details: subscriptionDetails
+        },
+      };
+
+      // First insert the subscription
+      const { data: newSubscription, error: createSubError } = await supabase
         .from('subscriptions')
-        .insert({
-          id: subscriptionId,
-          user_id: user.id,
-          plan_id: subscriptionDetails.planId,
-          provider: 'cashfree',
-          provider_subscription_id: data.order_id, // Use Cashfree order ID as the subscription ID for now
-          status: 'PENDING', // Will be updated to ACTIVE once payment is successful
-          amount: orderAmount,
-          currency: orderCurrency,
-          interval: subscriptionDetails.interval,
-          current_period_start: now.toISOString(),
-          current_period_end: currentPeriodEnd.toISOString(),
-          metadata: { 
-            ...data,
-            subscription_details: subscriptionDetails
-          },
-        })
+        .insert(subscriptionData)
         .select()
         .single();
-      subscription = insertResult.data;
-      subError = insertResult.error;
-      if (subError) {
-        console.error('Error creating subscription record:', subError);
-        // Don't fail the request if DB save fails
+
+      if (createSubError) {
+        console.error('Error creating subscription record:', createSubError);
+        // If subscription creation fails, we can't proceed with payment
+        return NextResponse.json(
+          { error: 'Failed to create subscription record', details: createSubError },
+          { status: 500 }
+        );
       }
+      
+      subscription = newSubscription;
+      subscriptionId = newSubscription.id;
     }
 
     // Check for existing payment order (by provider_order_id)
@@ -189,29 +212,50 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (!existingOrder) {
+      const orderData = {
+        user_id: user.id,
+        plan_id: subscriptionDetails.planId,
+        amount: orderAmount,
+        currency: orderCurrency,
+        payment_provider: 'cashfree',
+        provider_order_id: data.order_id,
+        status: 'PENDING', // Will be updated to 'SUCCESS' after payment confirmation
+        subscription_id: subscriptionId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        metadata: {
+          ...data,
+          subscription_details: subscriptionDetails
+        }
+      };
+
+      // Insert the payment order
       const { error: dbError } = await supabase
         .from('payment_orders')
-        .insert({
-          user_id: user.id,
-          plan_id: subscriptionDetails.planId,
-          amount: orderAmount,
-          currency: orderCurrency,
-          payment_provider: 'cashfree',
-          provider_order_id: data.order_id,
-          status: 'PENDING',
-          subscription_id: subscriptionId,
-          metadata: data,
-        });
+        .insert(orderData);
+        
       if (dbError) {
-        console.error('Database error:', dbError);
-        // Don't fail the request if DB save fails
+        console.error('Database error creating payment order:', dbError);
+        // If we can't create the payment order, we should still return the payment session
+        // but log the error for debugging
+        console.error('Proceeding with payment despite order creation error');
       }
+    }
+
+    // Return the payment link in the response
+    const paymentLink = data.payment_link || data.payments?.url;
+    if (!paymentLink) {
+      console.error('No payment link found in Cashfree response:', data);
+      return NextResponse.json(
+        { error: 'Payment link not found in Cashfree response' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       success: true,
       data: {
-        payment_session_id: data.payment_session_id,
+        payment_link: paymentLink,  // Ensure consistent naming with Cashfree's response
         order_id: data.order_id,
         subscription_id: subscriptionId,
         is_subscription: true,

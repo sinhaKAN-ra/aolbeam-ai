@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import type { Database } from '@/types/supabase';
 
 const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID;
 const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
@@ -8,8 +9,29 @@ const CASHFREE_MODE = process.env.NEXT_PUBLIC_CASHFREE_MODE || 'sandbox';
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = cookies();
-    const supabase = createServerComponentClient({ cookies: () => cookieStore });
+    const cookieStore = await cookies();
+    const cookieStoreSync = cookieStore as unknown as {
+      get: (name: string) => { value: string } | undefined;
+      set: (options: { name: string; value: string; [key: string]: any }) => void;
+    };
+    
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStoreSync.get(name)?.value;
+          },
+          set(name: string, value: string, options: any) {
+            cookieStoreSync.set({ name, value, ...options });
+          },
+          remove(name: string, options: any) {
+            cookieStoreSync.set({ name, value: '', ...options });
+          },
+        },
+      }
+    );
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {

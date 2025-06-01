@@ -1,7 +1,34 @@
 // Define the Cashfree types
+type CashfreeInstance = {
+  load: (options: {
+    paymentSession: {
+      orderId: string;
+      paymentSessionId: string;
+    };
+    redirectTarget: string;
+    renderContainer: string;
+    uiTheme: {
+      theme: string;
+      backgroundColor: string;
+      buttonColor: string;
+      buttonTextColor: string;
+      buttonCornerRadius: string;
+    };
+    customer: {
+      name: string;
+      email: string;
+      phone: string;
+    };
+    onSuccess: (data: any) => void;
+    onFailure: (error: any) => void;
+    onClose: () => void;
+  }) => Promise<void>;
+};
+
 declare global {
   interface Window {
     Cashfree: {
+      subscriptionsCheckout: boolean;
       Constructor: new (options: { mode: string }) => CashfreeInstance;
     };
   }
@@ -107,35 +134,79 @@ export async function initializeCashfreeWidget(options: {
   theme?: Record<string, any>;
   onSuccess?: (data: any) => void;
   onFailure?: (error: any) => void;
+  orderId?: string;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
 }) {
   try {
     await loadCashfreeWidget();
-
-    // First, let's clean up any existing widgets
+    
+    // Clean up any existing widgets
     const existingContainer = document.getElementById('payment-container');
     if (existingContainer) {
-      const existingWidget = document.getElementById('cashfree-widget');
-      if (existingWidget) existingWidget.remove();
-      
-      // Let's create a simpler payment container - direct approach
-      const payButton = document.createElement('button');
-      payButton.innerText = 'Pay with Cashfree';
-      payButton.className = 'px-4 py-2 bg-blue-500 text-white rounded-md w-full';
       existingContainer.innerHTML = '';
+      
+      // Create a container for the payment button
+      const payButton = document.createElement('button');
+      payButton.innerText = 'Pay ₹' + (options.amount / 100).toFixed(2) + ' with Cashfree';
+      payButton.className = 'px-4 py-2 bg-blue-600 text-white rounded-md w-full hover:bg-blue-700 transition-colors';
+      payButton.id = 'cashfree-pay-button';
+      
+      // Add loading state
+      payButton.addEventListener('click', () => {
+        payButton.disabled = true;
+        payButton.innerHTML = '<span class="animate-spin">⏳</span> Processing...';
+      });
+      
       existingContainer.appendChild(payButton);
       
-      // When button is clicked, handle the payment
+      // Initialize the Cashfree SDK
+      const cashfree = new window.Cashfree.Constructor({
+        mode: process.env.NEXT_PUBLIC_CASHFREE_MODE || 'sandbox'
+      });
+      
+      // Handle the payment when the button is clicked
       payButton.onclick = async () => {
         try {
-          // For direct payments without widget complications
-          if (options.returnUrl) {
-            window.location.href = options.returnUrl;
-            return;
+          if (!options.orderId) {
+            throw new Error('Order ID is required');
           }
           
-          options.onSuccess?.({ status: 'success', order_id: 'direct-' + Date.now() });
+          // Initialize the payment
+          await cashfree.load({
+            paymentSession: {
+              orderId: options.orderId,
+              paymentSessionId: options.orderId, // Using orderId as session ID for simplicity
+            },
+            redirectTarget: 'modal',
+            renderContainer: 'payment-container',
+            uiTheme: {
+              theme: options.theme?.theme || 'light',
+              backgroundColor: options.theme?.backgroundColor || '#ffffff',
+              buttonColor: options.theme?.buttonColor || '#4a90e2',
+              buttonTextColor: options.theme?.buttonTextColor || '#ffffff',
+              buttonCornerRadius: options.theme?.buttonCornerRadius || '4px',
+            },
+            customer: {
+              name: options.customerName || 'Customer',
+              email: options.customerEmail || 'customer@example.com',
+              phone: options.customerPhone || '9999999999',
+            },
+            onSuccess: (data: any) => {
+              console.log('Payment successful:', data);
+              options.onSuccess?.(data);
+            },
+            onFailure: (error: any) => {
+              console.error('Payment failed:', error);
+              options.onFailure?.(error);
+            },
+            onClose: () => {
+              console.log('Payment modal closed');
+            }
+          });
         } catch (error) {
-          console.error('Payment error:', error);
+          console.error('Error initializing payment:', error);
           options.onFailure?.(error);
         }
       };
@@ -151,6 +222,9 @@ export async function initializeCashfreeWidget(options: {
     redirectContainer.style.margin = '20px 0';
     redirectContainer.style.border = '1px solid #ddd';
     redirectContainer.style.borderRadius = '8px';
+    
+    // Get the body element
+    const body = document.body || document.getElementsByTagName('body')[0];
     
     const redirectButton = document.createElement('button');
     redirectButton.innerText = 'Complete Payment';

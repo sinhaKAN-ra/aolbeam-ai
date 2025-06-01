@@ -23,6 +23,13 @@ export default function SubscriptionsPage() {
   const [cancelSuccess, setCancelSuccess] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
 
+  // Check for payment success parameters in URL
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [paymentInfo, setPaymentInfo] = useState<{
+    subscriptionId?: string;
+    orderId?: string;
+  } | null>(null);
+
   useEffect(() => {
     if (!isAuthLoading && !user) {
       router.push('/login?redirect=/profile/subscriptions');
@@ -31,6 +38,26 @@ export default function SubscriptionsPage() {
 
     if (user) {
       loadSubscription();
+      
+      // Check for payment success parameters in URL
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const status = urlParams.get('status');
+        const subscriptionId = urlParams.get('subscription_id');
+        const orderId = urlParams.get('order_id');
+        
+        if (status === 'success' && subscriptionId) {
+          setPaymentSuccess(true);
+          setPaymentInfo({
+            subscriptionId,
+            orderId: orderId || undefined
+          });
+          
+          // Clear the URL parameters after processing
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, newUrl);
+        }
+      }
     }
   }, [user, isAuthLoading, router]);
 
@@ -107,6 +134,114 @@ export default function SubscriptionsPage() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <span className="ml-2">Loading subscription information...</span>
         </div>
+      </div>
+    );
+  }
+
+  // Show success message when payment is completed
+  if (paymentSuccess) {
+    return (
+      <div className="container max-w-4xl mx-auto py-12 px-4">
+        <Alert className="bg-green-50 border-green-200 mb-6">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertTitle className="text-green-800">Payment Successful!</AlertTitle>
+          <AlertDescription className="text-green-700">
+            Your subscription has been activated successfully. You now have access to all premium features.
+            {paymentInfo?.subscriptionId && (
+              <p className="text-sm mt-1">Subscription ID: {paymentInfo.subscriptionId}</p>
+            )}
+          </AlertDescription>
+        </Alert>
+        
+        {/* Continue to show subscription details */}
+        {subscription ? (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>{subscription.plan_id.charAt(0).toUpperCase() + subscription.plan_id.slice(1)} Plan</CardTitle>
+                  <CardDescription>Subscription details</CardDescription>
+                </div>
+                {getStatusBadge(subscription.status)}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Status</p>
+                    <p className="text-sm text-muted-foreground">{subscription.status}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Payment Provider</p>
+                    <p className="text-sm text-muted-foreground capitalize">{subscription.provider}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Amount</p>
+                    <p className="text-sm text-muted-foreground">
+                      {subscription.currency === 'INR' ? 'u20b9' : '$'}{subscription.amount} / {subscription.interval}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Started On</p>
+                    <p className="text-sm text-muted-foreground">{formatDate(subscription.created_at)}</p>
+                  </div>
+                </div>
+                
+                <Separator />
+                
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm font-medium">Current Period</p>
+                  </div>
+                  <p className="text-sm text-muted-foreground pl-6">
+                    {formatDate(subscription.current_period_start)} - {formatDate(subscription.current_period_end)}
+                  </p>
+                </div>
+                
+                {subscription.cancel_at_period_end && (
+                  <div className="bg-yellow-50 p-4 rounded-md border border-yellow-200">
+                    <p className="text-sm text-yellow-800">
+                      Your subscription is set to cancel at the end of the current billing period. You will continue to have access until {formatDate(subscription.current_period_end)}.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+            <CardFooter className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+              <div className="flex-1">
+                {!subscription.cancel_at_period_end && subscription.status === 'ACTIVE' && (
+                  <Button 
+                    variant="outline" 
+                    className="w-full" 
+                    onClick={handleCancelSubscription}
+                    disabled={isCancelling}
+                  >
+                    {isCancelling ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      'Cancel Subscription'
+                    )}
+                  </Button>
+                )}
+              </div>
+              <div className="flex-1">
+                <Button asChild className="w-full">
+                  <Link href="/pricing">Manage Plan</Link>
+                </Button>
+              </div>
+            </CardFooter>
+          </Card>
+        ) : (
+          <div className="flex items-center justify-center min-h-[200px]">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <span className="ml-2">Loading your subscription details...</span>
+          </div>
+        )}
       </div>
     );
   }
