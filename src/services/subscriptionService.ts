@@ -347,7 +347,7 @@ export async function getPaymentHistory(): Promise<PaymentHistory[]> {
     
     // Get payment history for these subscriptions
     const { data: payments, error: paymentsError } = await supabase
-      .from('payment_history')
+      .from('payment_orders')
       .select('*')
       .in('subscription_id', subscriptionIds)
       .order('created_at', { ascending: false });
