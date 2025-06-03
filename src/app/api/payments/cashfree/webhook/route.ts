@@ -87,11 +87,11 @@ export async function POST(request: Request) {
 
 // Helper function to verify webhook signature
 function verifyWebhookSignature(body: string, signature: string | null): boolean {
-  if (!signature || !process.env.CASHFREE_WEBHOOK_SECRET) return false;
+  if (!signature || !process.env.CASHFREE_SECRET_KEY) return false;
   
   try {
     const computedSignature = crypto
-      .createHmac('sha256', process.env.CASHFREE_WEBHOOK_SECRET)
+      .createHmac('sha256', process.env.CASHFREE_SECRET_KEY)
       .update(body)
       .digest('hex');
     
