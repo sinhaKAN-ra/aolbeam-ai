@@ -28,7 +28,7 @@ export interface SubscriptionPlan {
   id: string;
   name: string;
   price: string;
-  duration: string;
+  duration: string | undefined;
   features: string[];
   highlight?: boolean;
   order?: number;

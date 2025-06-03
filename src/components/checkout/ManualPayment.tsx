@@ -11,12 +11,12 @@ export const ManualPayment: React.FC<ManualPaymentProps> = ({
 }) => {
   const handleManualPayment = () => {
     if (paymentType === 'subscription') {
-      const message = `Hi, I'm interested in purchasing the ${plan?.name} plan for ${plan?.price}.`;
+      const message = `Hi, I'm interested in purchasing the ${plan?.name} plan for ${plan?.baseNumericPrice}.`;
       const whatsappUrl = `https://wa.me/916033240396?text=${encodeURIComponent(message)}`;
       window.open(whatsappUrl, '_blank');
     } else if (paymentType === 'one-time') {
       const subject = `Purchase Inquiry: ${plan?.name} Plan`;
-      const body = `Hi,\n\nI'm interested in purchasing the ${plan?.name} plan for ${plan?.oneTimePrice}.\n\nPlan Details:\n- Plan: ${plan?.name}\n- Price: ${plan?.oneTimePrice}\n- Features: ${plan?.features.join(', ')}\n\nPlease let me know how to proceed with the payment.\n\nBest regards,`;
+      const body = `Hi,\n\nI'm interested in purchasing the ${plan?.name} plan for ${plan?.baseNumericPrice}.\n\nPlan Details:\n- Plan: ${plan?.name}\n- Price: ${plan?.baseNumericPrice}\n- Features: ${plan?.features.join(', ')}\n\nPlease let me know how to proceed with the payment.\n\nBest regards,`;
       const mailtoUrl = `mailto:support@aolbeam.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.open(mailtoUrl, '_blank');
     }

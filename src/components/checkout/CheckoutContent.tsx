@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { Check, Loader2, Shield, CreditCard, Star, Sparkles } from 'lucide-react';
 import { PaymentMethods } from './PaymentMethods';
 import { LemonSqueezyPayment } from './LemonSqueezyPayment';
+import { ManualPayment } from './ManualPayment';
 import { initiatePayment } from '@/lib/payment';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -41,7 +42,7 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
           setSelectedPurchaseOption('subscription');
           setPaymentType('subscription');
           // For subscriptions, LemonSqueezy is the primary. Cashfree for IN subscriptions can be a future enhancement if needed.
-          setPaymentMethod('lemonsqueezy'); 
+          setPaymentMethod('lemonsqueezy');
         } else { // selectedPurchaseOption is 'oneTime' for an original subscription plan
           setPaymentType('one-time');
           setPaymentMethod('cashfree');
@@ -54,6 +55,8 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
       setPaymentMethod(null);
     }
   }, [plan, selectedPurchaseOption]);
+
+
 
   if (isLoading || !plan) {
     return (
@@ -125,9 +128,8 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
                     className="space-y-4"
                   >
                     {/* Subscription Option */}
-                    <div className={`relative rounded-xl border-2 p-6 cursor-pointer transition-all hover:shadow-md ${
-                      selectedPurchaseOption === 'subscription' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
-                    }`}>
+                    <div className={`relative rounded-xl border-2 p-6 cursor-pointer transition-all hover:shadow-md ${selectedPurchaseOption === 'subscription' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
+                      }`}>
                       <div className="flex items-start space-x-4">
                         <RadioGroupItem value="subscription" id="option-subscription" className="mt-1" />
                         <div className="flex-1">
@@ -151,9 +153,8 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
                     </div>
 
                     {/* One-Time Option */}
-                    <div className={`relative rounded-xl border-2 p-6 cursor-pointer transition-all hover:shadow-md ${
-                      selectedPurchaseOption === 'oneTime' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
-                    }`}>
+                    <div className={`relative rounded-xl border-2 p-6 cursor-pointer transition-all hover:shadow-md ${selectedPurchaseOption === 'oneTime' ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
+                      }`}>
                       <div className="flex items-start space-x-4">
                         <RadioGroupItem value="oneTime" id="option-oneTime" className="mt-1" />
                         <div className="flex-1">
@@ -233,22 +234,38 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Phone Number Input */}
-                <div className="space-y-2">
-                  <Label htmlFor="customerPhone" className="text-sm font-medium">
-                    Phone Number
-                  </Label>
-                  <Input
-                    id="customerPhone"
-                    type="tel"
-                    placeholder="Enter your phone number"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="h-12 text-base"
-                  />
-                  <p className="text-xs text-gray-500">
-                    Required for payment processing and order updates
-                  </p>
-                </div>
+                {paymentMethod !== 'lemonsqueezy' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="customerPhone" className="text-sm font-medium">
+                      Phone Number
+                    </Label>
+                    <Input
+                      id="customerPhone"
+                      type="tel"
+                      placeholder="Enter your phone number"
+                      value={customerPhone}
+                      onChange={(e) => {
+                        let value = e.target.value;
+                        if (plan?.countryCode === 'IN') {
+                          // Remove +91 if present
+                          if (value.startsWith('+91')) {
+                            value = value.substring(3);
+                          }
+                          // Limit to 10 digits
+                          if (value.length > 10) {
+                            value = value.substring(0, 10);
+                          }
+                        }
+                        setCustomerPhone(value);
+                      }}
+                      className="h-12 text-base"
+                      autoComplete="tel"
+                    />
+                    <p className="text-xs text-gray-500">
+                      Required for payment processing and order updates
+                    </p>
+                  </div>
+                )}
 
                 {/* Payment Methods */}
                 <div className="space-y-4">
@@ -263,7 +280,20 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
                 {/* Error Message */}
                 {paymentError && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-red-600 text-sm font-medium">{paymentError}</p>
+                    <p className="text-red-500 text-sm mt-2">{paymentError}</p>
+                    {paymentError && plan && paymentType && ( // Added checks for plan and paymentType
+                      <div className="mt-4">
+                        <ManualPayment
+                          plan={plan}
+                          paymentType={paymentType}
+                          customerPhone={customerPhone}
+                          setPaymentError={setPaymentError}
+                          setIsPaymentProcessing={setIsPaymentProcessing}
+                          user={user}
+                          session={session}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -286,10 +316,10 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
                           setPaymentError('Please enter your phone number for Indian payments.');
                           return;
                         }
-                        // Validation for Indian phone numbers: 10 digits, or +91 followed by 10 digits
-                        const indianPhoneRegex = /^(?:\+91)?[0-9]{10}$/;
+                        // Validation for Indian phone numbers: exactly 10 digits
+                        const indianPhoneRegex = /^[0-9]{10}$/;
                         if (!indianPhoneRegex.test(customerPhone)) {
-                          setPaymentError('Please enter a valid phone number (e.g., +919090407368 or 9090407368).');
+                          setPaymentError('Please enter a valid 10-digit Indian phone number.');
                           return;
                         }
                       }
