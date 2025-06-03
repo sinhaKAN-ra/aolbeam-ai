@@ -8,12 +8,24 @@ export async function POST(request: Request) {
     // Log the incoming request for debugging
     console.log('Received webhook request');
     
+    // Get the raw body first (we need to clone the request to read it multiple times)
+    const requestClone = request.clone();
+    const body = await request.text();
+    
+    // Check if this is a test webhook (Cashfree sends an empty body for tests)
+    if (request.method === 'POST' && body.trim() === '') {
+      console.log('Test webhook received - responding with 200 OK');
+      return new Response(JSON.stringify({ status: 'OK', message: 'Test webhook received' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
     // Initialize the server-side Supabase client
     const cookieStore = cookies();
     const supabase = await createClient();
     
-    // Get the raw body and signature
-    const body = await request.text();
+    // Get the signature and other headers
     const signature = request.headers.get('x-webhook-signature');
     const webhookVersion = request.headers.get('x-webhook-version');
     const webhookTimestamp = request.headers.get('x-webhook-timestamp');
@@ -21,6 +33,9 @@ export async function POST(request: Request) {
     console.log('Webhook version:', webhookVersion);
     console.log('Webhook timestamp:', webhookTimestamp);
     console.log('Webhook signature header:', signature);
+    
+    // Log the raw headers for debugging
+    console.log('All headers:', Object.fromEntries(request.headers.entries()));
 
     // Verify the webhook signature
     const isSignatureValid = verifyWebhookSignature(body, signature);
