@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase';
+import { createSupabaseServerClient } from '@/lib/supabaseServer';
 import { v4 as uuidv4 } from 'uuid';
 import { getCashfreeServiceInstance } from '@/services/payment/cashfree/CashfreePaymentService';
 import type { CashfreeSubscriptionRequestPayload } from '@/services/payment/cashfree/types';
+import { plans } from '@/app/pricing/page'; // Import the plans array from pricing page
+import { SubscriptionPlan } from '@/types'; // Import SubscriptionPlan type
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+// Helper function to get the order of a plan
+const getPlanOrder = (planId: string): number => {
+  const plan = plans.find(p => p.id === planId);
+  return plan && plan.order !== undefined ? plan.order : 0;
+};
 
 export async function POST(request: Request) {
 console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
@@ -32,10 +40,10 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     
     if (userError || !user) {
-      console.error('Auth error:', userError);
+      console.error('Authentication error:', userError);
       return NextResponse.json(
-        { 
-          error: 'Authentication failed', 
+        {
+          error: 'Authentication failed',
           details: userError?.message || 'No user found with the provided token'
         },
         { status: 401 }
@@ -54,7 +62,7 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
     }
     
     const { planId, customer_phone } = body;
-    
+
     // Log the received data for debugging
     console.log('Received subscription request:', { planId, customer_phone });
     
@@ -62,6 +70,30 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
     if (!planId || !customer_phone) {
       return NextResponse.json(
         { error: 'Missing required parameters: planId and customer_phone are required' },
+        { status: 400 }
+      );
+    }
+
+    // Fetch user's current subscription details from user_profiles
+    let currentUserPlanOrder = 0;
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('is_subscribed, subscription_plan_id')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) {
+      console.error('Error fetching user profile:', profileError);
+      // Continue even if profile fetch fails, treat as non-subscribed
+    } else if (profile && profile.is_subscribed && profile.subscription_plan_id) {
+      currentUserPlanOrder = getPlanOrder(profile.subscription_plan_id);
+    }
+
+    // Enforce upgrade-only flow
+    const targetPlanOrder = getPlanOrder(planId);
+    if (currentUserPlanOrder > 0 && targetPlanOrder <= currentUserPlanOrder) {
+      return NextResponse.json(
+        { error: 'Cannot downgrade or select current plan. Only upgrades are allowed.' },
         { status: 400 }
       );
     }
@@ -103,18 +135,28 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
     // Get plan details (in a real app, you would fetch this from the database)
     
     // Define plan details based on the selected plan
-    // The interval must be one of: 'day', 'week', 'month', 'year'
-    const isMonthly = planId.includes('monthly');
+    // Get plan details from the imported plans array
+    const selectedPlan = plans.find(p => p.id === planId);
+
+    if (!selectedPlan) {
+      return NextResponse.json(
+        { error: 'Invalid plan ID provided.' },
+        { status: 400 }
+      );
+    }
+
+    // Extract numerical price from the string (e.g., '₹699' -> 699)
+    const amount = parseFloat(selectedPlan.price.replace(/[^0-9.]/g, ''));
+
     const planDetails = {
-      id: planId,
-      name: isMonthly ? 'Premium Monthly' : 'Premium Yearly',
-      amount: isMonthly ? 29900 : 299000, // in paise (₹299.00 or ₹2,990.00)
-      currency: 'INR',
-      // Use full interval name that matches the database enum
-      interval: isMonthly ? 'monthly' : 'yearly',
-      description: isMonthly ? 'Premium Monthly Plan' : 'Premium Yearly Plan'
+      id: selectedPlan.id,
+      name: selectedPlan.name,
+      amount: amount,
+      interval: selectedPlan.duration.includes('month') ? 'monthly' : (selectedPlan.duration.includes('week') ? 'weekly' : 'yearly'), // Map duration to interval
+      description: selectedPlan.features.join(', '),
+      currency: 'INR' // Assuming Cashfree is always INR
     };
-    
+
     console.log('Using plan details:', planDetails);
 
     // Generate a unique subscription ID (standard UUID format) and order ID (formatted string)

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase';
+import { createSupabaseServerClient } from '@/lib/supabaseServer';
+import { v4 as uuidv4 } from 'uuid'; // Import uuid for generating unique order IDs
 
 const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID;
 const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
@@ -15,8 +16,7 @@ export async function POST(request: Request) {
     }
 
     // Initialize Supabase client for route handler
-    const supabase = createSupabaseServerClient();
-    // Get user session
+    const supabase = await createSupabaseServerClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized - Valid authentication required' }, { status: 401 });
@@ -24,19 +24,25 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const {
-      orderId,
-      orderAmount,
-      orderCurrency = 'INR',
+      amount, // Changed from orderAmount
+      currency = 'INR', // Changed from orderCurrency
+      planId, // Expecting planId as well, though not directly used in Cashfree payload but good for logging/DB
       customerName,
       customerEmail,
       customerPhone,
-      returnUrl,
-      notifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/payments/cashfree/webhook`,
-      orderNote = 'Subscription payment',
+      orderNote = 'One-time payment',
     } = body;
 
+    // Generate unique IDs
+    const dbOrderId = uuidv4(); // Pure UUID for database primary key
+    const cashfreeOrderId = `order_${Date.now()}_${dbOrderId.slice(0, 8)}`; // Format Cashfree prefers with order_ prefix
+    
+    // URLs for redirection and webhooks
+    const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/subscription/callback?db_id=${dbOrderId}`; // Cashfree will append other parameters like payment_status, cf_payment_id
+    const notifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/payments/cashfree/webhook`;
+
     // Validate required fields
-    if (!orderId || !orderAmount || !customerName || !customerEmail || !customerPhone || !returnUrl) {
+    if (!amount || !customerName || !customerEmail || !customerPhone || !currency) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -45,9 +51,9 @@ export async function POST(request: Request) {
 
     // Create order payload
     const orderPayload = {
-      order_id: orderId,
-      order_amount: orderAmount,
-      order_currency: orderCurrency,
+      order_id: cashfreeOrderId, // Use Cashfree-friendly ID format for the API
+      order_amount: amount, // Use destructured amount
+      order_currency: currency, // Use destructured currency
       customer_details: {
         customer_id: user.id,
         customer_name: customerName,
@@ -57,7 +63,7 @@ export async function POST(request: Request) {
       order_meta: {
         return_url: returnUrl,
         notify_url: notifyUrl,
-        payment_methods: 'cc,dc,upi,netbanking,paylater,wallet',
+        payment_methods: 'cc,dc,ppc,ccc,emi,paypal,upi,nb,app,paylater',
       },
       order_note: orderNote,
     };
@@ -89,13 +95,14 @@ export async function POST(request: Request) {
     const data = await response.json();
     
     // Insert payment order
-    const { data: paymentOrder, error: paymentOrderError } = await supabase
+    const { error: paymentOrderError } = await supabase
       .from('payment_orders')
       .insert({
-        id: orderId,
+        id: dbOrderId, // Use pure UUID for database primary key
         user_id: user.id,
-        amount: orderAmount,
-        currency: orderCurrency,
+        plan_id: planId, // Ensure planId is saved to the database
+        amount: amount, // Use destructured amount for DB
+        currency: currency, // Use destructured currency for DB
         payment_provider: 'cashfree',
         provider_order_id: data.order_id,
         status: 'PENDING',
@@ -105,9 +112,8 @@ export async function POST(request: Request) {
           ...data,
           order_details: orderPayload
         },
-      })
-      .select()
-      .single();
+      });
+      
     if (paymentOrderError) {
       console.error('Error creating payment order:', paymentOrderError);
       // Don't fail the request if DB save fails
@@ -118,7 +124,7 @@ export async function POST(request: Request) {
       data: {
         payment_session_id: data.payment_session_id,
         order_id: data.order_id,
-        order_token: data.order_token,
+        order_token: data.order_token, // Include order_token for compatibility with older SDK versions
       },
     });
   } catch (error) {

@@ -20,32 +20,29 @@ export default function SubscriptionCallbackPage() {
     const verifySubscription = async () => {
       try {
         // Extract parameters from URL
-        const subscriptionId = searchParams?.get('subscription_id') || ''; // Cashfree subscription ID
         const paymentStatus = searchParams?.get('payment_status') || '';
-        const paymentRef = searchParams?.get('cf_payment_id') || '';
+        const cfPaymentId = searchParams?.get('cf_payment_id') || ''; // Cashfree payment ID
         const dbId = searchParams?.get('db_id') || ''; // Database UUID for the subscription
         
-        if (!subscriptionId) {
+        if (!cfPaymentId && !dbId) {
           setStatus('error');
           setMessage('Invalid subscription information. Missing subscription ID.');
           return;
         }
         
-        // Check if payment was successful
-        if (paymentStatus === 'SUCCESS' || paymentStatus === 'OK') {
-          // Optional: Call your backend to verify the subscription with Cashfree API
-          const verifyResponse = await fetch('/api/subscriptions/cashfree/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              subscriptionId, // Cashfree subscription ID
-              dbId, // Database UUID
-              paymentRef 
-            })
-          });
-          
-          if (verifyResponse.ok) {
-            // Update local UI
+        // Always call your backend to verify the subscription with Cashfree API if dbId is present
+        const verifyResponse = await fetch('/api/subscriptions/cashfree/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            cfPaymentId, // Cashfree payment ID
+            dbId // Database UUID
+          })
+        });
+        
+        if (verifyResponse.ok) {
+          const result = await verifyResponse.json();
+          if (result.success) {
             setStatus('success');
             setMessage('Your subscription has been activated successfully!');
             
@@ -57,15 +54,13 @@ export default function SubscriptionCallbackPage() {
                 subscription_updated_at: new Date().toISOString()
               }
             });
-            
-            // The webhook will handle updating the subscription status in the database
           } else {
             setStatus('error');
-            setMessage('There was an issue verifying your payment. Please contact support.');
+            setMessage(result.message || 'There was an issue verifying your payment. Please contact support.');
           }
         } else {
           setStatus('error');
-          setMessage(`Payment was not successful. Status: ${paymentStatus || 'Unknown'}`);
+          setMessage('There was an issue verifying your payment. Please contact support.');
         }
       } catch (error: any) {
         console.error('Error in subscription callback:', error);
@@ -95,14 +90,15 @@ export default function SubscriptionCallbackPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="mt-6 text-2xl font-bold text-center text-green-600">Subscription Active!</h2>
+            <h2 className="mt-6 text-2xl font-bold text-center text-green-600">Plan Active!</h2>
             <p className="mt-2 text-center text-gray-600">{message}</p>
             <div className="mt-8">
               <Button
                 onClick={() => router.push('/profile/subscriptions')}
                 className="w-full"
               >
-                View My Subscription
+                
+                View Plan Details
               </Button>
             </div>
           </div>
@@ -119,7 +115,7 @@ export default function SubscriptionCallbackPage() {
             <p className="mt-2 text-center text-gray-600">{message}</p>
             <div className="mt-8 space-y-4">
               <Button
-                onClick={() => router.push('/checkout')}
+                onClick={() => router.push('/pricing')}
                 className="w-full"
               >
                 Try Again

@@ -1,53 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServerClient } from '@/lib/supabaseServer'; // Correct import as per memory
 
-// Create a Supabase client with admin privileges for authenticated API routes
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-// For server-side admin operations with subscriptions
 const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID;
 const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
 const CASHFREE_MODE = process.env.NEXT_PUBLIC_CASHFREE_MODE || 'sandbox';
 
 export async function POST(req: NextRequest) {
   try {
-    // Use the service role client to verify subscriptions
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    
-    // Get data from request body
-    const { subscriptionId, dbId, paymentRef } = await req.json();
-    
-    if (!subscriptionId && !dbId) {
-      return NextResponse.json({ error: 'Missing subscription identifiers' }, { status: 400 });
+    const supabase = await createSupabaseServerClient(); // Use the standardized client
+
+    // Get data from request body - expecting cfPaymentId and dbId
+    const { cfPaymentId, dbId } = await req.json();
+
+    if (!dbId) {
+      return NextResponse.json({ error: 'Missing database ID (dbId)' }, { status: 400 });
     }
 
-    // First check if subscription exists in our database
-    let query = supabase.from('subscriptions').select('*');
-    
-    // Use database UUID if available, otherwise use provider subscription ID
-    if (dbId) {
-      query = query.eq('id', dbId);
-    } else {
-      query = query.eq('provider_subscription_id', subscriptionId);
-    }
-    
-    const { data: existingSubscription, error: dbError } = await query.single();
+    // 1. Fetch the Cashfree order_id (provider_order_id) from payment_orders table using dbId
+    const { data: paymentOrder, error: paymentOrderError } = await supabase
+      .from('payment_orders')
+      .select('provider_order_id')
+      .eq('id', dbId)
+      .single();
 
-    if (dbError || !existingSubscription) {
-      console.error('Database error or subscription not found:', dbError);
-      return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
+    if (paymentOrderError || !paymentOrder) {
+      console.error('Database error or payment order not found:', paymentOrderError);
+      return NextResponse.json({ error: 'Payment order not found' }, { status: 404 });
+    }
+
+    const cashfreeOrderId = paymentOrder.provider_order_id;
+    if (!cashfreeOrderId) {
+      return NextResponse.json({ error: 'Cashfree Order ID not found for this dbId' }, { status: 404 });
     }
 
     // API base URL depends on environment
     const baseUrl = CASHFREE_MODE === 'production'
       ? 'https://api.cashfree.com/pg'
       : 'https://sandbox.cashfree.com/pg';
-    
+
     try {
-      // Call Cashfree API to verify subscription status
-      const response = await fetch(`${baseUrl}/subscriptions/${subscriptionId}`, {
-        method: 'GET',
+      // 2. Call Cashfree API to verify payment status for the order
+      // Use cfPaymentId if available, otherwise fetch all payments for the order
+      const cashfreeApiUrl = cfPaymentId 
+        ? `${baseUrl}/orders/${cashfreeOrderId}/payments/${cfPaymentId}`
+        : `${baseUrl}/orders/${cashfreeOrderId}/payments`;
+
+      const response = await fetch(cashfreeApiUrl, {
+        method: 'GET', // Cashfree payment verification is a GET request
         headers: {
           'Accept': 'application/json',
           'x-api-version': '2022-09-01',
@@ -59,61 +58,70 @@ export async function POST(req: NextRequest) {
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Cashfree API error:', errorData);
-        return NextResponse.json({ 
-          error: `Failed to verify subscription status with provider: ${errorData.message || response.statusText}` 
+        return NextResponse.json({
+          error: `Failed to verify payment status with provider: ${errorData.message || response.statusText}`
         }, { status: response.status });
       }
 
-      // Get subscription details from Cashfree
-      const subscriptionData = await response.json();
-      
-      // Map Cashfree subscription status to our status
-      let status = existingSubscription.status;
-      if (subscriptionData.subscription_status === 'ACTIVE') {
-        status = 'ACTIVE';
-      } else if (subscriptionData.subscription_status === 'CANCELLED') {
-        status = 'CANCELLED';
-      } else if (subscriptionData.subscription_status === 'EXPIRED') {
-        status = 'EXPIRED';
+      let paymentData;
+      if (cfPaymentId) {
+        paymentData = await response.json(); // Single payment object
+      } else {
+        const allPayments = await response.json(); // Array of payments
+        // Assuming we want the latest payment if cfPaymentId is not provided
+        paymentData = allPayments.length > 0 ? allPayments[0] : null; 
       }
-      
-      // Update subscription in database
+
+      if (!paymentData) {
+        return NextResponse.json({ error: 'No payment data found from Cashfree' }, { status: 404 });
+      }
+
+      // Map Cashfree payment status to our subscription status
+      let newStatus = 'PENDING'; // Default
+      if (paymentData.payment_status === 'SUCCESS') {
+        newStatus = 'ACTIVE'; // Or 'SUCCESS' if your enum allows
+      } else if (paymentData.payment_status === 'FAILED') {
+        newStatus = 'FAILED';
+      } else if (paymentData.payment_status === 'PENDING') {
+        newStatus = 'PENDING';
+      } else if (paymentData.payment_status === 'CANCELLED') {
+        newStatus = 'CANCELLED';
+      }
+
+      // 3. Update the 'subscriptions' table with the new status
       const { error: updateError } = await supabase
         .from('subscriptions')
-        .update({ 
-          status,
+        .update({
+          status: newStatus,
           updated_at: new Date().toISOString(),
           metadata: {
-            ...existingSubscription.metadata,
-            provider_data: subscriptionData,
+            ...paymentData, // Store full payment data from Cashfree
             last_verified: new Date().toISOString(),
           }
         })
-        .eq('id', existingSubscription.id);
+        .eq('id', dbId); // Update using the dbId
 
       if (updateError) {
-        console.error('Failed to update subscription:', updateError);
-        return NextResponse.json({ error: 'Failed to update subscription' }, { status: 500 });
+        console.error('Failed to update subscription status:', updateError);
+        return NextResponse.json({ error: 'Failed to update subscription status' }, { status: 500 });
       }
+
+      console.log('Cashfree Verification Result:');
+      console.log('Determined Status:', newStatus);
+      console.log('Payment Data from Cashfree:', paymentData);
 
       return NextResponse.json({
         success: true,
-        status,
-        message: `Subscription ${status.toLowerCase()}`
+        status: newStatus,
+        message: `Payment ${newStatus.toLowerCase()}`
       });
-    } catch (apiError) {
+
+    } catch (apiError: any) {
       console.error('Error calling Cashfree API:', apiError);
-      
-      // Still return success if we have the subscription in our database
-      // The webhook will eventually update the status if needed
-      return NextResponse.json({
-        success: true,
-        status: existingSubscription.status,
-        message: `Using existing subscription data (${existingSubscription.status.toLowerCase()})`
-      });
+      return NextResponse.json({ error: `Cashfree API call failed: ${apiError.message}` }, { status: 500 });
     }
-  } catch (error) {
-    console.error('Error verifying subscription:', error);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  } catch (error: any) {
+    console.error('Error verifying payment:', error);
+    return NextResponse.json({ error: `Server error: ${error.message}` }, { status: 500 });
   }
 }

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase';
+import { createSupabaseServerClient } from '@/lib/supabaseServer';
 
 const LEMONSQUEEZY_API_KEY = process.env.LEMONSQUEEZY_API_KEY;
 
 export async function POST(request: Request) {
   try {
     const supabase = createSupabaseServerClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await (await supabase).auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json(
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     }
 
     // Get the subscription details
-    const { data: subscription, error: subscriptionError } = await supabase
+    const { data: subscription, error: subscriptionError } = await (await supabase)
       .from('subscriptions')
       .select('*')
       .eq('id', subscriptionId)
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     }
 
     // Update the subscription in the database to be cancelled at period end
-    const { error: updateError } = await supabase
+    const { error: updateError } = await (await supabase)
       .from('subscriptions')
       .update({
         cancel_at_period_end: true,

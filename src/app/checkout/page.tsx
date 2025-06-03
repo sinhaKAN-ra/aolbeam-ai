@@ -4,113 +4,118 @@ import { useEffect, useState, useCallback } from 'react';
 import { PayPalScriptProvider, ReactPayPalScriptOptions } from '@paypal/react-paypal-js';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { CheckoutContent } from '@/components/checkout/CheckoutContent';
-import { ConvertedPlan, PlanId, PaymentProvider } from '@/app/checkout/types';
+import { CheckoutPlanInfo, PlanId, PaymentProvider } from '@/app/checkout/types';
+import { SubscriptionPlan } from '@/types';
+import { plans } from '@/app/pricing/page'; // Import the plans array from pricing page
+import { useSearchParams } from 'next/navigation';
+import { createClient } from '@/utils/supabase/client';
 
-// Define plans with basic and premium tiers
-const plans: Array<Omit<ConvertedPlan, 'price' | 'originalPrice' | 'oneTimePrice' | 'subscriptionPrice' | 'provider'>> = [
-  {
-    id: 'weekly' as PlanId,
-    name: 'Beam Basic',
-    description: 'Access to all Beam features with limited generations',
-    basePrice: 9.99,
-    baseOriginalPrice: 14.99,
-    subscriptionEnabled: true,
-    features: [
-      'Unlimited chat conversations',
-      'Basic content generation',
-      'Standard support'
-    ],
-    duration: '7 days',
-    interval: 'weekly'
-  },
-  {
-    id: 'monthly' as PlanId,
-    name: 'Beam Premium',
-    description: 'Full access to all Beam features with unlimited generations',
-    basePrice: 19.99,
-    baseOriginalPrice: 29.99,
-    subscriptionEnabled: true,
-    features: [
-      'Unlimited chat conversations',
-      'Advanced content generation',
-      'Priority support',
-      'Early access to new features'
-    ],
-    duration: '30 days',
-    interval: 'monthly'
+const parsePriceString = (priceStr: string): { numericPrice: number; currencySymbol: string } => {
+  const match = priceStr.match(/([₹$])?\s*([\d,.]+)/);
+  if (match) {
+    const symbol = match[1] || (priceStr.includes('₹') ? '₹' : '$');
+    const numericVal = parseFloat(match[2].replace(/,/g, ''));
+    return { numericPrice: numericVal, currencySymbol: symbol };
   }
-];
+  console.warn(`Could not parse price string: ${priceStr}`);
+  return { numericPrice: 0, currencySymbol: '$' }; // Default fallback
+};
 
 export default function CheckoutPage() {
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [countryCode, setCountryCode] = useState<string | null>(null);
-  const [plan, setPlan] = useState<ConvertedPlan | null>(null);
+  const [plan, setPlan] = useState<CheckoutPlanInfo | null>(null);
+  const searchParams = useSearchParams();
+  const supabase = createClient();
 
-  const detectCountryAndConvertPrices = useCallback(async () => {
+  const getPlanOrder = useCallback((planId: string) => {
+    const p: SubscriptionPlan | undefined = plans.find(p => p.id === planId);
+    return p && p.order !== undefined ? p.order : 0; // Ensure it always returns a number
+  }, []);
+
+  const fetchPlanAndUserData = useCallback(async () => {
     setIsLoading(true);
     try {
+      const planId = searchParams?.get('plan');
+      if (!planId) {
+        console.error('No plan ID found in query parameters.');
+        // Optionally redirect to pricing page or show an error
+        setIsLoading(false);
+        return;
+      }
+
+      const selectedPlan = plans.find(p => p.id === planId);
+      if (!selectedPlan) {
+        console.error(`Plan with ID ${planId} not found.`);
+        // Optionally redirect or show an error
+        setIsLoading(false);
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      let currentUserPlanOrder = 0;
+      if (session) {
+        const { data: profile, error } = await supabase
+          .from('user_profiles')
+          .select('is_subscribed, subscription_plan_id')
+          .eq('id', session.user.id)
+          .single();
+
+        if (error) {
+          console.error('Error fetching user profile:', error);
+        } else if (profile && profile.is_subscribed && profile.subscription_plan_id) {
+          currentUserPlanOrder = getPlanOrder(profile.subscription_plan_id);
+        }
+      }
+
+      const targetPlanOrder: number = getPlanOrder(selectedPlan.id);
+
+      // Enforce upgrade-only flow
+      if (session && targetPlanOrder !== undefined && targetPlanOrder <= currentUserPlanOrder) {
+        console.error('Cannot downgrade or select current plan.');
+        // Redirect to pricing page or show an error
+        // For now, setting plan to null and stopping loading
+        setPlan(null);
+        setIsLoading(false);
+        return;
+      }
+
       // Get user's country from IP
       const response = await fetch('https://ipapi.co/json/');
       const data = await response.json();
       const country = data.country_code || 'US';
       setCountryCode(country);
       
-      // For demo purposes, use the first plan
-      // In a real app, you might get this from query params or user selection
-      const selectedPlan = plans[0];
+      const { numericPrice, currencySymbol: parsedSymbol } = parsePriceString(selectedPlan.price);
       
-      // Format price as string with currency symbol based on country
-      const formatPrice = (price: number): string => {
-        if (country === 'IN') {
-          // Use INR symbol and convert price (assuming 1 USD = ~83 INR)
-          const inrPrice = Math.round(price * 83); // Convert to INR and round to whole number
-          return `₹${inrPrice}`;
-        } else {
-          return `$${price.toFixed(2)}`;
-        }
+      const finalCurrencySymbol = country === 'IN' ? '₹' : parsedSymbol;
+
+      const checkoutPlanInfo: CheckoutPlanInfo = {
+        id: selectedPlan.id,
+        name: selectedPlan.name,
+        features: selectedPlan.features,
+        originalType: selectedPlan.type, // 'subscription' or 'one_time' from pricing plan
+        countryCode: country,
+        currencySymbol: finalCurrencySymbol,
+        baseNumericPrice: numericPrice,
+        duration: selectedPlan.duration,
       };
       
-      // Convert currency if needed (simplified version)
-      const convertedPlan: ConvertedPlan = {
-        ...selectedPlan,
-        price: formatPrice(selectedPlan.basePrice),
-        originalPrice: formatPrice(selectedPlan.baseOriginalPrice),
-        oneTimePrice: formatPrice(selectedPlan.basePrice * 1.2), // Example: one-time price is 20% more
-        subscriptionPrice: formatPrice(selectedPlan.basePrice),
-        provider: country === 'IN' ? 'cashfree' : 'lemonsqueezy' as PaymentProvider
-      };
-      
-      setPlan(convertedPlan);
+      setPlan(checkoutPlanInfo);
     } catch (error) {
-      console.error('Error detecting country:', error);
-      // Fallback to US
-      setCountryCode('US');
-      
-      // Format price as string with currency symbol (fallback to USD)
-      const formatPrice = (price: number): string => {
-        return `$${price.toFixed(2)}`;
-      };
-      
-      const fallbackPlan: ConvertedPlan = {
-        ...plans[0],
-        price: formatPrice(plans[0].basePrice),
-        originalPrice: formatPrice(plans[0].baseOriginalPrice),
-        oneTimePrice: formatPrice(plans[0].basePrice * 1.2),
-        subscriptionPrice: formatPrice(plans[0].basePrice),
-        provider: 'lemonsqueezy' as PaymentProvider
-      };
-      
-      setPlan(fallbackPlan);
+      console.error('Error in fetchPlanAndUserData:', error);
+      setCountryCode('US'); // Fallback
+      setPlan(null); // Clear plan on error
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [searchParams, getPlanOrder, supabase]);
 
   useEffect(() => {
     setIsClient(true);
-    detectCountryAndConvertPrices();
-  }, [detectCountryAndConvertPrices]);
+    fetchPlanAndUserData();
+  }, [fetchPlanAndUserData]);
 
   if (!isClient) {
     return null;
@@ -126,10 +131,13 @@ export default function CheckoutPage() {
     <PayPalScriptProvider options={paypalOptions}>
       <AuthGuard>
         <div className="container mx-auto py-6 space-y-6">
-          <CheckoutContent plan={plan} isLoading={isLoading} countryCode={countryCode} />
+          <CheckoutContent 
+            plan={plan} // plan is now CheckoutPlanInfo | null
+            isLoading={isLoading}
+            // countryCode and originalType are now within the plan object passed to CheckoutContent
+          />
         </div>
       </AuthGuard>
     </PayPalScriptProvider>
   );
 }
-

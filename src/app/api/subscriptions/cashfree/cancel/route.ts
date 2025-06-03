@@ -3,9 +3,6 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import type { Database } from '@/types/supabase';
 
-const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID;
-const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
-const CASHFREE_MODE = process.env.NEXT_PUBLIC_CASHFREE_MODE || 'sandbox';
 
 export async function POST(request: Request) {
   try {

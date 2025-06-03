@@ -119,16 +119,19 @@ export async function loadLemonSqueezy(): Promise<void> {
     script.async = true;
     
     script.onload = () => {
+      console.log('Lemon Squeezy SDK script loaded successfully.');
       if (window.createLemonSqueezy) {
+        console.log('window.createLemonSqueezy is available.');
         window.createLemonSqueezy();
         resolve();
       } else {
+        console.error('window.createLemonSqueezy is NOT available after script load.');
         reject(new Error('Lemon Squeezy SDK failed to load'));
       }
     };
     
     script.onerror = (error) => {
-      console.error('Error loading Lemon Squeezy SDK:', error);
+      console.error('Error loading Lemon Squeezy SDK script:', error);
       reject(new Error('Failed to load Lemon Squeezy SDK'));
     };
     
@@ -161,12 +164,34 @@ export function initializeLemonSqueezy(onSuccess: (data: LemonSqueezyCheckoutDat
   });
 }
 
-export function openCheckout(checkoutUrl: string) {
-  if (!window.LemonSqueezy) {
-    throw new Error('Lemon Squeezy SDK not loaded');
+export async function openCheckout(checkoutUrl: string) {
+  const isSdkLoaded = () => typeof window !== 'undefined' && typeof window.LemonSqueezy !== 'undefined';
+
+  if (isSdkLoaded()) {
+    window.LemonSqueezy.Url.Open(checkoutUrl);
+    return;
   }
 
-  window.LemonSqueezy.Url.Open(checkoutUrl);
+  return new Promise<void>((resolve, reject) => {
+    let attempts = 0;
+    const maxAttempts = 20; // Try for up to 2 seconds (20 * 100ms)
+    const intervalTime = 100; // Check every 100ms
+
+    const checkSdk = setInterval(() => {
+      if (isSdkLoaded()) {
+        clearInterval(checkSdk);
+        window.LemonSqueezy.Url.Open(checkoutUrl);
+        resolve();
+      } else {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          clearInterval(checkSdk);
+          console.error('Lemon Squeezy SDK did not load within the expected time.');
+          reject(new Error('Lemon Squeezy SDK did not load.'));
+        }
+      }
+    }, intervalTime);
+  });
 }
 
 // API functions for LemonSqueezy subscriptions

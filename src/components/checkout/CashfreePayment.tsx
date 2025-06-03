@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, CreditCard, Lock } from 'lucide-react';
 import { PaymentHandlerProps } from '@/app/checkout/types';
 import { createCashfreeOrder, initializeCashfreeWidget } from '@/services/cashfree';
+import { load as cashfreeLoad } from '@cashfreepayments/cashfree-js';
 import { useSupabase } from '@/hooks/useSupabase';
 
 interface CashfreePaymentProps extends PaymentHandlerProps {
@@ -49,8 +50,7 @@ export const CashfreePayment: React.FC<CashfreePaymentProps> = ({
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
-  const [isCashfreeSdkLoaded, setIsCashfreeSdkLoaded] = useState(false);
-  const [sdkLoadAttempts, setSdkLoadAttempts] = useState(0);
+
 
   // Initialize Cashfree checkout
   const initializeCashfreeCheckout = async (cashfreeSubscriptionSessionId: string, dbSubscriptionId: string) => {
@@ -79,16 +79,37 @@ export const CashfreePayment: React.FC<CashfreePaymentProps> = ({
         throw new Error('Subscription session ID is empty after cleaning');
       }
       
-      // @ts-ignore - Cashfree is loaded dynamically
-      const cashfree = new window.Cashfree({
-        mode: process.env.NEXT_PUBLIC_CASHFREE_MODE === 'production' ? 'production' : 'sandbox',
+      // Load the Cashfree SDK using the npm package
+      console.log('[CashfreePayment] Loading Cashfree SDK using npm package...');
+      const mode = process.env.NEXT_PUBLIC_CASHFREE_MODE === 'production' ? 'production' : 'sandbox';
+      const cashfree = await cashfreeLoad({ mode });
+      
+      if (!cashfree) {
+        throw new Error('Failed to load Cashfree SDK from npm package');
+      }
+      
+      // Use the checkout method from the npm package
+      if (typeof cashfree.checkout !== 'function') {
+        throw new Error('Cashfree SDK checkout method not available');
+      }
+      
+      cashfree.checkout({
+        paymentSessionId: cleanedSessionId,
+        redirectTarget: '_blank',
+        components: ['card', 'netbanking', 'wallet', 'upi', 'paylater'],
+        theme: {
+          color: '#7c3aed',
+          backgroundColor: '#ffffff',
+          errorColor: '#dc2626',
+          themeColor: '#7c3aed',
+          iconBackground: '#f5f3ff',
+          hideHeader: false,
+          hideOrderSummary: true,
+        }
       });
       
-      console.log('[CashfreePayment] Initializing Cashfree checkout with:', {
-        sessionId: cleanedSessionId,
-        dbSubscriptionId: dbSubscriptionId || 'missing',
-        mode: process.env.NEXT_PUBLIC_CASHFREE_MODE || 'sandbox'
-      });
+      // For debugging
+      console.log('[CashfreePayment] Cashfree SDK instance:', cashfree);
 
       // Update subscription status to PENDING using our internal DB ID
       if (dbSubscriptionId) {
@@ -107,24 +128,6 @@ export const CashfreePayment: React.FC<CashfreePaymentProps> = ({
       
       // Add a small delay to ensure any state updates are processed
       await new Promise(resolve => setTimeout(resolve, 100));
-      
-      console.log('[CashfreePayment] Calling cashfree.redirect with paymentSessionId:', cleanedSessionId);
-      
-      cashfree.redirect({
-        paymentSessionId: cleanedSessionId, // Use the cleaned session ID
-        redirectTarget: '_blank',
-        components: ['card', 'netbanking', 'wallet', 'upi', 'paylater'],
-        theme: {
-          color: '#7c3aed',
-          backgroundColor: '#ffffff',
-          errorColor: '#dc2626',
-          themeColor: '#7c3aed',
-          iconBackground: '#f5f3ff',
-          hideHeader: false,
-          hideOrderSummary: true,
-          hidePaymentModes: false,
-        },
-      });
     } catch (error) {
       console.error('Error initializing Cashfree checkout:', error);
       setSubscriptionError('Failed to initialize payment. Please try again.');
@@ -173,98 +176,80 @@ export const CashfreePayment: React.FC<CashfreePaymentProps> = ({
   }, [paymentType, selectedPlanId]);
 
   const handleSubscribe = async () => {
-    if (!selectedPlanId) {
+    if (isSubscribing) return;
+    if (!customerPhone || !/^\d{10}$/.test(customerPhone)) {
+      setPhoneError('Please enter a valid 10-digit phone number');
+      return;
+    }
+
+    // Get selected plan ID or use the selected plan from props
+    const planId = selectedPlanId || plan?.id;
+    if (!planId) {
       setSubscriptionError('Please select a subscription plan');
       return;
     }
-
-    const isPhoneValid = customerPhone && /^\d{10}$/.test(customerPhone);
-    if (!isPhoneValid) {
-      setSubscriptionError('Please enter a valid 10-digit phone number');
-      return;
-    }
-
-    setIsSubscribing(true);
-    setSubscriptionError(null);
-
+    
     try {
-      console.log('Initiating subscription with plan:', selectedPlanId);
+      setIsSubscribing(true);
+      setSubscriptionError(null);
+      setPaymentError?.(null);
       
-      // Get the current session to include the auth token
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      
-      if (!currentSession) {
-        throw new Error('No active session. Please sign in again.');
+
+
+      // Get the selected plan details
+      // const selectedPlan = AVAILABLE_PLANS.find(p => p.id === planId) || {
+      //   id: planId,
+      //   name: plan?.name,
+      //   price: plan?.price?.baseOriginalPrice / 100, // Convert cents to rupees
+      //   interval: plan.interval
+      // };
+
+      // Create the subscription via our API
+      console.log(`Creating subscription for plan: ${planId}, phone: ${customerPhone}`);
+    const generatedOrderId = `order_${Date.now()}`;
+    const returnAmount = plan?.baseOriginalPrice / 100 || 0; // Use actual plan price for return URL
+
+    const orderResponse = await createCashfreeOrder({
+      orderId: generatedOrderId,
+      orderAmount: 1, // This will be replaced by the actual plan amount on the server
+      orderCurrency: 'INR',
+      customerName: user?.user_metadata?.full_name || user?.email || 'Guest',
+      customerEmail: user?.email || 'guest@example.com',
+      customerPhone: customerPhone.startsWith('+') ? customerPhone : `+91${customerPhone}`,
+      returnUrl: `${window.location.origin}/payment/success?token=${generatedOrderId}&payment_status=SUCCESS&payment_method=cashfree&plan_id=${planId}&amount=${returnAmount}&currency=INR&payment_type=subscription`,
+      isSubscription: true,
+      subscriptionDetails: {
+        planId: planId,
+        interval: 'monthly', // This needs to be dynamic based on the selected plan
+      },
+    }, session?.access_token);
+
+      if (!orderResponse.success) {
+        throw new Error(orderResponse.error || 'Failed to create subscription order');
       }
 
-      const response = await fetch('/api/subscriptions/cashfree/create-subscription', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({
-          planId: selectedPlanId,
-          customer_phone: customerPhone
-        })
-      });
-
-      const data = await response.json();
-      console.log('[CashfreePayment] Subscription API response data:', JSON.stringify(data, null, 2));
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create subscription');
+      const { data } = orderResponse;
+      
+      if (!data || !data.payment_session_id || !data.order_id) {
+        throw new Error('Invalid response from subscription creation API');
       }
 
-      // Handle the response from the subscription creation
-      if (data.subscription_session_id) {
-        console.log('Loading Cashfree SDK...');
-        
-        // First, check if script is already loaded
-        if (!window.Cashfree) {
-          const script = document.createElement('script');
-          script.src = 'https://sdk.cashfree.com/js/ui/2.0.0/cashfree.sandbox.js';
-          script.async = true;
-          
-          script.onload = () => {
-            console.log('Cashfree SDK loaded successfully');
-            console.log('[CashfreePayment] SDK loaded. Calling initializeCashfreeCheckout with:', { cashfreeSessId: data.subscription_session_id, dbSubId: data.subscription_id });
-            if (data.subscription_session_id && data.subscription_id) {
-              initializeCashfreeCheckout(data.subscription_session_id, data.subscription_id);
-            } else {
-              console.error('[CashfreePayment] Missing subscription_session_id or subscription_id from API response after SDK load.');
-              setSubscriptionError('Critical error: Payment session details missing. Cannot proceed.');
-              setIsSubscribing(false);
-            }
-          };
-          
-          script.onerror = () => {
-            console.error('Failed to load Cashfree SDK');
-            setSubscriptionError('Failed to load payment processor. Please refresh and try again.');
-            setIsSubscribing(false);
-          };
-          
-          document.head.appendChild(script);
-        } else {
-          console.log('Cashfree SDK already loaded');
-          console.log('[CashfreePayment] SDK already loaded. Calling initializeCashfreeCheckout with:', { cashfreeSessId: data.subscription_session_id, dbSubId: data.subscription_id });
-          if (data.subscription_session_id && data.subscription_id) {
-            initializeCashfreeCheckout(data.subscription_session_id, data.subscription_id);
-          } else {
-            console.error('[CashfreePayment] Missing subscription_session_id or subscription_id from API response (SDK already loaded path).');
-            setSubscriptionError('Critical error: Payment session details missing. Cannot proceed.');
-            setIsSubscribing(false);
-          }
+      // Initialize Cashfree checkout with the session ID and our internal subscription ID
+      initializeCashfreeCheckout(data.payment_session_id, data.order_id);
+
+      // Update subscription status to PENDING using our internal DB ID
+      if (data.order_id) {
+        try {
+          console.log('[CashfreePayment] Updating subscription status to PENDING...');
+          await updateSubscriptionStatus(data.order_id, 'PENDING');
+          console.log('[CashfreePayment] Subscription status updated to PENDING');
+        } catch (updateError) {
+          console.error('[CashfreePayment] Error updating subscription status:', updateError);
+          // Don't block the payment flow for this error
+          setSubscriptionError('Warning: Could not update subscription status, but continuing with payment...');
         }
-
-
-      } else if (data.auth_url) {
-        // Fallback to auth_url if subscription_session_id is not available
-        console.log('Redirecting to auth URL:', data.auth_url);
-        window.location.href = data.auth_url;
       } else {
-        console.error('No payment URL in response:', data);
-        throw new Error('No payment URL received from server');
+        console.warn('[CashfreePayment] order_id is missing, skipping updateSubscriptionStatus');
       }
     } catch (error) {
       console.error('Subscription error:', error);

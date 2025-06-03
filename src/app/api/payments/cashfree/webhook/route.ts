@@ -68,6 +68,7 @@ export async function POST(request: Request) {
             is_subscribed: true,
             subscription_plan_id: subscription.plan_id,
             subscription_started_at: new Date().toISOString(),
+            last_payment_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
           .eq('id', subscription.user_id);

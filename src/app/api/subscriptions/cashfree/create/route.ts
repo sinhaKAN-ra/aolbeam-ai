@@ -123,7 +123,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const data = await response.json();
+    const cashfreeResponse = await response.json();
     
     // Calculate the current period and next billing date
     const now = new Date();
@@ -156,7 +156,7 @@ export async function POST(request: Request) {
       .select('*')
       .eq('user_id', user.id)
       .eq('plan_id', subscriptionDetails.planId)
-      .eq('provider_subscription_id', data.order_id)
+      .eq('provider_subscription_id', cashfreeResponse.order_id)
       .maybeSingle();
 
     if (existingSub) {
@@ -169,7 +169,7 @@ export async function POST(request: Request) {
         user_id: user.id,
         plan_id: subscriptionDetails.planId,
         provider: 'cashfree',
-        provider_subscription_id: data.order_id,
+        provider_subscription_id: cashfreeResponse.order_id,
         status: 'TRIAL', // Will be updated to 'ACTIVE' after successful payment
         amount: orderAmount,
         currency: orderCurrency,
@@ -179,7 +179,7 @@ export async function POST(request: Request) {
         created_at: now.toISOString(),
         updated_at: now.toISOString(),
         metadata: { 
-          ...data,
+          ...cashfreeResponse,
           subscription_details: subscriptionDetails
         },
       };
@@ -201,49 +201,16 @@ export async function POST(request: Request) {
       }
       
       subscription = newSubscription;
-      subscriptionId = newSubscription.id;
     }
 
-    // Check for existing payment order (by provider_order_id)
-    const { data: existingOrder, error: findOrderError } = await supabase
-      .from('payment_orders')
-      .select('*')
-      .eq('provider_order_id', data.order_id)
-      .maybeSingle();
-
-    if (!existingOrder) {
-      const orderData = {
-        user_id: user.id,
-        plan_id: subscriptionDetails.planId,
-        amount: orderAmount,
-        currency: orderCurrency,
-        payment_provider: 'cashfree',
-        provider_order_id: data.order_id,
-        status: 'PENDING', // Will be updated to 'SUCCESS' after payment confirmation
-        subscription_id: subscriptionId,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        metadata: {
-          ...data,
-          subscription_details: subscriptionDetails
-        }
-      };
-
-      // Insert the payment order
-      const { error: dbError } = await supabase
-        .from('payment_orders')
-        .insert(orderData);
-        
-      if (dbError) {
-        console.error('Database error creating payment order:', dbError);
-        // If we can't create the payment order, we should still return the payment session
-        // but log the error for debugging
-        console.error('Proceeding with payment despite order creation error');
-      }
-    }
-
-    // Return the payment link in the response
-    const paymentLink = data.payment_link || data.payments?.url;
+    // Return the payment session ID and our internal subscription ID
+    return NextResponse.json({
+      success: true,
+      data: {
+        payment_session_id: cashfreeResponse.payment_session_id,
+        order_id: subscriptionId, // This is our internal subscription ID
+      },
+    });
     if (!paymentLink) {
       console.error('No payment link found in Cashfree response:', data);
       return NextResponse.json(

@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { createSupabaseServerClient } from '@/lib/supabaseServer';
 import { cookies } from 'next/headers';
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const orderId = searchParams.get('order_id');
   const paymentId = searchParams.get('payment_id');
@@ -15,7 +15,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
+    }
     
     // First, check if we have the payment in our database
     const { data: subscription, error: dbError } = await supabase
@@ -56,9 +61,10 @@ export async function GET(request: Request) {
         const paymentData = await cashfreeResponse.json();
         
         // Update the subscription status in our database
-        const { error: updateError } = await (await createClient())
+        const { error: updateError } = await supabase
           .from('subscriptions')
           .update({
+            user_id: user.id,
             status: paymentData.payment_status === 'SUCCESS' ? 'ACTIVE' : 'FAILED',
             payment_status: paymentData.payment_status,
             payment_id: paymentData.cf_payment_id,
@@ -109,10 +115,11 @@ export async function GET(request: Request) {
       const latestPayment = paymentData[0];
       
       // Insert the subscription into our database
-      const { data: newSubscription, error: insertError } = await (await createClient())
+      console.log('Attempting to insert subscription for user_id:', user.id);
+      const { data: newSubscription, error: insertError } = await supabase
         .from('subscriptions')
         .insert({
-          user_id: latestPayment.customer_id,
+          user_id: user.id,
           order_id: orderId,
           payment_id: latestPayment.payment_id,
           amount: latestPayment.payment_amount,

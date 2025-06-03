@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -25,6 +27,11 @@ export const LemonSqueezyPayment: React.FC<LemonSqueezyPaymentProps> = ({
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
+  // Load Lemon Squeezy SDK when the component mounts
+  React.useEffect(() => {
+    loadLemonSqueezy().catch(console.error);
+  }, []);
+
   const handleLemonSqueezyPayment = async () => {
     if (!user || !session) {
       setPaymentError('You must be logged in to make a payment.');
@@ -43,8 +50,8 @@ export const LemonSqueezyPayment: React.FC<LemonSqueezyPaymentProps> = ({
     setPaymentError(null);
     
     try {
-      // Load Lemon Squeezy SDK
-      await loadLemonSqueezy();
+      // SDK should already be loaded by useEffect, but we'll ensure it's ready
+      // by calling openCheckout which has the waiting mechanism.
       
       // Initialize with success handler
       initializeLemonSqueezy((data) => {
@@ -133,7 +140,7 @@ export const LemonSqueezyPayment: React.FC<LemonSqueezyPaymentProps> = ({
         ) : (
           <>
             <CreditCard className="mr-2 h-4 w-4" />
-            Pay {paymentType === 'subscription' ? plan?.price + '/mo' : plan?.oneTimePrice}
+            Pay {paymentType === 'subscription' ? plan?.baseNumericPrice + '/mo' : plan?.baseNumericPrice}
           </>
         )}
       </Button>

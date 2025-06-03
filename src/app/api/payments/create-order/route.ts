@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase';
+import { createSupabaseServerClient } from '@/lib/supabaseServer';
 
 // This is a placeholder for the actual Cashfree integration
 // You'll need to install the Cashfree SDK and set up your credentials
@@ -19,7 +19,7 @@ async function createCashfreeOrder(amount: number, currency: string, planId: str
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {

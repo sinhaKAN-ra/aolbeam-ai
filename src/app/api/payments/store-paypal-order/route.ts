@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase';
+import { createSupabaseServerClient } from '@/lib/supabaseServer';
 
 export async function POST(req: Request) {
   try {
     const supabase = createSupabaseServerClient();
     
     // Get the current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await (await supabase).auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     }
 
     // Store order in database
-    const { error: dbError } = await supabase
+    const { error: dbError } = await (await supabase)
       .from('payment_orders')
       .insert({
         user_id: user.id,

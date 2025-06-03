@@ -42,54 +42,104 @@ export async function POST(request: Request) {
       return NextResponse.json({ allowed: false, remaining: 0, limit: 0, isLoggedIn: false });
     }
 
-    // Use the database function to check interaction limit
-    const { data, error } = await supabase
-      .rpc('check_interaction_limit', {
-        p_user_id: user.id,
-        p_interaction_type: interactionType
-      })
+    // Get user profile to check subscription status
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('is_subscribed, subscription_plan')
+      .eq('id', user.id)
       .single();
 
-    if (error) {
-      console.error('Error checking interaction limit:', error);
+    if (profileError) {
+      console.error('Error getting user profile:', profileError);
       return NextResponse.json(
-        { error: 'Failed to check interaction limit' },
+        { error: 'Failed to get user profile' },
         { status: 500 }
       );
     }
 
-    const allowed = data as boolean;
-    const limit = 20; // Updated limit from 5 to 20 to match the database function
-    
-    // Get the actual count to calculate remaining
-    const { count, error: countError } = await supabase
+    // Determine limit based on subscription plan
+    let limit = 25; // Default for logged-in users without subscription
+    let isPaidPlan = false;
+    let isDaily = false;
+
+    if (profile.is_subscribed && profile.subscription_plan) {
+      // Set limits based on plan
+      switch (profile.subscription_plan) {
+        case 'one_time_cashfree':
+          limit = 1000; // Total limit for one-time purchase
+          isPaidPlan = true;
+          isDaily = false;
+          break;
+        case 'weekly': // Genius Plan
+          limit = 100;
+          isPaidPlan = true;
+          isDaily = true; // Paid plans have daily limits
+          break;
+        case 'monthly': // Power User
+          limit = 500;
+          isPaidPlan = true;
+          isDaily = true;
+          break;
+        case 'quarterly': // AI Master
+          limit = 1500;
+          isPaidPlan = true;
+          isDaily = true;
+          break;
+        default:
+          // Basic plan or unknown plan
+          limit = 25; // Default for non-subscribed or basic
+          isPaidPlan = false;
+          isDaily = false; // Basic plan has total limit, not daily
+          break;
+      }
+    } else {
+      // Handle non-subscribed users (free/basic)
+      if (profile.subscription_plan === 'basic') {
+        limit = 25;
+      } else {
+        limit = 15; // Free tier
+      }
+      isPaidPlan = false;
+      isDaily = false;
+    }
+
+    // Get the interaction count
+    let queryBuilder = supabase
       .from('user_interactions')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('interaction_type', interactionType)
-      .eq('created_date', new Date().toISOString().split('T')[0]);
+      .eq('user_id', user.id);
+    
+    // For paid plans with daily limits, only count today's interactions
+    if (isDaily) {
+      queryBuilder = queryBuilder.eq('created_at', new Date().toISOString().split('T')[0]);
+    }
+    
+    const { count, error: countError } = await queryBuilder;
 
     if (countError) {
       console.error('Error getting interaction count:', countError);
-      // If there's an error counting, assume the user has all interactions available
+      // If there's an error counting, assume the user has some interactions available
       return NextResponse.json({ 
         allowed: true,
-        remaining: limit,
+        remaining: Math.floor(limit / 2), // Give them half the limit as a fallback
         limit,
-        isLoggedIn: true 
+        isLoggedIn: true,
+        isPaidPlan
       } as InteractionCheckResponse);
     }
 
-    // If allowed is true from the database function, calculate the remaining count
-    const remaining = allowed ? Math.max(0, limit - (count || 0)) : 0;
+    // Check if user has exceeded their limit
+    const currentCount = count || 0;
+    const allowed = currentCount < limit;
+    const remaining = Math.max(0, limit - currentCount);
 
-    // For subscribed users, return unlimited (-1)
-    // For free users, return the actual count
     return NextResponse.json({ 
       allowed,
-      remaining: data === true && count === 0 ? limit : remaining,
+      remaining,
       limit,
-      isLoggedIn: true 
+      isLoggedIn: true,
+      isPaidPlan,
+      isDaily
     } as InteractionCheckResponse);
 
   } catch (error) {

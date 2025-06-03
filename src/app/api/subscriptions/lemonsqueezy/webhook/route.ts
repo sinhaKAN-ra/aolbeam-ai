@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { plans } from '@/app/pricing/page'; // Import the plans array from pricing page
+import { SubscriptionPlan } from '@/types'; // Import SubscriptionPlan type
 
 const LEMONSQUEEZY_API_KEY = process.env.LEMONSQUEEZY_API_KEY;
 const LEMONSQUEEZY_WEBHOOK_SECRET = process.env.LEMONSQUEEZY_WEBHOOK_SECRET;
@@ -10,6 +12,12 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = SUPABASE_URL && SUPABASE_SERVICE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
   : null;
+
+// Helper function to get the order of a plan
+const getPlanOrder = (planId: string): number => {
+  const plan = plans.find(p => p.id === planId);
+  return plan && plan.order !== undefined ? plan.order : 0;
+};
 
 export async function POST(request: Request) {
   try {
@@ -90,20 +98,70 @@ async function handleSubscriptionCreated(data: any) {
   const { data: userData, error: userError } = await supabase
     .from('subscriptions')
     .select('user_id')
-    .eq('provider_subscription_id', subscriptionId)
+    .eq('provider_subscription_id', subscriptionId) // Use provider_subscription_id to find the user
     .eq('provider', 'lemonsqueezy')
     .single();
   
-  if (userError || !userData?.user_id) {
-    console.error('Error finding user for subscription:', userError);
+  let userId = userData?.user_id; // Initialize userId
+
+  // If user not found via subscription, try finding by customer_id or email
+  if (!userId) {
+    const { data: profileData, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .eq('lemon_squeezy_customer_id', customerId)
+      .single();
+
+    if (profileError || !profileData) {
+      console.warn(`User not found for Lemon Squeezy customer_id: ${customerId}. Attempting to find by email.`);
+      // Fallback to finding user by email if customer_id doesn't match
+      const { data: userByEmail, error: userByEmailError } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('email', attributes.user_email)
+        .single();
+
+      if (userByEmailError || !userByEmail) {
+        console.error('Error finding user by email for subscription:', userByEmailError);
+        return; // Cannot proceed without a user
+      }
+      userId = userByEmail.id;
+    } else {
+      userId = profileData.id;
+    }
+  }
+
+  if (!userId) {
+    console.error('Could not determine user ID for Lemon Squeezy subscription.');
     return;
   }
-  
-  const userId = userData.user_id;
+
   const status = mapLemonSqueezyStatus(attributes.status);
   const planId = `${attributes.product_id}`;
   const periodEnd = attributes.renews_at || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // Default to 30 days if not provided
-  
+
+  // Fetch user's current subscription details from user_profiles
+  let currentUserPlanOrder = 0;
+  const { data: profile, error: profileError } = await supabase
+    .from('user_profiles')
+    .select('is_subscribed, subscription_plan_id')
+    .eq('id', userId)
+    .single();
+
+  if (profileError) {
+    console.error('Error fetching user profile for upgrade check:', profileError);
+    // Continue even if profile fetch fails, treat as non-subscribed
+  } else if (profile && profile.is_subscribed && profile.subscription_plan_id) {
+    currentUserPlanOrder = getPlanOrder(profile.subscription_plan_id);
+  }
+
+  // Enforce upgrade-only flow
+  const targetPlanOrder = getPlanOrder(planId);
+  if (currentUserPlanOrder > 0 && targetPlanOrder <= currentUserPlanOrder) {
+    console.warn(`Blocking Lemon Squeezy subscription creation for user ${userId}: Attempted to downgrade or select current plan. Current order: ${currentUserPlanOrder}, Target order: ${targetPlanOrder}`);
+    return; // Do not create/update subscription if it's not an upgrade
+  }
+
   // Update or create the subscription
   const { data: subscription, error: upsertError } = await supabase
     .from('subscriptions')
@@ -116,23 +174,26 @@ async function handleSubscriptionCreated(data: any) {
       amount: attributes.urls?.customer_portal ? parseFloat(attributes.urls.customer_portal) : 0,
       currency: 'USD',
       interval: mapInterval(attributes),
-      current_period_start: new Date().toISOString(),
-      current_period_end: periodEnd,
-      cancel_at_period_end: attributes.cancelled,
-      trial_start: attributes.trial_ends_at ? new Date(new Date(attributes.trial_ends_at).getTime() - (30 * 24 * 60 * 60 * 1000)).toISOString() : null,
-      trial_end: attributes.trial_ends_at,
+      current_period_start: new Date(attributes.created_at).toISOString(),
+      current_period_end: attributes.renews_at || null,
+      cancel_at_period_end: attributes.cancelled || attributes.renews_at === null,
+      trial_ends_at: attributes.trial_ends_at || null,
       metadata: attributes,
-    })
-    .select()
-    .single();
+    }, { onConflict: 'provider_subscription_id' });
   
   if (upsertError) {
     console.error('Error upserting subscription:', upsertError);
     return;
   }
-  
-  // Update the user profile with subscription information
-  await updateUserProfile(supabase, userId, status, planId, periodEnd);
+
+  // Update the user profile
+  await updateUserProfile(
+    supabase,
+    userId,
+    status,
+    planId,
+    periodEnd
+  );
 }
 
 async function handleSubscriptionUpdated(data: any) {
@@ -171,17 +232,16 @@ async function handleSubscriptionUpdated(data: any) {
     console.error('Error updating subscription:', error);
     return;
   }
-  
-  // Update the user profile if the subscription is active
-  if (status === 'ACTIVE' || status === 'TRIAL') {
-    await updateUserProfile(
-      supabase,
-      subscriptionData.user_id,
-      status,
-      subscriptionData.plan_id,
-      attributes.renews_at
-    );
-  }
+
+  // Update the user profile
+  await updateUserProfile(
+    supabase,
+    subscriptionData.user_id,
+    status,
+    subscriptionData.plan_id,
+    attributes.renews_at
+  );
+
 }
 
 async function handleSubscriptionCancelled(data: any) {
@@ -294,7 +354,30 @@ async function handleSubscriptionExpired(data: any) {
   
   if (error) {
     console.error('Error expiring subscription:', error);
+    return;
   }
+
+  // First get the current subscription to get the user ID and plan ID
+  const { data: subscriptionData } = await supabase
+    .from('subscriptions')
+    .select('user_id, plan_id')
+    .eq('provider_subscription_id', subscriptionId)
+    .eq('provider', 'lemonsqueezy')
+    .single();
+
+  if (!subscriptionData) {
+    console.error('Subscription not found for expiration:', subscriptionId);
+    return;
+  }
+
+  // Update the user profile
+  await updateUserProfile(
+    supabase,
+    subscriptionData.user_id,
+    'EXPIRED',
+    subscriptionData.plan_id,
+    attributes.ends_at || new Date().toISOString()
+  );
 }
 
 async function handleSubscriptionPaused(data: any) {
@@ -314,7 +397,30 @@ async function handleSubscriptionPaused(data: any) {
   
   if (error) {
     console.error('Error pausing subscription:', error);
+    return;
   }
+
+  // First get the current subscription to get the user ID and plan ID
+  const { data: subscriptionData } = await supabase
+    .from('subscriptions')
+    .select('user_id, plan_id')
+    .eq('provider_subscription_id', subscriptionId)
+    .eq('provider', 'lemonsqueezy')
+    .single();
+
+  if (!subscriptionData) {
+    console.error('Subscription not found for pausing:', subscriptionId);
+    return;
+  }
+
+  // Update the user profile
+  await updateUserProfile(
+    supabase,
+    subscriptionData.user_id,
+    'PAUSED',
+    subscriptionData.plan_id,
+    attributes.renews_at || new Date().toISOString()
+  );
 }
 
 async function handleSubscriptionUnpaused(data: any) {
@@ -334,7 +440,30 @@ async function handleSubscriptionUnpaused(data: any) {
   
   if (error) {
     console.error('Error unpausing subscription:', error);
+    return;
   }
+
+  // First get the current subscription to get the user ID and plan ID
+  const { data: subscriptionData } = await supabase
+    .from('subscriptions')
+    .select('user_id, plan_id')
+    .eq('provider_subscription_id', subscriptionId)
+    .eq('provider', 'lemonsqueezy')
+    .single();
+
+  if (!subscriptionData) {
+    console.error('Subscription not found for unpausing:', subscriptionId);
+    return;
+  }
+
+  // Update the user profile
+  await updateUserProfile(
+    supabase,
+    subscriptionData.user_id,
+    'ACTIVE',
+    subscriptionData.plan_id,
+    attributes.renews_at || new Date().toISOString()
+  );
 }
 
 // Helper function to map LemonSqueezy status to our status format

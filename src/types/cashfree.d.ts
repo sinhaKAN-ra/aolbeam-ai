@@ -9,6 +9,34 @@ interface CashfreeCheckoutResult {
   data?: any;
 }
 
+declare module '@cashfreepayments/cashfree-js' {
+  interface CashfreeOptions {
+    mode: 'production' | 'sandbox';
+  }
+
+  interface CashfreeRedirectOptions {
+    paymentSessionId: string;
+    redirectTarget?: '_self' | '_blank';
+    components?: string[];
+    theme?: {
+      color?: string;
+      backgroundColor?: string;
+      errorColor?: string;
+      themeColor?: string;
+      iconBackground?: string;
+      hideHeader?: boolean;
+      hideOrderSummary?: boolean;
+      hidePaymentModes?: boolean;
+    };
+  }
+
+  interface Cashfree {
+    checkout: (options: CashfreeRedirectOptions) => void;
+  }
+
+  function load(options: CashfreeOptions): Promise<Cashfree | undefined>;
+}
+
 interface CashfreeCheckoutOptions {
   subsSessionId: string;
   redirectTarget?: "_self" | "_blank";

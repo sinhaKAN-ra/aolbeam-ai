@@ -162,6 +162,21 @@ async function handleSubscriptionStatusChange(data: any, supabase: any) {
   }
   
   console.log(`Successfully updated subscription ${subscriptionId} to status ${newStatus}`);
+
+  // Determine periodEnd for user profile update
+  const periodEnd = (newStatus === 'ACTIVE' || newStatus === 'TRIAL')
+    ? (subscriptionData.current_period_end || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString())
+    : null;
+
+  // Update the user profile
+  await updateUserProfile(
+    supabase,
+    subscriptionData.user_id,
+    newStatus,
+    subscriptionData.plan_id,
+    periodEnd
+  );
+
   return NextResponse.json({ success: true });
 }
 
@@ -249,6 +264,20 @@ async function handlePaymentEvent(data: any, supabase: any) {
     }
     
     console.log(`Successfully updated subscription to status ${newStatus}`);
+
+    // Determine periodEnd for user profile update
+    const periodEnd = (newStatus === 'ACTIVE' || newStatus === 'TRIAL')
+      ? (subscriptionData.current_period_end || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString())
+      : null;
+
+    // Update the user profile
+    await updateUserProfile(
+      supabase,
+      subscriptionData.user_id,
+      newStatus,
+      subscriptionData.plan_id,
+      periodEnd
+    );
   } else {
     console.log(`No subscription found for order ${orderId}`);
   }
@@ -272,4 +301,36 @@ async function handleGenericEvent(data: any, supabase: any) {
   
   console.log('Unhandled webhook event type with data:', JSON.stringify(data, null, 2));
   return NextResponse.json({ success: true, message: 'Unhandled event type' });
+}
+
+// Helper function to update user profile with subscription information
+async function updateUserProfile(
+  supabase: any,
+  userId: string,
+  status: string,
+  planId: string,
+  periodEnd: string
+) {
+  try {
+    const isSubscribed = status === 'ACTIVE' || status === 'TRIAL';
+    
+    const { error } = await supabase
+      .from('user_profiles')
+      .upsert({
+        id: userId,
+        is_subscribed: isSubscribed,
+        subscription_plan_id: isSubscribed ? planId : null,
+        subscription_started_at: isSubscribed ? new Date().toISOString() : null,
+        subscription_ends_at: isSubscribed ? periodEnd : null,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+      
+    if (error) {
+      console.error('Error updating user profile:', error);
+    } else {
+      console.log(`User profile updated for user ${userId} with subscription status: ${status}`);
+    }
+  } catch (error) {
+    console.error('Error in updateUserProfile:', error);
+  }
 }

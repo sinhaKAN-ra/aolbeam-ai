@@ -1,4 +1,4 @@
-import { createSupabaseServerClient } from '@/lib/supabase';
+import { createSupabaseServerClient } from '@/lib/supabaseServer';
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     const supabase = createSupabaseServerClient();
     
     // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await (await supabase).auth.getUser();
     
     if (userError || !user) {
       return NextResponse.json(
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     }
 
     // Record the interaction
-    const { error: insertError } = await supabase
+    const { error: insertError } = await (await supabase)
       .from('user_interactions')
       .insert([
         { 

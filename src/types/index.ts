@@ -31,6 +31,7 @@ export interface SubscriptionPlan {
   duration: string;
   features: string[];
   highlight?: boolean;
+  order?: number;
 }
 
 export interface UserProfile {

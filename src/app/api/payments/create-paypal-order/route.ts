@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase';
+import { createSupabaseServerClient } from '@/lib/supabaseServer';
 
 // This is a placeholder for the actual PayPal integration
 // You'll need to install the PayPal SDK and set up your credentials
@@ -23,7 +23,7 @@ async function createPayPalOrder(amount: number, currency: string, planId: strin
 
 export async function POST(req: Request) {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     
     // Get the current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
