@@ -5,6 +5,9 @@ import crypto from 'crypto';
 
 export async function POST(request: Request) {
   try {
+    // Log the incoming request for debugging
+    console.log('Received webhook request');
+    
     // Initialize the server-side Supabase client
     const cookieStore = cookies();
     const supabase = await createClient();
@@ -12,10 +15,21 @@ export async function POST(request: Request) {
     // Get the raw body and signature
     const body = await request.text();
     const signature = request.headers.get('x-webhook-signature');
+    const webhookVersion = request.headers.get('x-webhook-version');
+    const webhookTimestamp = request.headers.get('x-webhook-timestamp');
+    
+    console.log('Webhook version:', webhookVersion);
+    console.log('Webhook timestamp:', webhookTimestamp);
+    console.log('Webhook signature header:', signature);
 
     // Verify the webhook signature
-    if (!verifyWebhookSignature(body, signature)) {
+    const isSignatureValid = verifyWebhookSignature(body, signature);
+    console.log('Webhook signature verification result:', isSignatureValid);
+    
+    if (!isSignatureValid) {
       console.error('Invalid webhook signature');
+      // For debugging, you might want to see the raw body that was used for verification
+      console.log('Raw body used for verification:', body);
       return NextResponse.json(
         { error: 'Invalid signature' },
         { status: 401 }
@@ -87,18 +101,32 @@ export async function POST(request: Request) {
 
 // Helper function to verify webhook signature
 function verifyWebhookSignature(body: string, signature: string | null): boolean {
-  if (!signature || !process.env.CASHFREE_SECRET_KEY) return false;
+  if (!signature || !process.env.CASHFREE_SECRET_KEY) {
+    console.error('Missing signature or CASHFREE_SECRET_KEY');
+    return false;
+  }
   
   try {
+    // Log the received signature and secret key (in production, you might want to avoid logging the full secret key)
+    console.log('Received signature:', signature);
+    console.log('Using secret key:', process.env.CASHFREE_SECRET_KEY ? '***' : 'MISSING');
+    
+    // Create the HMAC-SHA256 signature
     const computedSignature = crypto
       .createHmac('sha256', process.env.CASHFREE_SECRET_KEY)
       .update(body)
       .digest('base64');
     
-    return crypto.timingSafeEqual(
+    console.log('Computed signature:', computedSignature);
+    
+    // Compare the signatures in a timing-safe manner
+    const isSignatureValid = crypto.timingSafeEqual(
       Buffer.from(computedSignature),
       Buffer.from(signature)
     );
+    
+    console.log('Signature verification result:', isSignatureValid);
+    return isSignatureValid;
   } catch (error) {
     console.error('Error verifying webhook signature:', error);
     return false;
