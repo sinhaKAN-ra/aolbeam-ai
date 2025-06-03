@@ -93,7 +93,7 @@ function verifyWebhookSignature(body: string, signature: string | null): boolean
     const computedSignature = crypto
       .createHmac('sha256', process.env.CASHFREE_SECRET_KEY)
       .update(body)
-      .digest('hex');
+      .digest('base64');
     
     return crypto.timingSafeEqual(
       Buffer.from(computedSignature),
