@@ -29,7 +29,6 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [selectedPurchaseOption, setSelectedPurchaseOption] = useState<'subscription' | 'oneTime' | null>(null);
-
   useEffect(() => {
     if (plan) {
       if (plan.originalType === 'one_time') {
@@ -161,13 +160,13 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
                           <Label htmlFor="option-oneTime" className="cursor-pointer">
                             <div className="flex items-center gap-2 mb-2">
                               <span className="text-lg font-semibold">One-Time Purchase</span>
-                              <Badge variant="outline">Lifetime Access</Badge>
+                              <Badge variant="outline">One Week Access</Badge>
                             </div>
                             <div className="text-2xl font-bold text-primary mb-2">
                               {plan.currencySymbol}{oneTimePriceMarkedUp.toFixed(2)}
                             </div>
                             <p className="text-sm text-gray-600">
-                              Pay once, own forever. Includes current features with lifetime access.
+                              Includes current features with single time access for 7 days.
                             </p>
                           </Label>
                         </div>
@@ -269,7 +268,7 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
 
                 {/* Payment Methods */}
                 <div className="space-y-4">
-                  <Label className="text-sm font-medium">Payment Method</Label>
+                  {/* <Label className="text-sm font-medium">Payment Method</Label> */}
                   <PaymentMethods
                     paymentMethod={paymentMethod}
                     countryCode={plan.countryCode}

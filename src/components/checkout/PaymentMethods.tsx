@@ -41,13 +41,13 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                 )}
               </div>
               <div className="flex items-center">
-                <img 
+                {/* <img 
                   src="https://assets.cashfree.com/prod/images/logo/cashfree-logo-icon.svg" 
                   alt="Cashfree Logo" 
                   className="h-5 w-5 mr-2" 
-                />
+                /> */}
                 <div>
-                  <div className="font-medium">Cashfree</div>
+                  <div className="font-medium">Cashfree Payment</div>
                   <div className="text-xs text-muted-foreground">Credit/Debit Card, UPI, Netbanking (India)</div>
                 </div>
               </div>
@@ -75,10 +75,10 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                 )}
               </div>
               <div className="flex items-center">
-                <img src="https://app.lemonsqueezy.com/apple-touch-icon.png" alt="LemonSqueezy Logo" className="h-5 w-5 mr-2 rounded" />
+                {/* <img src="https://app.lemonsqueezy.com/apple-touch-icon.png" alt="LemonSqueezy Logo" className="h-5 w-5 mr-2 rounded" /> */}
                 <div>
-                  <div className="font-medium">Credit/Debit Card (International)</div>
-                  <div className="text-xs text-muted-foreground">Secure payment via LemonSqueezy</div>
+                  <div className="font-medium">LemonSqueezy Payment</div>
+                  <div className="text-xs text-muted-foreground">Pay with Credit/Debit Card (International)</div>
                 </div>
               </div>
             </div>
