@@ -6,18 +6,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Loader2, CreditCard, Globe, IndianRupee, Check } from 'lucide-react';
-import type { SubscriptionPlan } from '@/types';
+import { CheckoutPlanInfo } from '@/app/checkout/types';
 
 type PaymentMethod = 'cashfree' | 'paypal' | null;
 
 interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
-  plan: SubscriptionPlan;
+  plan: CheckoutPlanInfo;
   userCountry: string;
+  selectedPurchaseOption: 'subscription' | 'oneTime'; // Add this prop
 }
 
-export function CheckoutModal({ isOpen, onClose, plan, userCountry }: CheckoutModalProps) {
+export function CheckoutModal({ isOpen, onClose, plan, userCountry, selectedPurchaseOption }: CheckoutModalProps) {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>(null);
   const [isLoading, setIsLoading] = useState(false);
   const isIndia = userCountry === 'IN';
@@ -45,8 +46,9 @@ export function CheckoutModal({ isOpen, onClose, plan, userCountry }: CheckoutMo
           },
           body: JSON.stringify({
             planId: plan.id,
-            amount: plan.price.replace(/[^0-9]/g, ''), // Extract numbers from price string
+            amount: plan.baseNumericPrice.toString(),
             currency: 'INR',
+            paymentType: selectedPurchaseOption, // Pass the selected purchase option as paymentType
           }),
         });
 
@@ -63,7 +65,7 @@ export function CheckoutModal({ isOpen, onClose, plan, userCountry }: CheckoutMo
           },
           body: JSON.stringify({
             planId: plan.id,
-            amount: plan.price.replace(/[^0-9]/g, ''),
+            amount: plan.baseNumericPrice.toString(),
             currency: 'USD',
           }),
         });
@@ -94,7 +96,7 @@ export function CheckoutModal({ isOpen, onClose, plan, userCountry }: CheckoutMo
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <h4 className="font-medium">Plan: {plan.name}</h4>
-            <p className="text-2xl font-bold">{plan.price}</p>
+            <p className="text-2xl font-bold">{plan.currencySymbol}{plan.baseNumericPrice.toFixed(2)}</p>
           </div>
 
           <div className="space-y-4">
@@ -154,7 +156,7 @@ export function CheckoutModal({ isOpen, onClose, plan, userCountry }: CheckoutMo
               ) : (
                 <>
                   <CreditCard className="mr-2 h-4 w-4" />
-                  Pay {plan.price}
+                  Pay {plan.currencySymbol}{plan.baseNumericPrice.toFixed(2)}
                 </>
               )}
             </Button>

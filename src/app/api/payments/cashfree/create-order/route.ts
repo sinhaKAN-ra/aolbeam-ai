@@ -31,6 +31,7 @@ export async function POST(request: Request) {
       customerEmail,
       customerPhone,
       orderNote = 'One-time payment',
+      paymentType = 'one-time', // Default to 'one-time' if not provided
     } = body;
 
     // Generate unique IDs
@@ -112,6 +113,7 @@ export async function POST(request: Request) {
           ...data,
           order_details: orderPayload
         },
+        payment_type: paymentType, // Add payment_type to the database insert
       });
       
     if (paymentOrderError) {
