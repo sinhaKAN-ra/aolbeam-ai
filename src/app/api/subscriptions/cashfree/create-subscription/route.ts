@@ -353,7 +353,7 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
       .from('subscriptions')
       .update({
         provider_subscription_id: cashfreeApiResult.cf_subscription_id, // Cashfree's persistent subscription ID
-        provider_order_id: cashfreeApiResult.cf_order_id, // Store Cashfree's order ID for webhook lookup
+        provider_order_id: cashfreeApiResult.order_id, // Store Cashfree's order ID for webhook lookup
         status: finalStatus,
         metadata: {
           chosen_plan: planDetails, // Store the full chosen plan object
