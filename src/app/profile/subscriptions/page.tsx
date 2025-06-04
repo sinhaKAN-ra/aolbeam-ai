@@ -179,22 +179,22 @@ export default function SubscriptionsPage() {
           setIsUsageLoading(false);
         }
 
-        // Fetch payment history
-        try {
-          const payments = await getPaymentHistory();
-          setPaymentHistory(payments);
-        } catch (paymentsErr) {
-          console.error('Error loading payment history:', paymentsErr);
-        } finally {
-          setIsPaymentHistoryLoading(false);
-        }
+
       } else {
         // Reset all states if no subscription
         setCurrentPlan(null);
         setUsageMetrics(null);
-        setPaymentHistory([]);
         setIsPlanLoading(false);
         setIsUsageLoading(false);
+      }
+      
+      // Fetch payment history (moved outside the if (sub) block)
+      try {
+        const payments = await getPaymentHistory();
+        setPaymentHistory(payments);
+      } catch (paymentsErr) {
+        console.error('Error loading payment history:', paymentsErr);
+      } finally {
         setIsPaymentHistoryLoading(false);
       }
       
