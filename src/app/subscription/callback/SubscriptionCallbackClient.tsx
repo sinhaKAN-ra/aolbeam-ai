@@ -54,6 +54,20 @@ export default function SubscriptionCallbackClient() {
                 subscription_updated_at: new Date().toISOString()
               }
             });
+
+            // Also update the public.user_profiles table for consistency
+            const { data: user } = await supabase.auth.getUser();
+            if (user?.user?.id) {
+              await supabase
+                .from('user_profiles')
+                .update({
+                  is_subscribed: true,
+                  last_payment_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                  // You might want to add subscription_plan_id here if it's available from Lemon Squeezy callback
+                })
+                .eq('id', user.user.id);
+            }
           } else {
             setStatus('error');
             setMessage(result.message || 'There was an issue verifying your payment. Please contact support.');
