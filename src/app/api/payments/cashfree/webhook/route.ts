@@ -126,9 +126,13 @@ export async function POST(request: Request) {
     const { data: paymentOrderData, error: paymentOrderError, count: paymentOrderCount } = await supabase
       .from('payment_orders')
       .update({
+        status: payment_status, // Use the direct payment_status from Cashfree for payment_orders
+        payment_status,
+        payment_message,
         updated_at: new Date().toISOString(),
       })
-      .eq('provider_order_id', order_id);
+      .eq('provider_order_id', order_id)
+      .select();
 
     console.log('Supabase payment_orders update result - data:', paymentOrderData, 'count:', paymentOrderCount);
 

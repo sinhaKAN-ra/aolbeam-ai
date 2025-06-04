@@ -90,7 +90,7 @@ export default function SubscriptionCallbackClient() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="mt-6 text-2xl font-bold text-center text-green-600">Payment Connected!</h2>
+            <h2 className="mt-6 text-2xl font-bold text-center text-green-600">Transaction completed!</h2>
             <p className="mt-2 text-center text-gray-600">{message}</p>
             <div className="mt-8">
               <Button
