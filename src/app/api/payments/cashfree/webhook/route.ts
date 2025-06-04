@@ -94,8 +94,34 @@ export async function POST(request: Request) {
 
     console.log(`Mapped Cashfree status '${payment_status}' to internal status '${subscriptionStatus}'`);
 
+    // First, try to fetch the payment_order to confirm it's visible to this supabase client instance
+    console.log('Attempting to fetch payment_order before update with provider_order_id:', order_id);
+    const { data: preUpdatePaymentOrder, error: preUpdateError } = await supabase
+      .from('payment_orders')
+      .select('*')
+      .eq('provider_order_id', order_id)
+      .single();
+
+    if (preUpdateError) {
+      console.error('CRITICAL - Error fetching payment_order before update:', preUpdateError);
+      return NextResponse.json(
+        { error: 'Failed to find payment order before update' },
+        { status: 500 }
+      );
+    }
+
+    if (!preUpdatePaymentOrder) {
+      console.warn('Payment order not found for provider_order_id:', order_id, 'before update. It might have been processed already or ID is incorrect.');
+      return NextResponse.json(
+        { error: 'Payment order not found' },
+        { status: 404 }
+      );
+    }
+
+    console.log('Payment order found before update:', preUpdatePaymentOrder);
+
+    // Now, attempt the update
     console.log('Attempting to update payment_order with provider_order_id:', order_id);
-    // Update the payment_orders status in your database using provider_order_id
     const { data: paymentOrderData, error: paymentOrderError, count: paymentOrderCount } = await supabase
       .from('payment_orders')
       .update({
@@ -109,11 +135,15 @@ export async function POST(request: Request) {
     console.log('Supabase payment_orders update result - data:', paymentOrderData, 'count:', paymentOrderCount);
 
     if (paymentOrderError) {
-      console.error('Error updating payment_order:', paymentOrderError);
+      console.error('CRITICAL - Error updating payment_order:', paymentOrderError);
       return NextResponse.json(
         { error: 'Failed to update payment order' },
         { status: 500 }
       );
+    }
+
+    if (paymentOrderCount === 0) {
+      console.warn('No payment_order found for provider_order_id:', order_id, 'to update. Update operation returned 0 count.');
     }
 
     // Log what we've updated in payment_orders

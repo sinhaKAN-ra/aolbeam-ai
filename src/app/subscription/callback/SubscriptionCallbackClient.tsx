@@ -44,7 +44,7 @@ export default function SubscriptionCallbackClient() {
           const result = await verifyResponse.json();
           if (result.success) {
             setStatus('success');
-            setMessage('Your subscription has been activated successfully! it may take some time to reflect in your account.');
+            setMessage('Your payment has been connected! it may take some time to reflect its status. keep checking your account.');
             
             // Update user metadata to indicate they have an active subscription
             // This is just a UI enhancement, the actual subscription state is stored in the subscriptions table
@@ -90,7 +90,7 @@ export default function SubscriptionCallbackClient() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="mt-6 text-2xl font-bold text-center text-green-600">Plan Active!</h2>
+            <h2 className="mt-6 text-2xl font-bold text-center text-green-600">Payment Connected!</h2>
             <p className="mt-2 text-center text-gray-600">{message}</p>
             <div className="mt-8">
               <Button
