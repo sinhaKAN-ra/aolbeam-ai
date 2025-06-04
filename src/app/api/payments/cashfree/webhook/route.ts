@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     }
 
     const payload = JSON.parse(body);
-    const { data: { order_id, payment_status, payment_message } } = payload;
+    const { data: { order: { order_id }, payment: { payment_status, payment_message } } } = payload;
 
     if (!order_id || !payment_status) {
       return NextResponse.json(
