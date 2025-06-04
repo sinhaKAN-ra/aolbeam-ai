@@ -27,11 +27,14 @@ export interface InteractionHistoryItem {
 export interface SubscriptionPlan {
   id: string;
   name: string;
-  price: string;
-  duration: string | undefined;
+  price: string; // e.g., '₹249' or '$10'
+  currency: string; // e.g., 'INR', 'USD' - Crucial for payments
+  duration?: string; // e.g., '/ week', '/ month', '/ 3 months'
+  order: number; // Essential for upgrade/downgrade logic
   features: string[];
   highlight?: boolean;
-  order?: number;
+  type: 'subscription' | 'one_time'; // Distinguishes plan categories
+  description?: string; // A general description of the plan
 }
 
 export interface UserProfile {

@@ -48,7 +48,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                 /> */}
                 <div>
                   <div className="font-medium">Cashfree Payment</div>
-                  <div className="text-xs text-muted-foreground">Credit/Debit Card, UPI, Netbanking (India)</div>
+                  <div className="text-xs text-muted-foreground">Credit/Debit Card, UPI, Netbanking </div>
                 </div>
               </div>
             </div>
@@ -78,7 +78,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                 {/* <img src="https://app.lemonsqueezy.com/apple-touch-icon.png" alt="LemonSqueezy Logo" className="h-5 w-5 mr-2 rounded" /> */}
                 <div>
                   <div className="font-medium">LemonSqueezy Payment</div>
-                  <div className="text-xs text-muted-foreground">Pay with Credit/Debit Card (International)</div>
+                  <div className="text-xs text-muted-foreground">Pay with Credit/Debit Card </div>
                 </div>
               </div>
             </div>

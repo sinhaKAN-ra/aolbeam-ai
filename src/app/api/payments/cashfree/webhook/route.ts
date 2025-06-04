@@ -61,16 +61,38 @@ export async function POST(request: Request) {
       );
     }
 
-    // Update the subscription status in your database
+    // Map Cashfree payment_status to our internal subscription status
+    let subscriptionStatus: string;
+    switch (payment_status) {
+      case 'SUCCESS':
+        subscriptionStatus = 'ACTIVE';
+        break;
+      case 'PENDING':
+        subscriptionStatus = 'PENDING';
+        break;
+      case 'FAILED':
+        subscriptionStatus = 'FAILED';
+        break;
+      case 'CANCELLED':
+        subscriptionStatus = 'CANCELLED';
+        break;
+      case 'EXPIRED':
+        subscriptionStatus = 'EXPIRED';
+        break;
+      default:
+        subscriptionStatus = 'UNKNOWN'; // Handle any other unexpected statuses
+    }
+
+    // Update the subscription status in your database using provider_order_id
     const { error } = await supabase
       .from('subscriptions')
       .update({
-        status: payment_status === 'SUCCESS' ? 'ACTIVE' : 'FAILED',
+        status: subscriptionStatus,
         payment_status,
         payment_message,
         updated_at: new Date().toISOString(),
       })
-      .eq('order_id', order_id);
+      .eq('provider_order_id', order_id);
 
     if (error) {
       console.error('Error updating subscription:', error);
@@ -86,7 +108,7 @@ export async function POST(request: Request) {
       const { data: subscription } = await supabase
         .from('subscriptions')
         .select('user_id, plan_id')
-        .eq('order_id', order_id)
+        .eq('provider_order_id', order_id)
         .single();
 
       if (subscription?.user_id) {

@@ -7,28 +7,20 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription as PlanCardDescription } from '@/components/ui/card';
 import { Check, Info, Zap, CreditCard, Loader2, AlertCircle } from 'lucide-react';
-// import type { SubscriptionPlan } from '@/types/'; 
+import type { SubscriptionPlan } from '@/types'; 
 import { detectUserCountry } from '@/lib/utils/country';
 import { createClient } from '@/utils/supabase/client'; 
 
 // Footer is now global
 
-interface SubscriptionPlan {
-  id: string;
-  name: string;
-  price: string;
-  duration?: string; 
-  order: number;
-  features: string[];
-  highlight?: boolean;
-  type: 'subscription' | 'one_time'; 
-}
+// Inline SubscriptionPlan interface removed, will use the one from @/types
 
 export const plans: SubscriptionPlan[] = [
   {
     id: 'weekly',
     name: 'Weekly Pass',
     price: '₹249',
+    currency: 'INR',
     duration: '/ week',
     order: 1,
     features: [
@@ -45,6 +37,7 @@ export const plans: SubscriptionPlan[] = [
     id: 'monthly',
     name: 'Monthly Saver',
     price: '₹699',
+    currency: 'INR',
     duration: '/ month',
     order: 2,
     features: [
@@ -62,6 +55,7 @@ export const plans: SubscriptionPlan[] = [
     id: 'quarterly',
     name: 'Quarterly Pro',
     price: '₹1999',
+    currency: 'INR',
     duration: '/ 3 months',
     order: 3,
     features: [
@@ -75,9 +69,27 @@ export const plans: SubscriptionPlan[] = [
     ],
     type: 'subscription',
   },
+  // Example of a one-time plan, ensure it also has currency
+  // {
+  //   id: 'one_time_small',
+  //   name: 'Token Pack Small',
+  //   price: '₹99',
+  //   currency: 'INR',
+  //   order: 10, // Order can be used to group or sort one-time plans if needed
+  //   features: [
+  //     '✨ 50 AI Interactions (valid for 30 days)',
+  //     'Basic AI Model'
+  //   ],
+  //   type: 'one_time',
+  //   description: 'A small pack of interactions for light users.'
+  // }
 ];
 
 const INSTITUTE_CONTACT_EMAIL = "aolbeam@outlook.com";
+
+const getPlanDetails = (planId: string): SubscriptionPlan | undefined => {
+  return plans.find(p => p.id === planId);
+};
 
 export default function PricingPage() {
   const [userCountry, setUserCountry] = useState<string>('IN');
@@ -121,40 +133,61 @@ export default function PricingPage() {
     fetchUserData();
   }, []);
 
-  const getPlanOrder = (planId: string) => {
-    const plan = plans.find(p => p.id === planId);
-    return plan ? plan.order : 0; 
-  };
+  const determinePlanAction = (targetPlanId: string): { text: string; enabled: boolean; isCurrent: boolean } => {
+    const targetPlan = getPlanDetails(targetPlanId);
+    if (!targetPlan) return { text: "Plan Unavailable", enabled: false, isCurrent: false }; // Should not happen
 
-  const canUpgrade = (targetPlanId: string) => {
-    if (!isLoggedIn) return true; 
-
-    const currentUserPlanOrder = userSubscription?.is_subscribed
-      ? getPlanOrder(userSubscription.subscription_plan_id)
-      : 0; 
-
-    const targetPlanOrder = getPlanOrder(targetPlanId);
-
-    return targetPlanOrder > currentUserPlanOrder;
-  };
-
-  const getButtonText = (planId: string) => {
-    if (!isLoggedIn) return `Choose ${plans.find(p => p.id === planId)?.name}`;
-
-    const currentUserPlanOrder = userSubscription?.is_subscribed
-      ? getPlanOrder(userSubscription.subscription_plan_id)
-      : 0;
-    const targetPlanOrder = getPlanOrder(planId);
-
-    if (targetPlanOrder > currentUserPlanOrder) {
-      return `Upgrade to ${plans.find(p => p.id === planId)?.name}`;
-    } else if (targetPlanOrder === currentUserPlanOrder && userSubscription?.is_subscribed) {
-      return 'Current Plan';
-    } else if (targetPlanOrder < currentUserPlanOrder && userSubscription?.is_subscribed) {
-      return 'Downgrade (Not Allowed)';
-    } else {
-      return `Choose ${plans.find(p => p.id === planId)?.name}`;
+    // Case 1: User is not logged in, or has no subscription history
+    if (!isLoggedIn || !userSubscription?.subscription_plan_id) {
+      return { text: `Choose ${targetPlan.name}`, enabled: true, isCurrent: false };
     }
+
+    // Case 2: User is logged in and has a subscription_plan_id
+    const currentPlan = getPlanDetails(userSubscription.subscription_plan_id);
+    if (!currentPlan) {
+      // User has a subscription_plan_id but it's not in our `plans` array (data inconsistency?)
+      return { text: `Choose ${targetPlan.name}`, enabled: true, isCurrent: false }; 
+    }
+
+    // If the user is not marked as 'is_subscribed' (e.g. plan expired/canceled), they can choose any plan.
+    // This check might need refinement based on actual subscription statuses from the 'subscriptions' table if 'is_subscribed' isn't sufficient.
+    if (!userSubscription.is_subscribed) {
+        return { text: `Choose ${targetPlan.name}`, enabled: true, isCurrent: false };
+    }
+
+    // Case 2a: Target plan is the same as the current plan
+    if (currentPlan.id === targetPlan.id) {
+      return { text: "Current Plan", enabled: false, isCurrent: true };
+    }
+
+    // Case 2b: User has an active subscription, evaluating change options
+    if (currentPlan.type === 'subscription') {
+      if (targetPlan.type === 'subscription') {
+        const orderDiff = targetPlan.order - currentPlan.order;
+        if (orderDiff === 1) {
+          return { text: `Upgrade to ${targetPlan.name}`, enabled: true, isCurrent: false };
+        }
+        if (orderDiff === -1) {
+          return { text: `Downgrade to ${targetPlan.name}`, enabled: true, isCurrent: false };
+        }
+        // Not an adjacent plan
+        return { text: targetPlan.name, enabled: false, isCurrent: false }; 
+      } else {
+        // Trying to switch from subscription to one-time (currently not allowed by spec)
+        return { text: targetPlan.name, enabled: false, isCurrent: false }; 
+      }
+    } else if (currentPlan.type === 'one_time') {
+      if (targetPlan.type === 'subscription') {
+        // Upgrading from one-time to any subscription
+        return { text: `Switch to ${targetPlan.name}`, enabled: true, isCurrent: false };
+      }
+      // One-time to one-time (not specified, assume not an 'upgrade/downgrade' action, but a new purchase)
+      // Or if it's the same one-time plan, it would have been caught by 'isCurrent'
+      return { text: `Choose ${targetPlan.name}`, enabled: true, isCurrent: false }; 
+    }
+
+    // Fallback: Should ideally be covered by above logic
+    return { text: `View ${targetPlan.name}`, enabled: false, isCurrent: false };
   };
 
   if (isLoading) {
@@ -205,15 +238,22 @@ export default function PricingPage() {
                 </ul>
               </CardContent>
               <div className="p-6 pt-4 mt-auto">
-                <Button
-                  onClick={() => {
-                    router.push(`/checkout?plan=${plan.id}`);
-                  }}
-                  className={`w-full text-lg py-3 ${plan.highlight ? '' : 'bg-accent text-accent-foreground hover:bg-accent/90'}`}
-                  disabled={!canUpgrade(plan.id)}
-                >
-                  <CreditCard className="mr-2 h-5 w-5" /> {getButtonText(plan.id)}
-                </Button>
+                {(() => {
+                  const action = determinePlanAction(plan.id);
+                  return (
+                    <Button
+                      onClick={() => {
+                        if (action.enabled) {
+                          router.push(`/checkout?plan=${plan.id}`);
+                        }
+                      }}
+                      className={`w-full text-lg py-3 ${plan.highlight ? '' : 'bg-accent text-accent-foreground hover:bg-accent/90'} ${!action.enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={!action.enabled || action.isCurrent}
+                    >
+                      <CreditCard className="mr-2 h-5 w-5" /> {action.text}
+                    </Button>
+                  );
+                })()}
               </div>
             </Card>
           ))}

@@ -4,14 +4,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { getCashfreeServiceInstance } from '@/services/payment/cashfree/CashfreePaymentService';
 import type { CashfreeSubscriptionRequestPayload } from '@/services/payment/cashfree/types';
 import { plans } from '@/app/pricing/page'; // Import the plans array from pricing page
-import { SubscriptionPlan } from '@/types'; // Import SubscriptionPlan type
+import type { SubscriptionPlan } from '@/types'; // Import the centralized SubscriptionPlan type
+
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-// Helper function to get the order of a plan
-const getPlanOrder = (planId: string): number => {
-  const plan = plans.find(p => p.id === planId);
-  return plan && plan.order !== undefined ? plan.order : 0;
+// Helper function to get the full details of a plan
+const getPlanDetails = (planId: string): SubscriptionPlan | undefined => {
+  return plans.find(p => p.id === planId);
 };
 
 export async function POST(request: Request) {
@@ -75,7 +75,6 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
     }
 
     // Fetch user's current subscription details from user_profiles
-    let currentUserPlanOrder = 0;
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .select('is_subscribed, subscription_plan_id')
@@ -83,20 +82,52 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
       .single();
 
     if (profileError) {
-      console.error('Error fetching user profile:', profileError);
-      // Continue even if profile fetch fails, treat as non-subscribed
-    } else if (profile && profile.is_subscribed && profile.subscription_plan_id) {
-      currentUserPlanOrder = getPlanOrder(profile.subscription_plan_id);
+      console.warn('Warning: Error fetching user profile, proceeding as non-subscribed:', profileError.message);
+      // Allow proceeding, will be treated as a new subscription if no active plan found by logic below
     }
 
-    // Enforce upgrade-only flow
-    const targetPlanOrder = getPlanOrder(planId);
-    if (currentUserPlanOrder > 0 && targetPlanOrder <= currentUserPlanOrder) {
-      return NextResponse.json(
-        { error: 'Cannot downgrade or select current plan. Only upgrades are allowed.' },
-        { status: 400 }
-      );
+    const targetPlan = getPlanDetails(planId);
+    if (!targetPlan) {
+      return NextResponse.json({ error: 'Invalid target plan ID.' }, { status: 400 });
     }
+
+    let currentPlan: SubscriptionPlan | undefined;
+    if (profile && profile.subscription_plan_id) {
+      currentPlan = getPlanDetails(profile.subscription_plan_id);
+    }
+
+    // Validation Logic for plan changes
+    if (profile && profile.is_subscribed && currentPlan) {
+      // User has an active or recent subscription, apply change rules
+      if (currentPlan.id === targetPlan.id) {
+        return NextResponse.json({ error: 'Cannot select your current plan again.' }, { status: 400 });
+      }
+
+      if (currentPlan.type === 'subscription') {
+        if (targetPlan.type === 'subscription') {
+          const orderDiff = targetPlan.order - currentPlan.order;
+          if (Math.abs(orderDiff) !== 1) {
+            return NextResponse.json({ error: 'Can only upgrade or downgrade to the next/previous adjacent plan.' }, { status: 400 });
+          }
+          // If orderDiff is 1, it's an upgrade. If -1, it's a downgrade. Both are allowed here.
+        } else {
+          // Trying to switch from subscription to one-time
+          return NextResponse.json({ error: 'Cannot switch from a subscription to a one-time plan directly. Please cancel your subscription first.' }, { status: 400 });
+        }
+      } else if (currentPlan.type === 'one_time') {
+        if (targetPlan.type === 'subscription') {
+          // Allowed: Switching from one-time to any subscription
+        } else {
+          // Switching from one-time to another one-time (essentially a new purchase, allowed)
+          // Or if it's the same one-time plan, it would have been caught by currentPlan.id === targetPlan.id
+        }
+      }
+    } else {
+      // User is not subscribed, or profile/current plan couldn't be determined.
+      // They can choose any plan (new subscription).
+      console.log(`User ${user.id} is either not subscribed or current plan is undetermined. Allowing selection of plan ${targetPlan.id}.`);
+    }
+
 
     // Validate phone number format
     if (typeof customer_phone !== 'string' || !/^\+?[0-9]{10,12}$/.test(customer_phone.replace(/\D/g, ''))) {
@@ -134,26 +165,56 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
 
     // Get plan details (in a real app, you would fetch this from the database)
     
-    // Define plan details based on the selected plan
-    // Get plan details from the imported plans array
-    const selectedPlan = plans.find(p => p.id === planId);
-
-    if (!selectedPlan) {
-      return NextResponse.json(
-        { error: 'Invalid plan ID provided.' },
-        { status: 400 }
-      );
-    }
+    // targetPlan is the selected plan, already fetched and validated.
+    const planDetails = targetPlan;
 
     // Extract numerical price from the string (e.g., '₹699' -> 699)
-    const amount = parseFloat(selectedPlan.price.replace(/[^0-9.]/g, ''));
+    const amount = parseFloat(planDetails.price.replace(/[^0-9.]/g, ''));
+    if (isNaN(amount)) {
+      return NextResponse.json({ error: 'Invalid price format in plan configuration.' }, { status: 500 });
+    }
 
-    const planDetails = {
-      id: selectedPlan.id,
-      name: selectedPlan.name,
+    // Determine Cashfree plan type, interval, and intervals based on our plan structure
+    let cfPlanType: 'PERIODIC' | 'CUSTOM' = 'CUSTOM';
+    let cfInterval: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR' = 'MONTH'; // Default
+    let cfIntervals = 1;
+
+    if (planDetails.type === 'subscription') {
+      cfPlanType = 'PERIODIC';
+      if (planDetails.duration?.includes('/ week')) {
+        cfInterval = 'WEEK';
+        cfIntervals = 1;
+      } else if (planDetails.duration?.includes('/ month')) {
+        cfInterval = 'MONTH';
+        cfIntervals = 1;
+      } else if (planDetails.duration?.includes('/ 3 months')) {
+        cfInterval = 'MONTH';
+        cfIntervals = 3;
+      } else if (planDetails.duration?.includes('/ year')) {
+        cfInterval = 'YEAR';
+        cfIntervals = 1;
+      }
+      // Add more conditions if other durations exist
+    } else if (planDetails.type === 'one_time') {
+      // For one-time, Cashfree subscriptions might not be the right API.
+      // This flow is for 'subscriptions'. If one-time plans need a different Cashfree product (e.g. payment links),
+      // this would need a separate API or logic branch.
+      // For now, if it reaches here, we'll treat it as a 'CUSTOM' plan if Cashfree supports it for a single charge via subscription API.
+      // Or, this path should be blocked by validation if one-time plans cannot use this endpoint.
+      console.warn(`Attempting to create Cashfree subscription for one-time plan: ${planDetails.id}. This might need specific handling.`);
+      // Defaulting to a one-time interpretation if possible, e.g., a plan that runs once.
+      // This part is speculative based on Cashfree's flexibility with 'CUSTOM' plans.
+      cfPlanType = 'CUSTOM'; // Or could be 'ON_DEMAND' if that's more appropriate and supported
+      cfInterval = 'DAY'; // Smallest unit, effectively a single charge if intervals = 1 and it doesn't auto-renew
+      cfIntervals = 1; 
+    }
+
+    const planDetailsObject = {
+      id: planDetails.id,
+      name: planDetails.name,
       amount: amount,
-      interval: selectedPlan.duration.includes('month') ? 'monthly' : (selectedPlan.duration.includes('week') ? 'weekly' : 'yearly'), // Map duration to interval
-      description: selectedPlan.features.join(', '),
+      interval: cfInterval, // Map duration to interval
+      description: planDetails.features.join(', '),
       currency: 'INR' // Assuming Cashfree is always INR
     };
 
@@ -169,36 +230,46 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
     const returnUrl = `${APP_URL}/profile/subscriptions?subscription_id=${cashfreeSubId}&order_id=${orderId}&status=success`;
     const notifyUrl = `${APP_URL}/api/subscriptions/cashfree/webhook`;
 
-    // Calculate next billing date
-    const nextBillingDate = new Date(today);
-    if (planDetails.interval === 'month') {
-      nextBillingDate.setMonth(today.getMonth() + 1);
-    } else {
-      nextBillingDate.setFullYear(today.getFullYear() + 1);
-    }
+    // Determine interval_type and interval_count for Supabase storage
+    let dbIntervalType: string | undefined = undefined;
+    let dbIntervalCount: number | undefined = undefined;
 
-    // Create subscription in Cashfree
-    // Create initial subscription record in Supabase
+    if (planDetails.type === 'subscription') {
+      if (planDetails.duration?.includes('/ week')) {
+        dbIntervalType = 'week';
+        dbIntervalCount = 1;
+      } else if (planDetails.duration?.includes('/ month')) {
+        dbIntervalType = 'month';
+        dbIntervalCount = 1;
+      } else if (planDetails.duration?.includes('/ 3 months')) {
+        dbIntervalType = 'month';
+        dbIntervalCount = 3;
+      } else if (planDetails.duration?.includes('/ year')) {
+        dbIntervalType = 'year';
+        dbIntervalCount = 1;
+      }
+    } // For 'one_time', these might remain undefined or be set to a specific value
+
+    // Insert initial subscription record into Supabase
     const { data: subscription, error: subInsertError } = await supabase
       .from('subscriptions')
       .insert({
+        id: cashfreeSubId, // Use the same UUID for our internal record
         user_id: user.id,
-        plan_id: planId,
-        status: 'PENDING',
+        plan_id: planDetails.id,
+        status: 'INITIATED', // Initial status before Cashfree interaction
         provider: 'cashfree',
-        provider_subscription_id: cashfreeSubId,
-        amount: planDetails.amount,
-        currency: planDetails.currency,
-        interval: planDetails.interval,
-        current_period_start: today.toISOString(),
-        current_period_end: nextBillingDate.toISOString(),
-        created_at: today.toISOString(),
-        updated_at: today.toISOString(),
+        amount: amount, // Numeric amount parsed earlier
+        currency: planDetails.currency || 'INR', // Currency from plan or default
+        interval_type: dbIntervalType,
+        interval_count: dbIntervalCount,
         metadata: {
-          planDetails,
+          chosen_plan: planDetails, // Store the full chosen plan object from your config
           customer_phone: formattedPhone,
-          internal_cashfree_sub_id: cashfreeSubId
+          internal_cashfree_sub_id: cashfreeSubId, // Link to the ID used with Cashfree
         },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .select()
       .single();
@@ -214,17 +285,17 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
     const cashfreeService = getCashfreeServiceInstance();
 
     // Prepare the subscription payload for Cashfree
-    const subscriptionPayload = {
-      subscription_id: cashfreeSubId,
+    const subscriptionPayload: CashfreeSubscriptionRequestPayload = {
+      subscription_id: cashfreeSubId, // Our internal unique ID for this attempt
       plan_details: {
-        plan_id: planId,
+        plan_id: planDetails.id, // Use our plan ID as Cashfree's plan_id
         plan_name: planDetails.name,
-        type: planDetails.interval === 'monthly' ? 'PERIODIC' : 'CUSTOM',
-        amount: planDetails.amount,
-        interval: planDetails.interval === 'monthly' ? 'MONTH' : 'YEAR',
-        intervals: 1,
-        description: planDetails.description,
-        currency: planDetails.currency
+        type: cfPlanType,
+        amount: amount,
+        interval: cfInterval,
+        intervals: cfIntervals,
+        description: planDetails.description || `Subscription for ${planDetails.name}`,
+        currency: planDetails.currency || 'INR' // Default to INR if not specified in plan
       },
       customer_details: {
         customer_id: user.id,
@@ -252,7 +323,7 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
         .update({
           status: 'FAILED',
           metadata: {
-            planDetails,
+            chosen_plan: planDetails, // Store the full chosen plan object
             customer_phone: formattedPhone,
             internal_cashfree_sub_id: cashfreeSubId,
             cashfree_error: serviceResponse.error,
@@ -282,9 +353,10 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
       .from('subscriptions')
       .update({
         provider_subscription_id: cashfreeApiResult.cf_subscription_id, // Cashfree's persistent subscription ID
+        provider_order_id: cashfreeApiResult.cf_order_id, // Store Cashfree's order ID for webhook lookup
         status: finalStatus,
         metadata: {
-          planDetails,
+          chosen_plan: planDetails, // Store the full chosen plan object
           customer_phone: formattedPhone,
           internal_cashfree_sub_id: cashfreeSubId,
           cashfree_response: cashfreeApiResult,
