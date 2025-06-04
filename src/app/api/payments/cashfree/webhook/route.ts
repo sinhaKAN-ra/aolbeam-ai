@@ -79,9 +79,14 @@ export async function POST(request: Request) {
       case 'EXPIRED':
         subscriptionStatus = 'EXPIRED';
         break;
+      case 'INITIALIZED':
+        subscriptionStatus = 'PENDING'; // Map INITIALIZED to PENDING to match our enum values
+        break;
       default:
-        subscriptionStatus = 'UNKNOWN'; // Handle any other unexpected statuses
+        subscriptionStatus = 'PENDING'; // Default to PENDING for safety
     }
+
+    console.log(`Mapped Cashfree status '${payment_status}' to internal status '${subscriptionStatus}'`);
 
     console.log('Attempting to update payment_order with provider_order_id:', order_id);
     // Update the payment_orders status in your database using provider_order_id
@@ -105,32 +110,53 @@ export async function POST(request: Request) {
       );
     }
 
+    // Log what we've updated in payment_orders
+    if (paymentOrderData) {
+      console.log('Successfully updated payment_order with status:', subscriptionStatus);
+    }
+
     // If paymentOrderCount is 0, it means no record was found or updated
     if (paymentOrderCount === 0) {
       console.warn('No payment_order found for provider_order_id:', order_id);
-      return NextResponse.json(
-        { error: 'Payment order not found or already processed' },
-        { status: 404 }
-      );
+      // Instead of failing, try to find the subscription directly by provider_order_id
+      console.log('Attempting to find subscription directly by provider_order_id:', order_id);
     }
 
-    // Fetch the payment order to get the associated subscription_id
+    // Try two approaches to find the subscription:
+    // 1. First, via payment_orders table (the ideal path)
+    let subscriptionId: string | null = null;
+
+    // Fetch the associated subscription_id from payment_orders
     const { data: fetchedPaymentOrder, error: fetchPaymentOrderError } = await supabase
       .from('payment_orders')
       .select('subscription_id')
       .eq('provider_order_id', order_id)
       .single();
 
-    if (fetchPaymentOrderError || !fetchedPaymentOrder?.subscription_id) {
-      console.error('Error fetching subscription_id from payment_orders:', fetchPaymentOrderError || 'subscription_id not found');
-      return NextResponse.json(
-        { error: 'Failed to retrieve associated subscription ID' },
-        { status: 500 }
-      );
-    }
+    if (fetchedPaymentOrder?.subscription_id) {
+      subscriptionId = fetchedPaymentOrder.subscription_id;
+      console.log('Found associated subscription_id via payment_orders:', subscriptionId);
+    } else {
+      console.log('No subscription_id found in payment_orders, trying direct lookup in subscriptions table...');
+      
+      // 2. Try to find subscription directly by provider_order_id (fallback)
+      const { data: subscriptionData, error: subscriptionLookupError } = await supabase
+        .from('subscriptions')
+        .select('id')
+        .eq('provider_order_id', order_id)
+        .single();
 
-    const subscriptionId = fetchedPaymentOrder.subscription_id;
-    console.log('Found associated subscription_id:', subscriptionId);
+      if (subscriptionData?.id) {
+        subscriptionId = subscriptionData.id;
+        console.log('Found subscription directly by provider_order_id:', subscriptionId);
+      } else {
+        console.error('Error finding subscription by provider_order_id:', subscriptionLookupError || 'No matching subscription');
+        return NextResponse.json(
+          { error: 'Failed to retrieve associated subscription' },
+          { status: 404 }
+        );
+      }
+    }
 
     // Now, update the subscription status in your database using the fetched subscription_id
     const { data: subscriptionData, error: subscriptionError, count: subscriptionCount } = await supabase
@@ -163,11 +189,11 @@ export async function POST(request: Request) {
 
     // If payment is successful, update the user's profile
     if (payment_status === 'SUCCESS') {
-      // Get the subscription to get the user ID
+      // Get the subscription to get the user ID using the subscription_id we already fetched
       const { data: subscription } = await supabase
         .from('subscriptions')
         .select('user_id, plan_id')
-        .eq('provider_order_id', order_id)
+        .eq('id', subscriptionId) // Use the subscription_id we already retrieved
         .single();
 
       if (subscription?.user_id) {

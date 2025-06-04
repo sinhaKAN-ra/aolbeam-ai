@@ -15,6 +15,14 @@ const getPlanDetails = (planId: string): SubscriptionPlan | undefined => {
 };
 
 export async function POST(request: Request) {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    console.error('User not authenticated.');
+    return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
+  }
 console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
   console.log('[create-subscription API] Supabase Anon Key prefix:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.substring(0, 5));
   console.log('[create-subscription API] Supabase Service Role Key prefix:', process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0, 5));
@@ -49,6 +57,8 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
         { status: 401 }
       );
     }
+
+
 
     // Parse request body with validation
     let body;
@@ -90,6 +100,8 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
     if (!targetPlan) {
       return NextResponse.json({ error: 'Invalid target plan ID.' }, { status: 400 });
     }
+
+
 
     let currentPlan: SubscriptionPlan | undefined;
     if (profile && profile.subscription_plan_id) {
@@ -257,7 +269,7 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
         id: cashfreeSubId, // Use the same UUID for our internal record
         user_id: user.id,
         plan_id: planDetails.id,
-        status: 'INITIATED', // Initial status before Cashfree interaction
+        status: 'PENDING', // Initial status, assuming 'PENDING' is an allowed enum value
         provider: 'cashfree',
         amount: amount, // Numeric amount parsed earlier
         currency: planDetails.currency || 'INR', // Currency from plan or default
@@ -274,10 +286,20 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
       .select()
       .single();
 
+    console.log('Initial subscription insert result - data:', subscription, 'error:', subInsertError);
+
     if (subInsertError) {
       console.error('Error creating subscription record:', subInsertError);
       return NextResponse.json(
-        { error: 'Failed to create subscription record', details: subInsertError.message },
+        { error: 'Failed to create subscription record', details: typeof subInsertError === 'object' && subInsertError !== null ? String(subInsertError.message || JSON.stringify(subInsertError)) : String(subInsertError) },
+        { status: 500 }
+      );
+    }
+
+    if (!subscription || !subscription.id) {
+      console.error('Initial subscription record is null or missing ID after insert. Error:', subInsertError);
+      return NextResponse.json(
+        { error: 'Failed to retrieve subscription ID after creation.', details: typeof subInsertError === 'object' && subInsertError !== null ? String(subInsertError.message || JSON.stringify(subInsertError)) : String(subInsertError) },
         { status: 500 }
       );
     }
@@ -345,7 +367,7 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
     const cashfreeApiResult = serviceResponse.data;
     console.log('Cashfree subscription created via service:', cashfreeApiResult);
 
-    // Insert a record into payment_orders table
+
     const { error: paymentOrderInsertError } = await supabase
       .from('payment_orders')
       .insert({
@@ -401,17 +423,24 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
       }
     }
 
+
+
+
     return NextResponse.json({
       success: true,
-      subscription_id: subscription.id, // Our internal Supabase subscription ID
+      subscription_id: subscription.id, // Include subscription ID for debugging
       subscription_session_id: cashfreeApiResult.subscription_session_id, // For the payment page session
       auth_url: cashfreeApiResult.auth_link, // URL to redirect user for payment
     });
 
-  } catch (error: any) { // This is the outer catch block
+  } catch (error) { // This is the outer catch block
     console.error('Unexpected error in POST /api/subscriptions/cashfree/create-subscription:', error);
+    const errorMessage = error instanceof Error ? error.message : 
+                        (typeof error === 'object' && error !== null && 'message' in error) ? String(error.message) : 
+                        'An unexpected internal server error occurred.';
+    
     return NextResponse.json(
-      { error: error.message || 'An unexpected internal server error occurred.' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

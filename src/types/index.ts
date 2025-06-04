@@ -30,6 +30,8 @@ export interface SubscriptionPlan {
   price: string; // e.g., '₹249' or '$10'
   currency: string; // e.g., 'INR', 'USD' - Crucial for payments
   duration?: string; // e.g., '/ week', '/ month', '/ 3 months'
+  interval_type?: 'day' | 'week' | 'month' | 'year';
+  interval_count?: number;
   order: number; // Essential for upgrade/downgrade logic
   features: string[];
   highlight?: boolean;
