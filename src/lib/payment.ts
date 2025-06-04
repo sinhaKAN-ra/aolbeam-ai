@@ -36,6 +36,8 @@ export const initiatePayment = async ({
     return;
   }
 
+  console.log(`[initiatePayment] paymentMethod: ${paymentMethod}, paymentType: ${paymentType}`);
+
   try {
     let response: Response;
     let orderData: OrderResponse;
@@ -46,8 +48,8 @@ export const initiatePayment = async ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           planId: plan.id, // Original plan ID
-          amount: finalAmount, // Use the calculated final amount
-          currency: plan.currencySymbol === '₹' ? 'INR' : (plan.currencySymbol === '$' ? 'USD' : plan.currencySymbol), // Determine currency
+          amount: finalAmount,
+          currency: plan.currencySymbol === '₹' ? 'INR' : (plan.currencySymbol === '$' ? 'USD' : plan.currencySymbol),
           customerEmail: user.email,
           customerPhone: customerPhone,
           customerName: user.user_metadata.full_name || user.email,
@@ -68,13 +70,34 @@ export const initiatePayment = async ({
           redirectTarget: '_self' as const,
         };
 
-        setIsPaymentProcessing(false); // Dismiss loading state before initiating external checkout
+        setIsPaymentProcessing(false);
         cashfree?.checkout(checkoutOptions);
       } else {
         setPaymentError(orderData.error || 'Failed to create Cashfree order.');
         setIsPaymentProcessing(false);
       }
+    } else if (paymentMethod === 'cashfree' && paymentType === 'subscription') {
+      // Handle Cashfree subscription creation
+      response = await fetch('/api/subscriptions/cashfree/create-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planId: plan.id,
+          amount: finalAmount,
+          currency: plan.currencySymbol === '₹' ? 'INR' : (plan.currencySymbol === '$' ? 'USD' : plan.currencySymbol),
+          customerEmail: user.email,
+          customerPhone: customerPhone,
+          customerName: user.user_metadata.full_name || user.email,
+        }),
+      });
+      orderData = await response.json();
 
+      if (orderData.success && orderData.data?.auth_url) {
+        window.location.href = orderData.data.auth_url; // Redirect to Cashfree for subscription payment
+      } else {
+        setPaymentError(orderData.error || 'Failed to create Cashfree subscription.');
+        setIsPaymentProcessing(false);
+      }
     } else if (paymentMethod === 'lemonsqueezy' && paymentType === 'subscription') {
       response = await fetch('/api/payments/lemonsqueezy/create-checkout', {
         method: 'POST',

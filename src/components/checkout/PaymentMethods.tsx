@@ -4,18 +4,20 @@ import { Label } from '@/components/ui/label';
 import { CreditCard, MessageSquare, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type PaymentMethod = 'paypal' | 'lemonsqueezy' | 'cashfree' | 'manual' | null;
+type PaymentMethod = 'cashfree' | 'lemonsqueezy' | null;
 
 interface PaymentMethodsProps {
   paymentMethod: PaymentMethod;
-  countryCode: string | null; // Kept for potential future use, though not actively used for rendering now
-  planType: 'one-time' | 'subscription' | null; // This determines which block (Cashfree/LemonSqueezy) is shown
+  countryCode: string | null;
+  planType: 'one-time' | 'subscription' | null;
+  onSelectPaymentMethod: (method: PaymentMethod) => void; // New prop for selection
 }
 
 export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
   paymentMethod,
   countryCode,
   planType,
+  onSelectPaymentMethod,
 }) => {
   return (
     <div className="space-y-3">
@@ -29,7 +31,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                 ? "border-primary bg-primary/5" 
                 : "border-border"
             )}
-            // onClick={() => setPaymentMethod('cashfree')} // Removed: selection is handled by parent
+            onClick={() => onSelectPaymentMethod('cashfree')}
           >
             <div className="flex items-center">
               <div className={cn(
@@ -63,7 +65,7 @@ export const PaymentMethods: React.FC<PaymentMethodsProps> = ({
                 ? "border-primary bg-primary/5" 
                 : "border-border"
             )}
-            // onClick={() => setPaymentMethod('lemonsqueezy')} // Removed: selection is handled by parent
+            onClick={() => onSelectPaymentMethod('lemonsqueezy')}
           >
             <div className="flex items-center">
               <div className={cn(

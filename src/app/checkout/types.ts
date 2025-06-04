@@ -54,6 +54,7 @@ export interface OrderResponse {
     paymentLink?: string;
     subscription_id?: string;
     is_subscription?: boolean;
+    auth_url?: string; // Added for Cashfree subscription redirection
   };
   error?: string;
 }

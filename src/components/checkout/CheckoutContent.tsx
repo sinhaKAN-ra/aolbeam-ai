@@ -33,6 +33,7 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
   const [selectedPurchaseOption, setSelectedPurchaseOption] = useState<'subscription' | 'oneTime' | null>(null);
   useEffect(() => {
     if (plan) {
+
       if (plan.originalType === 'one_time') {
         setSelectedPurchaseOption('oneTime');
         setPaymentType('one-time');
@@ -272,10 +273,11 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
                   {/* Payment Methods */}
                   <div className="space-y-4">
                     {/* <Label className="text-sm font-medium">Payment Method</Label> */}
-                    <PaymentMethods
+                    <PaymentMethods 
                       paymentMethod={paymentMethod}
                       countryCode={plan.countryCode}
                       planType={paymentType}
+                      onSelectPaymentMethod={setPaymentMethod}
                     />
                   </div>
 

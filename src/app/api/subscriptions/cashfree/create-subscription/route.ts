@@ -296,8 +296,14 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
 
     if (subInsertError) {
       console.error('Error creating subscription record:', subInsertError);
+      const errorDetails = subInsertError ? 
+        (typeof subInsertError === 'object' ? 
+          (subInsertError === null ? 'null error object' : 
+            ('message' in subInsertError ? String(subInsertError.message) : JSON.stringify(subInsertError))
+          ) : String(subInsertError)
+        ) : 'Unknown error';
       return NextResponse.json(
-        { error: 'Failed to create subscription record', details: typeof subInsertError === 'object' && subInsertError !== null ? String(subInsertError.message || JSON.stringify(subInsertError)) : String(subInsertError) },
+        { error: 'Failed to create subscription record', details: errorDetails },
         { status: 500 }
       );
     }
@@ -403,6 +409,8 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
 
     // Store exact order ID string for consistent matching
     const orderId = String(cashfreeApiResult.order_id).trim();
+    
+    console.log('CRITICAL - Before payment_orders insert: subscriptionId =', subscriptionId);
     
     const { data: paymentOrder, error: paymentOrderInsertError } = await supabase
       .from('payment_orders')
