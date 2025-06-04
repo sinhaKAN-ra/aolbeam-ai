@@ -1,12 +1,20 @@
 import { createServerClient as createSupabaseServerClientInternal, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-export async function createSupabaseServerClient() {
+export async function createSupabaseServerClient(useServiceRole = false) {
   const cookieStore = await cookies();
   
+  const supabaseKey = useServiceRole 
+    ? process.env.SUPABASE_SERVICE_ROLE_KEY
+    : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseKey) {
+    throw new Error(`Missing Supabase key. ${useServiceRole ? 'SUPABASE_SERVICE_ROLE_KEY' : 'NEXT_PUBLIC_SUPABASE_ANON_KEY'} is not set.`);
+  }
+
   return createSupabaseServerClientInternal(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseKey,
     {
       cookies: {
         get(name: string) {

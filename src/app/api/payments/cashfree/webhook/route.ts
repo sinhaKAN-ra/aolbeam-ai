@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { createSupabaseServerClient } from '@/lib/supabaseServer';
 import { cookies, headers } from 'next/headers';
 import crypto from 'crypto';
 
@@ -7,6 +7,9 @@ export async function POST(request: Request) {
   try {
     // Log the incoming request for debugging
     console.log('Received webhook request');
+    
+    // Initialize the server-side Supabase client
+    const supabase = await createSupabaseServerClient(true);
     
     // Get the raw body first (we need to clone the request to read it multiple times)
     const requestClone = request.clone();
@@ -21,9 +24,7 @@ export async function POST(request: Request) {
       });
     }
     
-    // Initialize the server-side Supabase client
-    const cookieStore = cookies();
-    const supabase = await createClient();
+
     
     // Get the signature and other headers
     const signature = request.headers.get('x-webhook-signature');
