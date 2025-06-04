@@ -128,113 +128,96 @@ export async function POST(request: Request) {
       console.log('Attempting to find subscription directly by provider_order_id:', order_id);
     }
 
-    // Try two approaches to find the subscription:
-    // 1. First, via payment_orders table (the ideal path)
     let subscriptionId: string | null = null;
+    let isSubscriptionPayment = false;
 
-    // Fetch the associated subscription_id from payment_orders
-    // Try to find payment_order with exact provider_order_id match
+    // Fetch the associated subscription_id, plan_id, and user_id from payment_orders
     console.log('Querying payment_orders with provider_order_id:', order_id);
-    let { data: fetchedPaymentOrder, error: fetchPaymentOrderError } = await supabase
+    const { data: fetchedPaymentOrder, error: fetchPaymentOrderError } = await supabase
       .from('payment_orders')
-      .select('subscription_id, provider_order_id')
+      .select('subscription_id, plan_id, user_id')
       .eq('provider_order_id', order_id)
       .single();
 
     if (fetchedPaymentOrder?.subscription_id) {
       subscriptionId = fetchedPaymentOrder.subscription_id;
+      isSubscriptionPayment = true;
       console.log('Found associated subscription_id via payment_orders:', subscriptionId);
     } else {
-      console.log('No subscription_id found in payment_orders, trying direct lookup in subscriptions table...');
-      
-      // 2. Try to find subscription directly by provider_order_id (fallback)
-      console.log('Trying alternate lookup: searching subscriptions table with provider_order_id:', order_id);
-      const { data: subscriptionData, error: subscriptionLookupError } = await supabase
+      console.log('No subscription_id found in payment_orders. Assuming one-time payment.');
+    }
+
+
+    if (isSubscriptionPayment && subscriptionId) {
+      // For subscriptions, update the subscription status in your database
+      const { data: subscriptionData, error: subscriptionError, count: subscriptionCount } = await supabase
         .from('subscriptions')
-        .select('id, provider_order_id, metadata')
-        .eq('provider_order_id', order_id)
-        .single();
-        
-      // 3. If still not found, try one last approach - look in metadata
-      if (!subscriptionData?.id) {
-        console.log('Still not found. Trying to find by provider_order_id in metadata...');
-        const { data: metadataSearch, error: metadataSearchError } = await supabase
-          .from('subscriptions')
-          .select('id, provider_order_id, metadata')
-          .contains('metadata', { provider_order_id: order_id })
-          .single();
-          
-        if (metadataSearch?.id) {
-          console.log('Found subscription via metadata search:', metadataSearch);
-          return metadataSearch;
-        } else {
-          console.log('Metadata search also failed:', metadataSearchError || 'No matching subscription');
-        }
+        .update({
+          status: subscriptionStatus,
+          payment_status,
+          payment_message,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', subscriptionId); // Use the subscriptionId fetched from payment_orders
+
+      console.log('Supabase subscriptions update result - data:', subscriptionData, 'count:', subscriptionCount);
+
+      if (subscriptionError) {
+        console.error('Error updating subscription:', subscriptionError);
+        return NextResponse.json(
+          { error: 'Failed to update subscription' },
+          { status: 500 }
+        );
       }
 
-      if (subscriptionData?.id) {
-        subscriptionId = subscriptionData.id;
-        console.log('Found subscription directly by provider_order_id:', subscriptionId);
-      } else {
-        console.error('Error finding subscription by provider_order_id:', subscriptionLookupError || 'No matching subscription');
+      if (subscriptionCount === 0) {
+        console.warn('No subscription found for ID:', subscriptionId);
         return NextResponse.json(
-          { error: 'Failed to retrieve associated subscription' },
+          { error: 'Subscription not found or already processed' },
           { status: 404 }
         );
       }
-    }
 
-    // Now, update the subscription status in your database using the fetched subscription_id
-    const { data: subscriptionData, error: subscriptionError, count: subscriptionCount } = await supabase
-      .from('subscriptions')
-      .update({
-        status: subscriptionStatus,
-        payment_status,
-        payment_message,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', subscriptionId); // Use the subscriptionId fetched from payment_orders
+      // If payment is successful, update the user's profile for subscriptions
+      if (payment_status === 'SUCCESS') {
+        // Get the subscription to get the user ID using the subscription_id we already fetched
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select('user_id, plan_id')
+          .eq('id', subscriptionId) // Use the subscription_id we already retrieved
+          .single();
 
-    console.log('Supabase subscriptions update result - data:', subscriptionData, 'count:', subscriptionCount);
-
-    if (subscriptionError) {
-      console.error('Error updating subscription:', subscriptionError);
-      return NextResponse.json(
-        { error: 'Failed to update subscription' },
-        { status: 500 }
-      );
-    }
-
-    if (subscriptionCount === 0) {
-      console.warn('No subscription found for ID:', subscriptionId);
-      return NextResponse.json(
-        { error: 'Subscription not found or already processed' },
-        { status: 404 }
-      );
-    }
-
-    // If payment is successful, update the user's profile
-    if (payment_status === 'SUCCESS') {
-      // Get the subscription to get the user ID using the subscription_id we already fetched
-      const { data: subscription } = await supabase
-        .from('subscriptions')
-        .select('user_id, plan_id')
-        .eq('id', subscriptionId) // Use the subscription_id we already retrieved
-        .single();
-
-      if (subscription?.user_id) {
-        // Update the user's profile to mark as subscribed
-        await supabase
-          .from('user_profiles')
-          .update({
-            is_subscribed: true,
-            subscription_plan_id: subscription.plan_id,
-            subscription_started_at: new Date().toISOString(),
-            last_payment_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', subscription.user_id);
+        if (subscription?.user_id) {
+          // Update the user's profile to mark as subscribed
+          await supabase
+            .from('user_profiles')
+            .update({
+              is_subscribed: true,
+              subscription_plan_id: subscription.plan_id,
+              subscription_started_at: new Date().toISOString(),
+              last_payment_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', subscription.user_id);
+        }
       }
+    } else if (payment_status === 'SUCCESS' && fetchedPaymentOrder?.user_id && fetchedPaymentOrder?.plan_id) {
+      // For one-time payments, if successful, update the user's profile directly
+      console.log('Processing one-time payment success. Updating user profile.');
+      await supabase
+        .from('user_profiles')
+        .update({
+          // For one-time payments, we might not set is_subscribed to true unless it's a specific type of one-time purchase that grants subscription-like access.
+          // For now, let's assume it updates last_payment_at and potentially a specific one-time purchase record.
+          last_payment_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          // You might also want to add a field like 'last_one_time_purchase_plan_id' or similar if needed.
+        })
+        .eq('id', fetchedPaymentOrder.user_id);
+    } else if (payment_status === 'FAILED' && fetchedPaymentOrder?.user_id) {
+      // For one-time payments that failed, you might want to log or handle this differently
+      console.log('One-time payment failed for user:', fetchedPaymentOrder.user_id);
+      // Optionally, update user profile to reflect failed payment or send notification
     }
 
     return NextResponse.json({ received: true });
