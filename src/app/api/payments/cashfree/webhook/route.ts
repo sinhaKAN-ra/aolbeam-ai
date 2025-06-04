@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     console.log('All headers:', Object.fromEntries(request.headers.entries()));
 
     // Verify the webhook signature
-    const isSignatureValid = verifyWebhookSignature(body, signature);
+    const isSignatureValid = verifyWebhookSignature(body, signature, webhookTimestamp);
     console.log('Webhook signature verification result:', isSignatureValid);
     
     if (!isSignatureValid) {
@@ -137,7 +137,7 @@ export async function POST(request: Request) {
 }
 
 // Helper function to verify webhook signature
-function verifyWebhookSignature(body: string, signature: string | null): boolean {
+function verifyWebhookSignature(body: string, signature: string | null, timestamp: string | null): boolean {
   if (!signature || !process.env.CASHFREE_SECRET_KEY) {
     console.error('Missing signature or CASHFREE_SECRET_KEY');
     return false;
@@ -149,9 +149,16 @@ function verifyWebhookSignature(body: string, signature: string | null): boolean
     console.log('Using secret key:', process.env.CASHFREE_SECRET_KEY ? '***' : 'MISSING');
     
     // Create the HMAC-SHA256 signature
+    // The signed payload is timestamp + raw_body
+    if (!timestamp) {
+      console.error('Timestamp is missing for signature verification.');
+      return false;
+    }
+    const signedPayload = timestamp + body;
+    
     const computedSignature = crypto
       .createHmac('sha256', process.env.CASHFREE_SECRET_KEY)
-      .update(body)
+      .update(signedPayload)
       .digest('base64');
     
     console.log('Computed signature:', computedSignature);
