@@ -361,6 +361,8 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
     if (paymentOrderInsertError) {
       console.error('Error inserting into payment_orders:', paymentOrderInsertError);
       // This is a critical error, but we still proceed to update the subscription if possible
+    } else {
+      console.log('Successfully inserted into payment_orders with provider_order_id:', cashfreeApiResult.order_id);
     }
 
     // Update subscription with Cashfree details
