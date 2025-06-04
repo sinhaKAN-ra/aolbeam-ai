@@ -366,8 +366,7 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
       .eq('id', subscription.id);
 
     if (updateError) {
-      console.error('Error updating subscription with Cashfree ID:', updateError);
-      // Non-fatal for the client, but needs monitoring. Client gets payment URL.
+      console.error('Error updating subscription record with Cashfree details:', updateError);
     }
 
     return NextResponse.json({

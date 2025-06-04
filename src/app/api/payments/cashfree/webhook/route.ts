@@ -84,6 +84,7 @@ export async function POST(request: Request) {
     }
 
     console.log('Attempting to update subscription with provider_order_id:', order_id);
+    console.log('Attempting to update subscription with provider_order_id:', order_id);
     // Update the subscription status in your database using provider_order_id
     const { data, error, count } = await supabase
       .from('subscriptions')
