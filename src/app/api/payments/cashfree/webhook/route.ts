@@ -99,7 +99,7 @@ export async function POST(request: Request) {
     const { data: paymentOrderData, error: paymentOrderError, count: paymentOrderCount } = await supabase
       .from('payment_orders')
       .update({
-        status: subscriptionStatus, // Assuming payment_orders also has a status column
+        status: payment_status, // Use the direct payment_status from Cashfree for payment_orders
         payment_status,
         payment_message,
         updated_at: new Date().toISOString(),

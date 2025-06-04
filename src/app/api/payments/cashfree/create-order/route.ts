@@ -96,14 +96,15 @@ export async function POST(request: Request) {
     const data = await response.json();
     
     // Insert payment order
+    console.log('Attempting to insert payment_order with dbOrderId:', dbOrderId, 'and provider_order_id:', data.order_id);
     const { error: paymentOrderError } = await supabase
       .from('payment_orders')
       .insert({
         id: dbOrderId, // Use pure UUID for database primary key
         user_id: user.id,
-        plan_id: planId, // Ensure planId is saved to the database
-        amount: amount, // Use destructured amount for DB
-        currency: currency, // Use destructured currency for DB
+        plan_id: planId,
+        amount: amount,
+        currency: currency,
         payment_provider: 'cashfree',
         provider_order_id: data.order_id,
         status: 'PENDING',
@@ -113,12 +114,14 @@ export async function POST(request: Request) {
           ...data,
           order_details: orderPayload
         },
-        payment_type: paymentType, // Add payment_type to the database insert
+        payment_type: paymentType,
       });
       
     if (paymentOrderError) {
-      console.error('Error creating payment order:', paymentOrderError);
-      // Don't fail the request if DB save fails
+      console.error('CRITICAL - Error creating payment order:', paymentOrderError);
+      // We should ideally fail the request if DB save fails, but for now, log it.
+    } else {
+      console.log('Successfully inserted payment_order into Supabase.');
     }
 
     return NextResponse.json({
