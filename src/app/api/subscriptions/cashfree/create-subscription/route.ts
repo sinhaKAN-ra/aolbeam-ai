@@ -345,6 +345,24 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
     const cashfreeApiResult = serviceResponse.data;
     console.log('Cashfree subscription created via service:', cashfreeApiResult);
 
+    // Insert a record into payment_orders table
+    const { error: paymentOrderInsertError } = await supabase
+      .from('payment_orders')
+      .insert({
+        provider_order_id: cashfreeApiResult.order_id, // Cashfree's order ID
+        subscription_id: subscription.id, // Our internal subscription ID
+        status: 'PENDING', // Initial status for the payment order
+        payment_status: cashfreeApiResult.payment_status || 'PENDING', // Initial payment status from Cashfree
+        payment_message: cashfreeApiResult.payment_message || 'Payment initiated',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+
+    if (paymentOrderInsertError) {
+      console.error('Error inserting into payment_orders:', paymentOrderInsertError);
+      // This is a critical error, but we still proceed to update the subscription if possible
+    }
+
     // Update subscription with Cashfree details
     const mappedStatus = cashfreeApiResult.subscription_status?.toUpperCase();
     const finalStatus = mappedStatus === 'INITIALIZED' ? 'PENDING' : (mappedStatus || 'PENDING');
@@ -367,6 +385,18 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
 
     if (updateError) {
       console.error('Error updating subscription record with Cashfree details:', updateError);
+    } else {
+      // Verify the provider_order_id was successfully stored
+      const { data: updatedSub, error: fetchError } = await supabase
+        .from('subscriptions')
+        .select('id, provider_order_id')
+        .eq('id', subscription.id)
+        .single();
+      if (updatedSub) {
+        console.log('Successfully updated subscription with provider_order_id in DB:', updatedSub.provider_order_id);
+      } else if (fetchError) {
+        console.error('Error fetching updated subscription to verify provider_order_id:', fetchError);
+      }
     }
 
     return NextResponse.json({

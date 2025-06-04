@@ -83,10 +83,57 @@ export async function POST(request: Request) {
         subscriptionStatus = 'UNKNOWN'; // Handle any other unexpected statuses
     }
 
-    console.log('Attempting to update subscription with provider_order_id:', order_id);
-    console.log('Attempting to update subscription with provider_order_id:', order_id);
-    // Update the subscription status in your database using provider_order_id
-    const { data, error, count } = await supabase
+    console.log('Attempting to update payment_order with provider_order_id:', order_id);
+    // Update the payment_orders status in your database using provider_order_id
+    const { data: paymentOrderData, error: paymentOrderError, count: paymentOrderCount } = await supabase
+      .from('payment_orders')
+      .update({
+        status: subscriptionStatus, // Assuming payment_orders also has a status column
+        payment_status,
+        payment_message,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('provider_order_id', order_id);
+
+    console.log('Supabase payment_orders update result - data:', paymentOrderData, 'count:', paymentOrderCount);
+
+    if (paymentOrderError) {
+      console.error('Error updating payment_order:', paymentOrderError);
+      return NextResponse.json(
+        { error: 'Failed to update payment order' },
+        { status: 500 }
+      );
+    }
+
+    // If paymentOrderCount is 0, it means no record was found or updated
+    if (paymentOrderCount === 0) {
+      console.warn('No payment_order found for provider_order_id:', order_id);
+      return NextResponse.json(
+        { error: 'Payment order not found or already processed' },
+        { status: 404 }
+      );
+    }
+
+    // Fetch the payment order to get the associated subscription_id
+    const { data: fetchedPaymentOrder, error: fetchPaymentOrderError } = await supabase
+      .from('payment_orders')
+      .select('subscription_id')
+      .eq('provider_order_id', order_id)
+      .single();
+
+    if (fetchPaymentOrderError || !fetchedPaymentOrder?.subscription_id) {
+      console.error('Error fetching subscription_id from payment_orders:', fetchPaymentOrderError || 'subscription_id not found');
+      return NextResponse.json(
+        { error: 'Failed to retrieve associated subscription ID' },
+        { status: 500 }
+      );
+    }
+
+    const subscriptionId = fetchedPaymentOrder.subscription_id;
+    console.log('Found associated subscription_id:', subscriptionId);
+
+    // Now, update the subscription status in your database using the fetched subscription_id
+    const { data: subscriptionData, error: subscriptionError, count: subscriptionCount } = await supabase
       .from('subscriptions')
       .update({
         status: subscriptionStatus,
@@ -94,15 +141,23 @@ export async function POST(request: Request) {
         payment_message,
         updated_at: new Date().toISOString(),
       })
-      .eq('provider_order_id', order_id);
+      .eq('id', subscriptionId); // Use the subscriptionId fetched from payment_orders
 
-    console.log('Supabase update result - data:', data, 'count:', count);
+    console.log('Supabase subscriptions update result - data:', subscriptionData, 'count:', subscriptionCount);
 
-    if (error) {
-      console.error('Error updating subscription:', error);
+    if (subscriptionError) {
+      console.error('Error updating subscription:', subscriptionError);
       return NextResponse.json(
         { error: 'Failed to update subscription' },
         { status: 500 }
+      );
+    }
+
+    if (subscriptionCount === 0) {
+      console.warn('No subscription found for ID:', subscriptionId);
+      return NextResponse.json(
+        { error: 'Subscription not found or already processed' },
+        { status: 404 }
       );
     }
 
