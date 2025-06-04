@@ -99,6 +99,7 @@ export default function SubscriptionsPage() {
     subscriptionId?: string;
     orderId?: string;
   } | null>(null);
+  const [hasOneTimePayment, setHasOneTimePayment] = useState(false);
 
   useEffect(() => {
     if (!isAuthLoading && !user) {
@@ -192,6 +193,11 @@ export default function SubscriptionsPage() {
       try {
         const payments = await getPaymentHistory();
         setPaymentHistory(payments);
+        // Check for successful one-time payments
+        const oneTimeSuccess = payments.some(
+          (p) => p.subscription_id === null && p.status === 'success'
+        );
+        setHasOneTimePayment(oneTimeSuccess);
       } catch (paymentsErr) {
         console.error('Error loading payment history:', paymentsErr);
       } finally {
@@ -387,7 +393,7 @@ export default function SubscriptionsPage() {
               </Alert>
             )}
             
-            {!subscription ? (
+            {!subscription && !hasOneTimePayment ? (
               <Card>
                 <CardHeader>
                   <CardTitle>No Active Subscription</CardTitle>
@@ -416,9 +422,36 @@ export default function SubscriptionsPage() {
               </Card>
             ) : (
               <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
+                {/* Display one-time payment message if no active subscription but has one-time payment */}
+                {!subscription && hasOneTimePayment && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>One-Time Purchase Confirmed</CardTitle>
+                      <CardDescription>
+                        Thank you for your one-time purchase! Your access to premium features is active.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-col items-center justify-center p-6 text-center space-y-4">
+                        <div className="h-20 w-20 rounded-full bg-green-100 flex items-center justify-center">
+                          <CheckCircle className="h-10 w-10 text-green-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-medium">Enjoy Your Features</h3>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Your one-time purchase grants you access to specific premium features.
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                
+                {/* Existing subscription details card */}
+                {subscription && (
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
                       <div>
                         <CardTitle className="text-xl">
                           {subscription.plan_id.charAt(0).toUpperCase() + subscription.plan_id.slice(1)} Plan
@@ -542,6 +575,7 @@ export default function SubscriptionsPage() {
                     </Button>
                   </CardFooter>
                 </Card>
+                )}
                 
                 {/* Usage metrics */}
                 <Card className="mb-6">
@@ -695,7 +729,7 @@ export default function SubscriptionsPage() {
                       ))}
                     </div>
                   </CardContent>
-                </Card> */}
+                </Card>
                 
                 {/* Payment History */}
                 <Card>

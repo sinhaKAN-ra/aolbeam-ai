@@ -142,18 +142,65 @@ export async function cancelSubscription(subscriptionId: string): Promise<{ succ
   }
 }
 
+export async function hasPremiumAccess(): Promise<boolean> {
+  try {
+    const supabase = createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return false;
+    }
+
+    // Check for active subscription
+    const { data: subscription } = await supabase
+      .from('subscriptions')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('status', 'ACTIVE')
+      .limit(1)
+      .single();
+
+    if (subscription) {
+      return true; // User has an active subscription
+    }
+
+    // Check for successful one-time payments
+    const { data: oneTimePayment } = await supabase
+      .from('payment_orders')
+      .select('id')
+      .eq('user_id', user.id)
+      .is('subscription_id', null) // One-time payments have null subscription_id
+      .eq('status', 'success')
+      .limit(1)
+      .single();
+
+    return !!oneTimePayment; // True if a successful one-time payment exists
+  } catch (error) {
+    console.error('Error checking premium access:', error);
+    return false;
+  }
+}
+
 export async function checkSubscriptionStatus(): Promise<{ isActive: boolean; expiry?: string; plan?: string }> {
   try {
     const subscription = await getUserSubscription();
     
-    if (!subscription) {
-      return { isActive: false };
+    // If there's an active subscription, return its details
+    if (subscription && subscription.status === 'ACTIVE') {
+      return {
+        isActive: true,
+        expiry: subscription.current_period_end,
+        plan: subscription.plan_id
+      };
     }
+
+    // Otherwise, check if they have premium access via one-time payment
+    const premiumAccess = await hasPremiumAccess();
     
     return {
-      isActive: subscription.status === 'ACTIVE',
-      expiry: subscription.current_period_end,
-      plan: subscription.plan_id
+      isActive: premiumAccess,
+      expiry: undefined, // One-time payments don't have an expiry in this context
+      plan: premiumAccess ? 'one-time' : undefined // Indicate 'one-time' plan if applicable
     };
   } catch (error) {
     console.error('Error checking subscription status:', error);

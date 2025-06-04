@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 import type { UserProfile } from '@/types';
-import { getUserSubscription, Subscription } from '@/services/subscriptionService';
+import { getUserSubscription, hasPremiumAccess, Subscription } from '@/services/subscriptionService';
 
 interface ProfileFormData {
   full_name: string;
@@ -73,13 +73,14 @@ export default function SettingsPage() {
       
       if (profileError) throw profileError;
 
-      // Fetch live subscription status
+      // Fetch live subscription status and premium access
       const subscription = await getUserSubscription();
+      const premiumAccess = await hasPremiumAccess();
 
       const updatedProfile = {
         ...profileData,
-        is_subscribed: subscription?.status === 'ACTIVE',
-        subscription_plan: subscription?.plan_id || null,
+        is_subscribed: premiumAccess,
+        subscription_plan: subscription?.plan_id || (premiumAccess ? 'one-time' : null),
       };
       
       setProfile(updatedProfile);
@@ -316,13 +317,13 @@ export default function SettingsPage() {
                   
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-sm font-medium">Weekly Progress Report</h4>
-                      <p className="text-sm text-muted-foreground">Get a weekly summary of your learning progress and achievements.</p>
+                      <h4 className="text-sm font-medium">Email Notifications</h4>
+                      <p className="text-sm text-muted-foreground">Receive email notifications.</p>
                     </div>
                     <Switch
-                      checked={profile?.weekly_report || false}
-                      onCheckedChange={(checked) => handleSwitchChange(checked, 'weekly_report')}
-                      aria-label="Toggle weekly report"
+                      checked={formData.email_notifications}
+                      onCheckedChange={(checked) => setFormData({ ...formData, email_notifications: checked })}
+                      aria-label="Toggle email notifications"
                     />
                   </div>
                 </div>
