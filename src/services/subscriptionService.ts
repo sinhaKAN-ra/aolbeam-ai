@@ -12,7 +12,7 @@ export interface PlanLimit {
   isFeatured: boolean;
 }
 
-export interface PaymentHistory {
+export interface Payment {
   id: string;
   subscription_id: string | null;
   amount: number;
@@ -367,7 +367,7 @@ export async function getUserUsageMetrics(): Promise<UsageMetrics> {
 /**
  * Get payment history for the current user
  */
-export async function getPaymentHistory(): Promise<PaymentHistory[]> {
+export async function getPaymentHistory(): Promise<Payment[]> {
   try {
     const supabase = createClient();
     
@@ -391,7 +391,7 @@ export async function getPaymentHistory(): Promise<PaymentHistory[]> {
       return [];
     }
     
-    return payments as unknown as PaymentHistory[];
+    return payments as unknown as Payment[];
   } catch (error) {
     console.error('Error getting payment history:', error);
     return [];

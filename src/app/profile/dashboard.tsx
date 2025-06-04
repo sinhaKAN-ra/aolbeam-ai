@@ -9,8 +9,8 @@ import Link from 'next/link';
 // Auth and Data
 import { useAuth } from '@/contexts/AuthContext';
 import supabaseClient from '@/lib/supabase/client';
-import type { Subscription, UsageMetrics, PlanLimit } from '@/services/subscriptionService';
-import { getUserUsageMetrics, getSubscriptionPlan } from '@/services/subscriptionService';
+import type { Subscription, UsageMetrics, PlanLimit, Payment } from '@/services/subscriptionService';
+import { getUserUsageMetrics, getSubscriptionPlan, getPaymentHistory } from '@/services/subscriptionService';
 import { useToast } from '@/hooks/use-toast';
 
 // UI Components
@@ -68,6 +68,7 @@ export default function Dashboard() {
   const [usageMetrics, setUsageMetrics] = useState<UsageMetrics | null>(null);
   const [isUsageLoading, setIsUsageLoading] = useState(true);
   const [usageError, setUsageError] = useState<string | null>(null);
+  const [hasOneTimePayment, setHasOneTimePayment] = useState(false); // New state for one-time payments
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
 
@@ -165,7 +166,7 @@ export default function Dashboard() {
     
     try {
       // Get subscription and plan info from supabase directly
-      const { data, error } = await supabaseClient.from('subscriptions')
+      const { data: subData, error: subError } = await supabaseClient.from('subscriptions')
         .select('*')
         .eq('user_id', user.id)
         .eq('status', 'ACTIVE')
@@ -173,28 +174,41 @@ export default function Dashboard() {
         .limit(1)
         .single();
       
-      if (error) {
-        setIsSubscriptionLoading(false);
-        console.error('Error fetching subscription:', error);
-        return;
+      if (subError) {
+        console.error('Error fetching subscription:', subError);
+        // Do not return here, continue to fetch payment history
       }
       
-      setSubscription(data as unknown as Subscription);
-      
+      setSubscription(subData as unknown as Subscription);
+      console.log('Dashboard: fetchSubscriptionAndUsage: subscription data', subData);
+
+      // Fetch payment history to check for one-time payments
+      try {
+        const payments: Payment[] = await getPaymentHistory();
+        const oneTimeSuccess = payments.some(
+          (p) => p.subscription_id === null && p.status?.toLowerCase() === 'success'
+        );
+        setHasOneTimePayment(oneTimeSuccess);
+        console.log('Dashboard: fetchSubscriptionAndUsage: payment history', payments);
+        console.log('Dashboard: fetchSubscriptionAndUsage: hasOneTimePayment calculated as', oneTimeSuccess);
+      } catch (paymentsErr) {
+        console.error('Dashboard: Error loading payment history:', paymentsErr);
+      }
+
       // Get usage metrics
       try {
         const metrics = await getUserUsageMetrics();
         setUsageMetrics(metrics);
       } catch (usageError) {
         setUsageError('Failed to load usage metrics');
-        console.error('Error fetching usage metrics:', usageError);
+        console.error('Dashboard: Error fetching usage metrics:', usageError);
       } finally {
         setIsUsageLoading(false);
       }
       
       // Get current plan details
-      if (data?.plan_id) {
-        const plan = await getSubscriptionPlan(data.plan_id);
+      if (subData?.plan_id) {
+        const plan = await getSubscriptionPlan(subData.plan_id);
         setCurrentPlan(plan);
       }
       
@@ -430,8 +444,8 @@ export default function Dashboard() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Current Plan</span>
-                  <Badge variant={profile?.is_subscribed ? "default" : "outline"}>
-                    {subscription?.plan_id || profile?.subscription_plan || 'Free'}
+                  <Badge variant={subscription ? "default" : (hasOneTimePayment ? "secondary" : "outline")}>
+                    {subscription?.plan_id || (hasOneTimePayment ? 'One-Time Purchase' : 'Free')}
                   </Badge>
                 </div>
                 <Separator />
@@ -440,7 +454,7 @@ export default function Dashboard() {
                     <span className="text-sm font-medium">✨ AI Interactions</span>
                     <span className="text-sm">
                       {!profile ? '15 total' : 
-                       !profile.is_subscribed ? '25 total' :
+                       !profile.is_subscribed ? '100 / day' :
                        subscription?.plan_id === 'weekly' ? '100 / day' :
                        subscription?.plan_id === 'monthly' ? '500 / day' :
                        subscription?.plan_id === 'quarterly' ? '1,500 / day' : 'Unlimited'}
@@ -464,7 +478,7 @@ export default function Dashboard() {
           </CardContent>
           <CardFooter className="border-t px-6 py-4">
             <Link href="/profile/subscriptions" className="w-full">
-              <Button variant={profile?.is_subscribed ? "outline" : "default"} className="w-full">
+              <Button variant={subscription ? "outline" : (hasOneTimePayment ? "outline" : "default")} className="w-full">
                 {profile?.is_subscribed ? 'Manage Subscription' : 'Upgrade Now'}
               </Button>
             </Link>

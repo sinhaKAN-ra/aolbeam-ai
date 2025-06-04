@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 import type { UserProfile } from '@/types';
-import { getUserSubscription, hasPremiumAccess, Subscription } from '@/services/subscriptionService';
+import { getUserSubscription, hasPremiumAccess, getPaymentHistory, Subscription, Payment } from '@/services/subscriptionService';
 
 interface ProfileFormData {
   full_name: string;
@@ -39,7 +39,9 @@ export default function SettingsPage() {
     email_notifications: false,
   });
   const [activeTab, setActiveTab] = useState('account');
-  
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [hasOneTimePayment, setHasOneTimePayment] = useState(false);
+
   const supabase = createSupabaseBrowserClient();
   
   useEffect(() => {
@@ -74,13 +76,19 @@ export default function SettingsPage() {
       if (profileError) throw profileError;
 
       // Fetch live subscription status and premium access
-      const subscription = await getUserSubscription();
-      const premiumAccess = await hasPremiumAccess();
+      const fetchedSubscription = await getUserSubscription();
+      setSubscription(fetchedSubscription);
+
+      const payments = await getPaymentHistory();
+      const oneTimeSuccess = payments.some(
+        (p) => p.subscription_id === null && p.status?.toLowerCase() === 'success'
+      );
+      setHasOneTimePayment(oneTimeSuccess);
 
       const updatedProfile = {
         ...profileData,
-        is_subscribed: premiumAccess,
-        subscription_plan: subscription?.plan_id || (premiumAccess ? 'one-time' : null),
+        is_subscribed: !!fetchedSubscription || oneTimeSuccess,
+        subscription_plan: fetchedSubscription?.plan_id || (oneTimeSuccess ? 'one-time' : null),
       };
       
       setProfile(updatedProfile);
@@ -242,18 +250,28 @@ export default function SettingsPage() {
                     <div className="space-y-2">
                       <Label>Account Status</Label>
                       <div className="flex items-center gap-2">
-                        <div className={`h-2.5 w-2.5 rounded-full ${profile.is_subscribed ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                        <span className="text-sm">
-                          {profile.is_subscribed ? 'Premium Account' : 'Free Account'}
-                        </span>
-                        {!profile.is_subscribed && (
+                        <div className={`h-2.5 w-2.5 rounded-full ${subscription ? 'bg-green-500' : (hasOneTimePayment ? 'bg-blue-500' : 'bg-yellow-500')}`}></div>
+                        <p className="text-sm font-medium leading-none">
+                          {subscription ? 'Premium Account' : (hasOneTimePayment ? 'One-Time Purchase' : 'Free Account')}
+                        </p>
+                        {!subscription && !hasOneTimePayment && (
+                          <p className="text-sm text-muted-foreground">
+                            Upgrade to a premium plan for more features.
+                          </p>
+                        )}
+                        {hasOneTimePayment && !subscription && (
+                          <p className="text-sm text-muted-foreground">
+                            Thank you for your one-time purchase! Consider upgrading for full access.
+                          </p>
+                        )}
+                        {!subscription && !hasOneTimePayment && (
                           <Button 
                             type="button" 
                             variant="link" 
-                            onClick={() => router.push('/pricing')} 
-                            className="px-2 h-auto text-primary text-sm"
+                            className="p-0 h-auto text-sm"
+                            onClick={() => router.push('/profile/subscriptions')}
                           >
-                            Upgrade
+                            Upgrade Now
                           </Button>
                         )}
                       </div>

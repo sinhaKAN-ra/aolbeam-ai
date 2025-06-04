@@ -39,7 +39,7 @@ import type {
   Subscription, 
   PlanLimit, 
   UsageMetrics, 
-  PaymentHistory
+  Payment
 } from '@/services/subscriptionService';
 
 // UI Components
@@ -81,7 +81,7 @@ export default function SubscriptionsPage() {
   const [isUsageLoading, setIsUsageLoading] = useState(true);
   
   // Payment history state
-  const [paymentHistory, setPaymentHistory] = useState<PaymentHistory[]>([]);
+  const [paymentHistory, setPaymentHistory] = useState<Payment[]>([]);
   const [isPaymentHistoryLoading, setIsPaymentHistoryLoading] = useState(true);
   
   // Plan change state
@@ -126,9 +126,19 @@ export default function SubscriptionsPage() {
     try {
       const result = await changePlan(planId);
       
-      if (result.success && result.redirectUrl) {
-        // Redirect to payment page
-        window.location.href = result.redirectUrl;
+      if (result.success) {
+        if (result.redirectUrl) {
+          // Redirect to payment page
+          window.location.href = result.redirectUrl;
+        } else {
+          // If no redirect, assume plan change was synchronous and refresh data
+          toast({
+            title: 'Success',
+            description: 'Your plan has been updated successfully.',
+            variant: 'default',
+          });
+          refreshData();
+        }
       } else {
         toast({
           title: 'Error',
@@ -158,6 +168,7 @@ export default function SubscriptionsPage() {
       // Fetch subscription data
       const sub = await getUserSubscription();
       setSubscription(sub);
+      console.log('fetchSubscription: subscription data', sub);
       
       // Fetch plan details if subscription exists
       if (sub) {
@@ -195,9 +206,12 @@ export default function SubscriptionsPage() {
         setPaymentHistory(payments);
         // Check for successful one-time payments
         const oneTimeSuccess = payments.some(
-          (p) => p.subscription_id === null && p.status === 'success'
+          (p) => p.subscription_id === null && p.status?.toLowerCase() === 'success'
         );
         setHasOneTimePayment(oneTimeSuccess);
+        console.log('fetchSubscription: payment history', payments);
+        console.log('fetchSubscription: hasOneTimePayment calculated as', oneTimeSuccess);
+        console.log('fetchSubscription: final hasOneTimePayment state', hasOneTimePayment); // Note: This might log the old state due to setState async nature
       } catch (paymentsErr) {
         console.error('Error loading payment history:', paymentsErr);
       } finally {
@@ -454,7 +468,7 @@ export default function SubscriptionsPage() {
                       <div className="flex items-center justify-between">
                       <div>
                         <CardTitle className="text-xl">
-                          {subscription.plan_id.charAt(0).toUpperCase() + subscription.plan_id.slice(1)} Plan
+                          {currentPlan?.name || (subscription.plan_id.charAt(0).toUpperCase() + subscription.plan_id.slice(1))} Plan
                         </CardTitle>
                         <CardDescription>Current subscription details</CardDescription>
                       </div>
@@ -531,6 +545,15 @@ export default function SubscriptionsPage() {
                       )}
                     </div>
                   </CardContent>
+                  {hasOneTimePayment && (
+                    <CardContent>
+                      <Separator className="my-4" />
+                      <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        <span>You also have one or more one-time purchases. See Payment History for details.</span>
+                      </div>
+                    </CardContent>
+                  )}
                   <CardFooter className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center border-t pt-6">
                     {!subscription.cancel_at_period_end && subscription.status === 'ACTIVE' && (
                       <AlertDialog>
@@ -761,11 +784,11 @@ export default function SubscriptionsPage() {
                             <div className="text-sm">{formatDate(payment.created_at)}</div>
                             <div className="text-sm">{formatCurrency(payment.amount, payment.currency)}</div>
                             <div>
-                              {payment.status === 'success' ? (
+                              {payment.status?.toLowerCase() === 'success' ? (
                                 <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                                   Paid
                                 </Badge>
-                              ) : payment.status === 'pending' ? (
+                              ) : payment.status?.toLowerCase() === 'pending' ? (
                                 <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
                                   Pending
                                 </Badge>
@@ -774,6 +797,9 @@ export default function SubscriptionsPage() {
                                   {payment.status}
                                 </Badge>
                               )}
+                              <span className="block text-xs text-muted-foreground mt-1">
+                                {payment.subscription_id ? 'Subscription' : 'One-Time Purchase'}
+                              </span>
                             </div>
                             <div>
                               {payment.invoice_url ? (
