@@ -233,13 +233,16 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
     console.log('Using plan details:', planDetails);
 
     // Generate a unique subscription ID (standard UUID format) and order ID (formatted string)
+    // This will be our internal database ID
     const subscriptionId = uuidv4(); // Use standard UUID format for database compatibility
+    // This will be sent to Cashfree API as the subscription ID
     const cashfreeSubId = `sub_${uuidv4().replace(/-/g, '').substring(0, 16)}`; // Formatted ID for Cashfree
-    const orderId = `order_${uuidv4().replace(/-/g, '').substring(0, 16)}`;
+    // This will be our internally generated order ID - Cashfree will return its own order_id later
+    const generatedOrderId = `order_${uuidv4().replace(/-/g, '').substring(0, 16)}`;
     const today = new Date();
     
     // Set return URL for after payment completion
-    const returnUrl = `${APP_URL}/profile/subscriptions?subscription_id=${cashfreeSubId}&order_id=${orderId}&status=success`;
+    const returnUrl = `${APP_URL}/profile/subscriptions?subscription_id=${cashfreeSubId}&order_id=${generatedOrderId}&status=success`;
     const notifyUrl = `${APP_URL}/api/subscriptions/cashfree/webhook`;
 
     // Determine interval_type and interval_count for Supabase storage
@@ -262,11 +265,13 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
       }
     } // For 'one_time', these might remain undefined or be set to a specific value
 
-    // Insert initial subscription record into Supabase
+    console.log('Attempting to create subscription with ID:', subscriptionId);
+    
+    // Insert initial subscription record into Supabase - use standard UUID as primary key
     const { data: subscription, error: subInsertError } = await supabase
       .from('subscriptions')
       .insert({
-        id: cashfreeSubId, // Use the same UUID for our internal record
+        id: subscriptionId, // Use standard UUID format for the primary key
         user_id: user.id,
         plan_id: planDetails.id,
         status: 'PENDING', // Initial status, assuming 'PENDING' is an allowed enum value
@@ -278,7 +283,8 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
         metadata: {
           chosen_plan: planDetails, // Store the full chosen plan object from your config
           customer_phone: formattedPhone,
-          internal_cashfree_sub_id: cashfreeSubId, // Link to the ID used with Cashfree
+          internal_cashfree_sub_id: cashfreeSubId, // The ID sent to Cashfree API
+          internal_db_id: subscriptionId, // Our database's UUID
         },
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -298,8 +304,15 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
 
     if (!subscription || !subscription.id) {
       console.error('Initial subscription record is null or missing ID after insert. Error:', subInsertError);
+      const errorDetails = subInsertError ? 
+        (typeof subInsertError === 'object' ? 
+          (subInsertError === null ? 'null error object' : 
+            ('message' in subInsertError ? String(subInsertError.message) : JSON.stringify(subInsertError))
+          ) : String(subInsertError)
+        ) : 'Unknown error';
+      
       return NextResponse.json(
-        { error: 'Failed to retrieve subscription ID after creation.', details: typeof subInsertError === 'object' && subInsertError !== null ? String(subInsertError.message || JSON.stringify(subInsertError)) : String(subInsertError) },
+        { error: 'Failed to retrieve subscription ID after creation.', details: errorDetails },
         { status: 500 }
       );
     }
@@ -308,7 +321,7 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
 
     // Prepare the subscription payload for Cashfree
     const subscriptionPayload: CashfreeSubscriptionRequestPayload = {
-      subscription_id: cashfreeSubId, // Our internal unique ID for this attempt
+      subscription_id: cashfreeSubId, // Use the formatted subscription ID for Cashfree
       plan_details: {
         plan_id: planDetails.id, // Use our plan ID as Cashfree's plan_id
         plan_name: planDetails.name,
@@ -329,7 +342,7 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
         return_url: returnUrl,
         notify_url: notifyUrl
       },
-      subscription_note: `Subscription for ${planDetails.name}`,
+      subscription_note: `Subscription for ${planDetails.name} (DB ID: ${subscriptionId})`, // Include our ID in the note field
       auth_attempts: 3, // Number of retry attempts for failed payments
       subscription_expiry_time: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days from now
     } as const; // Using 'as const' to ensure type safety
@@ -354,11 +367,17 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
         })
         .eq('id', subscription.id);
 
+      // Safely extract error details from payment provider response
+      const errorMessage = serviceResponse.error && typeof serviceResponse.error === 'object' ?
+        (serviceResponse.error.message || 'Unknown payment provider error') : 'Unknown payment provider error';
+      const errorCode = serviceResponse.error && typeof serviceResponse.error === 'object' ?
+        (serviceResponse.error.code || 'UNKNOWN') : 'UNKNOWN';
+      
       return NextResponse.json(
         {
           error: 'Payment provider error',
-          details: serviceResponse.error.message,
-          provider_code: serviceResponse.error.code,
+          details: errorMessage,
+          provider_code: errorCode,
         },
         { status: 502 } // Bad Gateway, as we failed to interact with upstream service
       );
@@ -366,19 +385,38 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
 
     const cashfreeApiResult = serviceResponse.data;
     console.log('Cashfree subscription created via service:', cashfreeApiResult);
+    
+    // Validate that we have an order_id from Cashfree
+    if (!cashfreeApiResult.order_id) {
+      console.error('Missing order_id in Cashfree API response:', cashfreeApiResult);
+      return NextResponse.json(
+        { error: 'Missing order_id in Cashfree API response' },
+        { status: 502 }
+      );
+    }
+    
+    console.log('CRITICAL - Data to be stored:');
+    console.log('- Internal DB subscription ID:', subscriptionId);
+    console.log('- Cashfree subscription ID:', cashfreeSubId);
+    console.log('- Cashfree order_id:', cashfreeApiResult.order_id);
 
 
-    const { error: paymentOrderInsertError } = await supabase
+    // Store exact order ID string for consistent matching
+    const orderId = String(cashfreeApiResult.order_id).trim();
+    
+    const { data: paymentOrder, error: paymentOrderInsertError } = await supabase
       .from('payment_orders')
       .insert({
-        provider_order_id: cashfreeApiResult.order_id, // Cashfree's order ID
-        subscription_id: subscription.id, // Our internal subscription ID
+        provider_order_id: orderId, // Standardized Cashfree order ID
+        subscription_id: subscriptionId, // Our internal UUID subscription ID
         status: 'PENDING', // Initial status for the payment order
         payment_status: cashfreeApiResult.payment_status || 'PENDING', // Initial payment status from Cashfree
         payment_message: cashfreeApiResult.payment_message || 'Payment initiated',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      });
+      })
+      .select()
+      .single();
 
     if (paymentOrderInsertError) {
       console.error('Error inserting into payment_orders:', paymentOrderInsertError);
@@ -395,17 +433,19 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
       .from('subscriptions')
       .update({
         provider_subscription_id: cashfreeApiResult.cf_subscription_id, // Cashfree's persistent subscription ID
-        provider_order_id: cashfreeApiResult.order_id, // Store Cashfree's order ID for webhook lookup
+        provider_order_id: orderId, // Store standardized Cashfree order ID for webhook lookup
         status: finalStatus,
         metadata: {
           chosen_plan: planDetails, // Store the full chosen plan object
           customer_phone: formattedPhone,
           internal_cashfree_sub_id: cashfreeSubId,
           cashfree_response: cashfreeApiResult,
+          provider_order_id: orderId, // Also store in metadata for redundancy
+          internal_db_id: subscriptionId, // Our database's UUID for consistency
         },
         updated_at: new Date().toISOString(),
       })
-      .eq('id', subscription.id);
+      .eq('id', subscriptionId); // Use correct subscriptionId here
 
     if (updateError) {
       console.error('Error updating subscription record with Cashfree details:', updateError);
@@ -413,8 +453,8 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
       // Verify the provider_order_id was successfully stored
       const { data: updatedSub, error: fetchError } = await supabase
         .from('subscriptions')
-        .select('id, provider_order_id')
-        .eq('id', subscription.id)
+        .select('id, provider_order_id, provider_subscription_id')
+        .eq('id', subscriptionId)
         .single();
       if (updatedSub) {
         console.log('Successfully updated subscription with provider_order_id in DB:', updatedSub.provider_order_id);
@@ -428,9 +468,11 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
 
     return NextResponse.json({
       success: true,
-      subscription_id: subscription.id, // Include subscription ID for debugging
+      subscription_id: subscriptionId, // Include our internal subscription ID
+      cashfree_subscription_id: cashfreeSubId, // Include Cashfree subscription ID
       subscription_session_id: cashfreeApiResult.subscription_session_id, // For the payment page session
       auth_url: cashfreeApiResult.auth_link, // URL to redirect user for payment
+      provider_order_id: orderId, // Include order ID for tracking
     });
 
   } catch (error) { // This is the outer catch block

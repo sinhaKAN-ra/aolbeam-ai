@@ -52,7 +52,13 @@ export async function POST(request: Request) {
     }
 
     const payload = JSON.parse(body);
-    const { data: { order: { order_id }, payment: { payment_status, payment_message } } } = payload;
+    console.log('Full webhook payload:', JSON.stringify(payload, null, 2));
+    
+    // Extract and standardize the order_id
+    const { data: { order: { order_id: rawOrderId }, payment: { payment_status, payment_message } } } = payload;
+    const order_id = String(rawOrderId).trim(); // Ensure consistent string format
+    
+    console.log('CRITICAL - Webhook processing order_id:', order_id);
 
     if (!order_id || !payment_status) {
       return NextResponse.json(
@@ -127,9 +133,11 @@ export async function POST(request: Request) {
     let subscriptionId: string | null = null;
 
     // Fetch the associated subscription_id from payment_orders
-    const { data: fetchedPaymentOrder, error: fetchPaymentOrderError } = await supabase
+    // Try to find payment_order with exact provider_order_id match
+    console.log('Querying payment_orders with provider_order_id:', order_id);
+    let { data: fetchedPaymentOrder, error: fetchPaymentOrderError } = await supabase
       .from('payment_orders')
-      .select('subscription_id')
+      .select('subscription_id, provider_order_id')
       .eq('provider_order_id', order_id)
       .single();
 
@@ -140,11 +148,29 @@ export async function POST(request: Request) {
       console.log('No subscription_id found in payment_orders, trying direct lookup in subscriptions table...');
       
       // 2. Try to find subscription directly by provider_order_id (fallback)
+      console.log('Trying alternate lookup: searching subscriptions table with provider_order_id:', order_id);
       const { data: subscriptionData, error: subscriptionLookupError } = await supabase
         .from('subscriptions')
-        .select('id')
+        .select('id, provider_order_id, metadata')
         .eq('provider_order_id', order_id)
         .single();
+        
+      // 3. If still not found, try one last approach - look in metadata
+      if (!subscriptionData?.id) {
+        console.log('Still not found. Trying to find by provider_order_id in metadata...');
+        const { data: metadataSearch, error: metadataSearchError } = await supabase
+          .from('subscriptions')
+          .select('id, provider_order_id, metadata')
+          .contains('metadata', { provider_order_id: order_id })
+          .single();
+          
+        if (metadataSearch?.id) {
+          console.log('Found subscription via metadata search:', metadataSearch);
+          return metadataSearch;
+        } else {
+          console.log('Metadata search also failed:', metadataSearchError || 'No matching subscription');
+        }
+      }
 
       if (subscriptionData?.id) {
         subscriptionId = subscriptionData.id;
