@@ -14,7 +14,7 @@ export interface PlanLimit {
 
 export interface PaymentHistory {
   id: string;
-  subscription_id: string;
+  subscription_id: string | null;
   amount: number;
   currency: string;
   status: 'success' | 'failed' | 'pending' | 'refunded';
@@ -332,24 +332,11 @@ export async function getPaymentHistory(): Promise<PaymentHistory[]> {
       return [];
     }
     
-    // Get user's subscriptions
-    const { data: subscriptions, error: subscriptionError } = await supabase
-      .from('subscriptions')
-      .select('id')
-      .eq('user_id', user.id);
-    
-    if (subscriptionError || !subscriptions.length) {
-      console.error('Error getting subscriptions:', subscriptionError);
-      return [];
-    }
-    
-    const subscriptionIds = subscriptions.map(sub => sub.id);
-    
-    // Get payment history for these subscriptions
+    // Get all payment orders for the current user, including one-time payments (subscription_id is NULL)
     const { data: payments, error: paymentsError } = await supabase
       .from('payment_orders')
       .select('*')
-      .in('subscription_id', subscriptionIds)
+      .eq('user_id', user.id) // Filter by user_id
       .order('created_at', { ascending: false });
     
     if (paymentsError) {
