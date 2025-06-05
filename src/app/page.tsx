@@ -70,7 +70,12 @@ export default function AOLBEAMPage() {
   // History and interactions
   const [history, setHistory] = useState<InteractionHistoryItem[]>([]);
   const [guestInteractionCount, setGuestInteractionCount] = useLocalStorage<number>('aolbeamGuestInteractionCount', 0);
-  const { checkInteractionLimit, recordInteraction, requireInteraction } = useInteractionLimit();
+  const { checkInteractionLimit, recordInteraction, requireInteraction } = useInteractionLimit(
+    currentUser,
+    guestInteractionCount,
+    setGuestInteractionCount,
+    FREE_INTERACTION_LIMIT
+  );
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [isClientMounted, setIsClientMounted] = useState(false);
 
