@@ -13,6 +13,44 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
+// Helper function for delays
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Helper function for retry logic
+async function retryWithExponentialBackoff<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  initialDelay = 1000, // 1 second
+  maxDelay = 30000 // 30 seconds
+): Promise<T> {
+  let attempt = 0;
+  let currentDelay = initialDelay;
+  while (attempt < retries) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      attempt++;
+      // Check if the error indicates a model overload or service unavailable
+      // This condition might need adjustment based on the exact error structure from Genkit/Google SDK
+      const isServiceUnavailable = 
+        (error.message && (error.message.includes('503') || error.message.toLowerCase().includes('service unavailable') || error.message.toLowerCase().includes('model is overloaded'))) ||
+        (error.status === 503);
+
+      if (isServiceUnavailable && attempt < retries) {
+        console.warn(`AI Service unavailable (attempt ${attempt}/${retries}). Retrying in ${currentDelay}ms... Error: ${error.message}`);
+        await delay(currentDelay);
+        currentDelay = Math.min(currentDelay * 2, maxDelay); // Exponential backoff
+      } else {
+        // For other errors or if retries exhausted, re-throw the error
+        console.error(`AI call failed after ${attempt} attempts or due to non-retryable error:`, error);
+        throw error; 
+      }
+    }
+  }
+  // Should not be reached if retries are exhausted and error is thrown, but as a fallback:
+  throw new Error(`AI call failed after ${retries} retries.`);
+}
+
 const GeneratePracticeProblemInputSchema = z.object({
   topic: z.string().describe('The topic for which to generate a practice problem.'),
   problemType: z.enum(['theory', 'practical', 'conceptual', 'numerical', 'diagram_based']).describe('The type of problem to generate.'),
@@ -52,10 +90,16 @@ export async function generatePracticeProblem(input: GeneratePracticeProblemInpu
     difficulty
   };
   
-  const result = await generatePracticeProblemFlow(validatedInput);
-  
-  // Ensure the output difficulty matches the validated input
-  return { ...result, difficulty };
+  try {
+    const result = await generatePracticeProblemFlow(validatedInput);
+    // Ensure the output difficulty matches the validated input
+    return { ...result, difficulty };
+  } catch (error: any) {
+    console.error("Error in generatePracticeProblem:", error.message);
+    // Re-throw the error to be caught by the calling function in page.tsx
+    // You might want to transform it into a more user-friendly error object here
+    throw new Error(`Failed to generate practice problem: ${error.message}`);
+  }
 }
 
 const prompt = ai.definePrompt({
@@ -147,8 +191,18 @@ const generatePracticeProblemFlow = ai.defineFlow(
     outputSchema: GeneratePracticeProblemOutputSchema.omit({ difficulty: true }),
   },
   async (input) => {
-    const {output} = await prompt(input);
-    return output!;
+    // Use the retry helper for the prompt call
+    const result = await retryWithExponentialBackoff(async () => {
+      const { output } = await prompt(input);
+      if (!output) {
+        // This case might happen if the prompt itself fails in a non-exception way
+        // or if the model returns an empty/invalid response that Genkit handles by returning null/undefined output
+        console.error("AI prompt returned no output or an invalid structure.");
+        throw new Error("AI model did not return a valid output.");
+      }
+      return output;
+    });
+    return result;
   }
 );
 

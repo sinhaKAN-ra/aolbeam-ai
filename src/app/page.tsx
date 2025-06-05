@@ -44,6 +44,17 @@ const FREE_INTERACTION_LIMIT = 25;
 const ALL_CONCRETE_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
 
 export default function AOLBEAMPage() {
+
+  const isAIServiceOverloadError = (errorMessage: string): boolean => {
+    const lowerMessage = errorMessage.toLowerCase();
+    return (
+      lowerMessage.includes('503') ||
+      lowerMessage.includes('service unavailable') ||
+      lowerMessage.includes('model is overloaded') ||
+      lowerMessage.includes('[googlegenerativeaierror]') // Specific to Google errors
+    );
+  };
+
   const { toast } = useToast();
   const { user: currentUser, isLoading: isAuthLoading } = useAuth();
   const supabase = useSupabase();
@@ -462,12 +473,25 @@ const handleGenerateProblem = async (topic: string, type: ProblemType, difficult
     });
     toast({ title: "Problem Generated!", description: `A new ${actualProblemTypeForAI} problem on "${topic}" (${problemDifficulty}) is ready.` });
     problemGeneratedSuccessfully = true;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Page: Error generating problem:", error);
-    toast({ variant: "destructive", title: "Error", description: "Failed to generate problem. Please try again." });
+    if (error.message && isAIServiceOverloadError(error.message)) {
+      toast({
+        variant: "destructive",
+        title: "AI Service Busy",
+        description: "The AI model is currently experiencing high demand. Please try again in a few moments.",
+      });
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Error Generating Problem",
+        description: error.message || "An unexpected error occurred. Please try again.",
+      });
+    }
     problemGeneratedSuccessfully = false;
   } finally {
     setIsLoadingProblem(false);
+    // No refreshInteractionStatus here, it's handled by requireInteraction and the logic below for paywall
   }
 
   // After the AI action has been attempted, if it was successful,
@@ -587,12 +611,25 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
     setEvaluationResult(evalOutput);
     toast({ title: "Answer Evaluated", description: evalOutput.isCorrect ? "Your answer is correct!" : "Your answer needs improvement." });
     evaluationSuccessful = true;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Page: Error evaluating answer:", error);
-    toast({ variant: "destructive", title: "Error", description: "Failed to evaluate answer. Please try again." });
+    if (error.message && isAIServiceOverloadError(error.message)) {
+      toast({
+        variant: "destructive",
+        title: "AI Service Busy",
+        description: "The AI model is currently experiencing high demand and could not evaluate. Please try again in a few moments.",
+      });
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Error Evaluating Answer",
+        description: error.message || "An unexpected error occurred. Please try again.",
+      });
+    }
     evaluationSuccessful = false;
   } finally {
     setIsLoadingEvaluation(false);
+    // No refreshInteractionStatus here, it's handled by requireInteraction and the logic below for paywall
   }
 
   if (evaluationSuccessful) {
@@ -611,83 +648,87 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
         variant: "destructive",
         title: "Interaction Limit Reached",
         description: "Your current plan's interaction limit has been reached. Please upgrade to continue."
-      });
-    }
-  }
+      }); // Closes the toast call for interactionResult.showUpgradeModal
+    } // Closes 'else if (interactionResult.showUpgradeModal)'
+  } // Closes 'if (evaluationSuccessful)' or a similar block that contains these interaction limit checks
   await refreshInteractionStatus();
-};
+}; // Closes 'handleEvaluateAnswer'
+  const handleGenerateProblemInsights = async (problemStatement: string, topicToFetch: string) => {
+    // console.log("handleGenerateProblemInsights called with:", { problemStatement, topicToFetch });
 
-  const handleGenerateProblemInsights = async (problemStatement: string, topicToFetch: string) => { 
-    try {
-      // console.log("handleGenerateProblemInsights called with:", { problemStatement, topicToFetch });
-      
-      if (currentUser && isLoadingPageProfile) return; // Still loading user profile
+    if (currentUser && isLoadingPageProfile) return; // Still loading user profile
 
-      const interactionResult = await requireInteraction('insight');
+    const interactionResult = await requireInteraction('insight');
 
-      if (!interactionResult.allowed) {
-        if (interactionResult.showLoginModal) {
-          setPaywallContext('guestLimitReached');
-          setShowPaywall(true);
-          toast({ 
-            variant: "destructive", 
-            title: "Login Required", 
-            description: "Please sign up or log in to continue generating insights." 
-          });
-        } else if (interactionResult.showUpgradeModal) {
-          setPaywallContext('loggedInLimitReached');
-          setShowPaywall(true);
-          toast({ 
-            variant: "destructive", 
-            title: "Upgrade Required", 
-            description: "Please upgrade to continue generating insights." 
-          });
-        }
-        return;
-      }
-      
-      // console.log("Fetching insights for:", { problemStatement, topicToFetch });
-      setIsLoadingInsights(true); 
-      
-
-      // The interaction has already been recorded by requireInteraction in handleGenerateProblemInsights
-      const result = await generateProblemInsights({ 
-        problemStatement, 
-        topic: topicToFetch 
-      });
-      
-      // console.log("Generated insights:", result);
-      
-      // Store the complete insights object
-      const insightsString = JSON.stringify(result, null, 2);
-      setProblemInsights(insightsString);
-      
-      if (currentUser) {
-        await updateLastHistoryItem({ 
-          isTopicRevised: true, 
-          topicDetails: insightsString 
+    if (!interactionResult.allowed) {
+      if (interactionResult.showLoginModal) {
+        setPaywallContext('guestLimitReached');
+        setShowPaywall(true);
+        toast({
+          variant: "destructive",
+          title: "Login Required",
+          description: "Please sign up or log in to continue generating insights."
+        });
+      } else if (interactionResult.showUpgradeModal) {
+        setPaywallContext('loggedInLimitReached');
+        setShowPaywall(true);
+        toast({
+          variant: "destructive",
+          title: "Upgrade Required",
+          description: "Please upgrade to continue generating insights."
         });
       }
-      
-      toast({ 
-        title: "Problem Insights Fetched", 
-        description: `Insights for the current problem are now available.` 
+      return; // Exit early if not allowed
+    }
+
+    setIsLoadingInsights(true); // Set loading state before starting the async operation
+
+    try {
+      // console.log("Fetching insights for:", { problemStatement, topicToFetch });
+      const result = await generateProblemInsights({
+        problemStatement,
+        topic: topicToFetch
       });
-      
-      return result;
-    } catch (error) {
+
+      // console.log("Generated insights:", result);
+
+      const insightsString = JSON.stringify(result, null, 2);
+      setProblemInsights(insightsString);
+
+      if (currentUser) {
+        await updateLastHistoryItem({
+          isTopicRevised: true,
+          topicDetails: insightsString
+        });
+      }
+
+      toast({
+        title: "Problem Insights Fetched",
+        description: `Insights for the current problem are now available.`
+      });
+      // If 'result' needs to be returned by handleGenerateProblemInsights, do it here.
+      // return result;
+
+    } catch (error: any) {
       console.error("Page: Error in handleGenerateProblemInsights:", error);
-      toast({ 
-        variant: "destructive", 
-        title: "Error", 
-        description: error instanceof Error ? error.message : "Failed to fetch problem insights." 
-      });
-      setProblemInsights("Failed to load insights. Please try again.");
-      throw error; // Re-throw to allow error handling in the calling component
+      if (error.message && isAIServiceOverloadError(error.message)) {
+        toast({
+          variant: "destructive",
+          title: "AI Service Busy",
+          description: "The AI model is currently experiencing high demand and could not generate insights. Please try again in a few moments.",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error Generating Insights",
+          description: error.message || "Failed to fetch problem insights. Please try again."
+        });
+      }
+      setProblemInsights(prev => prev || "Failed to load insights due to an error. Please try again.");
     } finally {
       setIsLoadingInsights(false);
+      await refreshInteractionStatus();
     }
-    await refreshInteractionStatus();
   };
 
   const handleProblemFeedback = async (rating: string, comment: string) => {
@@ -696,7 +737,7 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
       return;
     };
     // console.log("Page: Submitting feedback to history - Rating:", rating, "Comment:", comment);
-    await updateLastHistoryItem({ 
+    await updateLastHistoryItem({
       feedbackRating: rating,
       feedbackComment: comment,
     });
