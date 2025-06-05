@@ -63,6 +63,8 @@ Ensure the LaTeX, Markdown, and Mermaid syntax is syntactically correct and prop
 Evaluate the student's answer to the following question. Use the provided 'Expected Answer Guidelines/Format' and 'Topic Details' to form your evaluation.
 Determine if the answer is correct, and provide detailed feedback adhering to the formatting rules above. Set the isCorrect output field appropriately.
 
+**IMPORTANT: The 'isCorrect' field must be set to 'true' ONLY if the student's answer is functionally equivalent to the 'correctAnswer' you derive, considering all relevant context and expected format. If there is any any significant deviation or error, it must be 'false'.**
+
 Question:
 {{{question}}}
 
@@ -75,14 +77,14 @@ Expected Answer Guidelines/Format:
 Topic Details (for context, may contain formatted content):
 {{{topicDetails}}}
 
-**CRITICAL REQUIREMENT: For the 'correctAnswer' field, you MUST provide a comprehensive step-by-step solution that:**
-1. Breaks down the problem-solving process into clear sequential steps
-2. Explains the reasoning behind each step
-3. Shows all intermediate calculations or logical reasoning
-4. Arrives at the final answer with a clear conclusion
-5. Uses appropriate formatting (LaTeX for math, Markdown for code, Mermaid for diagrams)
+**CRITICAL REQUIREMENT: For the 'correctAnswer' field, you MUST provide a comprehensive, pedagogically sound, and strategically helpful step-by-step solution that:**
+1. Breaks down the problem-solving process into clear sequential steps, guiding the student through the thought process.
+2. Explains the reasoning and underlying concepts behind each step, anticipating common student misconceptions.
+3. Shows all intermediate calculations or logical reasoning, making the progression transparent.
+4. Arrives at the final answer with a clear conclusion.
+5. Uses appropriate formatting (LaTeX for math, Markdown for code, Mermaid for diagrams).
 
-This step-by-step solution will be shown to the student to help them understand how to solve the problem correctly.
+This step-by-step solution will be shown to the student to help them understand how to solve the problem correctly and learn effective problem-solving strategies.
   `,
 });
 
