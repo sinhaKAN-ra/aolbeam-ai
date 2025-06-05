@@ -1,5 +1,5 @@
 // Types for interaction limits
-export type InteractionType = 'evaluate' | 'insight';
+export type InteractionType = 'evaluate' | 'insight' | 'problem_generation';
 
 export interface InteractionLimitBase {
   allowed: boolean;
@@ -11,10 +11,15 @@ export interface InteractionLimitBase {
 export interface InteractionLimitResult extends InteractionLimitBase {
   requiresLogin: boolean;
   requiresUpgrade: boolean;
+  showLoginModal: boolean;
+  showUpgradeModal: boolean;
 }
 
 // API response types
-export interface InteractionCheckResponse extends InteractionLimitBase {}
+export interface InteractionCheckResponse extends InteractionLimitBase {
+  showLoginModal: boolean;
+  showUpgradeModal: boolean;
+}
 
 export interface InteractionLimitState extends InteractionLimitBase {
   requiresLogin: boolean;

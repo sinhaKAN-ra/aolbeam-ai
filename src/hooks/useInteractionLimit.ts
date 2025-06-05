@@ -22,10 +22,12 @@ export function useInteractionLimit() {
         return { 
           allowed: false, 
           remaining: 0, 
-          limit: 5, 
+          limit: 5, // This will be handled by the server for actual limits
           isLoggedIn: false,
           requiresLogin: true,
-          requiresUpgrade: false
+          requiresUpgrade: false,
+          showLoginModal: true,
+          showUpgradeModal: false
         };
       }
 
@@ -53,7 +55,7 @@ export function useInteractionLimit() {
       console.error('Error checking interaction limit:', err);
       setError('Failed to check interaction limit');
       // Default to not allowing if there's an error
-      return { allowed: false, remaining: 0, limit: 0, isLoggedIn: false, requiresLogin: false, requiresUpgrade: false };
+      return { allowed: false, remaining: 0, limit: 0, isLoggedIn: false, requiresLogin: false, requiresUpgrade: false, showLoginModal: false, showUpgradeModal: false };
     } finally {
       setIsLoading(false);
     }
@@ -81,23 +83,10 @@ export function useInteractionLimit() {
   const requireInteraction = useCallback(async (interactionType: InteractionType): Promise<InteractionLimitResult> => {
     const result = await checkInteractionLimit(interactionType);
     
+    // If not allowed, return the result directly. The result object will now contain
+    // showLoginModal or showUpgradeModal set to true if needed by the server response.
     if (!result.allowed) {
-      if (!result.isLoggedIn) {
-        // Redirect to login with a return URL
-        router.push(`/login?returnUrl=${encodeURIComponent(window.location.pathname)}`);
-        return { 
-          ...result,
-          requiresLogin: true,
-          requiresUpgrade: false
-        };
-      }
-      
-      // Show upgrade modal or message
-      return { 
-        ...result,
-        requiresUpgrade: true,
-        requiresLogin: false
-      };
+      return result;
     }
 
     // If allowed, record the interaction
@@ -109,15 +98,14 @@ export function useInteractionLimit() {
     // Get updated count after recording the interaction
     const updatedResult = await checkInteractionLimit(interactionType);
     
+    // Ensure that if allowed, no modals are shown
     return { 
-      allowed: true, 
-      remaining: updatedResult.remaining, 
-      limit: updatedResult.limit, 
-      isLoggedIn: true,
-      requiresLogin: false,
-      requiresUpgrade: false
+      ...updatedResult,
+      allowed: true, // Explicitly set to true as interaction was allowed and recorded
+      showLoginModal: false,
+      showUpgradeModal: false
     };
-  }, [checkInteractionLimit, recordInteraction, router]);
+  }, [checkInteractionLimit, recordInteraction]);
 
   return {
     checkInteractionLimit,

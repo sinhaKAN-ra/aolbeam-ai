@@ -23,7 +23,7 @@ import {
 import { RefreshCw, FilePlus2, ArrowRight, Loader2 } from 'lucide-react';
 
 import type { InteractionHistoryItem, ProblemType, UserProfile, DifficultyLevel } from '@/types';
-import { ProblemGenerator, type ProblemGeneratorHandles } from '@/components/ProblemGenerator';
+import { ProblemGenerator, ProblemGeneratorHandles } from '@/components/ProblemGenerator';
 import { ProblemDisplay } from '@/components/ProblemDisplay';
 import { EvaluationResult } from '@/components/EvaluationResult';
 import { ProblemInsights } from '@/components/ProblemInsights';
@@ -34,12 +34,13 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSupabase } from '@/hooks/useSupabase';
 import { useRouter } from 'next/navigation';
 import { useInteractionLimit } from '@/hooks/useInteractionLimit';
+import { InteractionType, InteractionLimitResult } from '@/types/interaction';
 
 // This is a client component that will be hydrated on the client
 // Server-side data fetching should be moved to a Server Component
 // and passed as props to this component
 
-const FREE_INTERACTION_LIMIT = 20;
+const FREE_INTERACTION_LIMIT = 25;
 const ALL_CONCRETE_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
 
 export default function AOLBEAMPage() {
@@ -69,7 +70,7 @@ export default function AOLBEAMPage() {
   // History and interactions
   const [history, setHistory] = useState<InteractionHistoryItem[]>([]);
   const [guestInteractionCount, setGuestInteractionCount] = useLocalStorage<number>('aolbeamGuestInteractionCount', 0);
-  const { checkInteractionLimit, recordInteraction } = useInteractionLimit();
+  const { checkInteractionLimit, recordInteraction, requireInteraction } = useInteractionLimit();
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [isClientMounted, setIsClientMounted] = useState(false);
 
@@ -275,41 +276,6 @@ export default function AOLBEAMPage() {
     };
   }, []);
 
-  const hasReachedFreeLimit = useCallback(async () => {
-    if (currentUser) {
-      const result = await checkInteractionLimit('evaluate');
-      return !result.allowed;
-    }
-    return guestInteractionCount >= FREE_INTERACTION_LIMIT;
-  }, [currentUser, checkInteractionLimit, guestInteractionCount]);
-
-  const incrementInteraction = useCallback(async (type: 'evaluate' | 'insight' = 'evaluate') => {
-    if (currentUser) {
-      try {
-        // Record the interaction using the new system
-        await recordInteraction(type);
-        
-        // Also update the old counter for backward compatibility
-        if (userProfile) {
-          const newCount = (userProfile.interaction_count || 0) + 1;
-          const { error } = await supabase
-            .from('user_profiles')
-            .update({ interaction_count: newCount })
-            .eq('user_id', currentUser.id);
-
-          setUserProfile(prev => prev ? { ...prev, interaction_count: newCount } : null);
-          if (error) {
-            console.error('Error updating interaction count:', error);
-          }
-        }
-      } catch (error) {
-        console.error('Error incrementing interaction:', error);
-      }
-    } else {
-      setGuestInteractionCount(prev => prev + 1);
-    }
-  }, [currentUser, userProfile, supabase, setGuestInteractionCount, recordInteraction]);
-
   const addToHistory = useCallback(async (itemToAdd: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'> & { actualProblemType: Exclude<ProblemType, 'random'> }) => {
     const newHistoryItem: InteractionHistoryItem = {
         ...itemToAdd,
@@ -425,23 +391,25 @@ export default function AOLBEAMPage() {
   }, [setHistory, supabase, currentUser, toast, history, saveHistoryToLocalStorage]);
 
   const handleGenerateProblem = async (topic: string, type: ProblemType, difficulty: DifficultyLevel) => {
-    if ((currentUser && isLoadingPageProfile) || await hasReachedFreeLimit()) {
-      if (await hasReachedFreeLimit()) {
-        if (!currentUser) {
-          toast({ 
-            variant: "destructive", 
-            title: "Free Limit Reached", 
-            description: "Please sign up or log in to continue generating problems." 
-          });
-          router.push('/login?redirect=/');
-        } else {
-          toast({ 
-            variant: "destructive", 
-            title: "Free Limit Reached", 
-            description: "Please upgrade to continue generating problems." 
-          });
-          setShowPaywall(true);
-        }
+    if (currentUser && isLoadingPageProfile) return; // Still loading user profile
+
+    const interactionResult = await requireInteraction('problem_generation');
+
+    if (!interactionResult.allowed) {
+      if (interactionResult.showLoginModal) {
+        setShowPaywall(true);
+        toast({ 
+          variant: "destructive", 
+          title: "Free Limit Reached", 
+          description: "Please sign up or log in to continue generating problems." 
+        });
+      } else if (interactionResult.showUpgradeModal) {
+        setShowPaywall(true);
+        toast({ 
+          variant: "destructive", 
+          title: "Free Limit Reached", 
+          description: "Please upgrade to continue generating problems." 
+        });
       }
       return;
     }
@@ -462,7 +430,8 @@ export default function AOLBEAMPage() {
     setCurrentProblemType(actualProblemTypeForAI); 
 
     try {
-      await incrementInteraction('evaluate');
+
+      // The interaction has already been recorded by requireInteraction in handleGenerateProblem
       const result = await generatePracticeProblem({ topic, problemType: actualProblemTypeForAI, difficulty });
       const problemDifficulty = result.difficulty || difficulty; 
       const problemWithDifficulty = {...result, difficulty: problemDifficulty};
@@ -557,16 +526,25 @@ ${currentProblem.answerFormat}` : ''}`;
     try {
       console.log("handleGenerateProblemInsights called with:", { problemStatement, topicToFetch });
       
-      // Check user and loading state
-      const userCheck = currentUser && isLoadingPageProfile;
-      const usageLimitReached = await hasReachedFreeLimit();
-      console.log("User check:", { currentUser, isLoadingPageProfile, userCheck, usageLimitReached });
-      
-      if (userCheck || usageLimitReached) {
-        console.log("Cannot fetch insights: User not loaded or usage limit reached");
-        if (usageLimitReached) {
-          toast({ variant: "destructive", title: "Usage Limit Reached", description: "You've reached your free usage limit. Please sign up to continue." });
+      if (currentUser && isLoadingPageProfile) return; // Still loading user profile
+
+      const interactionResult = await requireInteraction('insight');
+
+      if (!interactionResult.allowed) {
+        if (interactionResult.showLoginModal) {
           setShowPaywall(true);
+          toast({ 
+            variant: "destructive", 
+            title: "Free Limit Reached", 
+            description: "Please sign up or log in to continue generating insights." 
+          });
+        } else if (interactionResult.showUpgradeModal) {
+          setShowPaywall(true);
+          toast({ 
+            variant: "destructive", 
+            title: "Free Limit Reached", 
+            description: "Please upgrade to continue generating insights." 
+          });
         }
         return;
       }
@@ -574,7 +552,8 @@ ${currentProblem.answerFormat}` : ''}`;
       console.log("Fetching insights for:", { problemStatement, topicToFetch });
       setIsLoadingInsights(true); 
       
-      await incrementInteraction('insight');
+
+      // The interaction has already been recorded by requireInteraction in handleGenerateProblemInsights
       const result = await generateProblemInsights({ 
         problemStatement, 
         topic: topicToFetch 
@@ -687,43 +666,55 @@ ${currentProblem.answerFormat}` : ''}`;
         if (lastItem.evaluation) setEvaluationResult(lastItem.evaluation);
         if (lastItem.isTopicRevised && lastItem.topicDetails) {
           setProblemInsights(lastItem.topicDetails);
-        } else {
-          setProblemInsights(null);
         }
       }
     }
   }, [currentUser, history, isLoadingProblem, currentProblem, isLoadingPageProfile, isClientMounted]);
 
-  const [interactionsLeft, setInteractionsLeft] = useState<string>("Loading interactions...");
+  const [interactionStatus, setInteractionStatus] = useState<InteractionLimitResult | null>(null);
 
   useEffect(() => {
-    async function updateInteractionsText() {
-      if (isLoadingPageProfile && currentUser) {
-        setInteractionsLeft("Loading interactions...");
-        return;
+    const fetchInteractionStatus = async () => {
+      if (isClientMounted && !isLoadingPageProfile) {
+        const status = await checkInteractionLimit('problem_generation'); // Use a generic interaction type for display
+        setInteractionStatus(status);
       }
-      
-      if (currentUser) {
-        try {
-          const result = await checkInteractionLimit('evaluate');
-          if (result.limit === -1 || result.remaining === -1) {
-            setInteractionsLeft("You have unlimited interactions!");
-          } else {
-            setInteractionsLeft(`Free interactions remaining: ${result.remaining}`);
-          }
-        } catch (error) {
-          console.error('Error checking interaction limit:', error);
-          setInteractionsLeft("Interactions: N/A (Error loading limits)");
-        }
+    };
+    fetchInteractionStatus();
+  }, [isClientMounted, isLoadingPageProfile, checkInteractionLimit, currentUser, guestInteractionCount, userProfile]);
+
+  const interactionsLeftText = useCallback(() => {
+    if (!isClientMounted || !interactionStatus) {
+      return "Loading interactions...";
+    }
+
+    const { allowed, remaining, limit, isLoggedIn, requiresLogin, requiresUpgrade } = interactionStatus;
+
+    if (isLoggedIn) {
+      if (userProfile?.is_subscribed) {
+        return "You have unlimited interactions! 🎉";
       } else {
-        setInteractionsLeft(`Free interactions remaining: ${Math.max(0, FREE_INTERACTION_LIMIT - guestInteractionCount)}`);
+        // Logged-in, not subscribed
+        if (remaining > 0) {
+          return `Free interactions remaining: ${remaining} / ${limit}`;
+        } else if (requiresUpgrade) {
+          return "Free interactions exhausted. Please upgrade to continue.";
+        } else {
+          return "Interactions: N/A"; // Should not happen if logic is correct
+        }
+      }
+    } else {
+      // Guest user
+      const guestRemaining = Math.max(0, FREE_INTERACTION_LIMIT - guestInteractionCount);
+      if (guestRemaining > 0) {
+        return `Free interactions remaining (guest): ${guestRemaining} / ${FREE_INTERACTION_LIMIT}`;
+      } else if (requiresLogin) {
+        return "Free interactions exhausted. Please log in to continue.";
+      } else {
+        return "Interactions: N/A"; // Should not happen if logic is correct
       }
     }
-    
-    updateInteractionsText();
-  }, [currentUser, isLoadingPageProfile, checkInteractionLimit, guestInteractionCount]);
-
-  const interactionsLeftText = () => interactionsLeft;
+  }, [isClientMounted, interactionStatus, guestInteractionCount, userProfile]);
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -830,16 +821,20 @@ ${currentProblem.answerFormat}` : ''}`;
       <PaywallModal
         isOpen={showPaywall}
         onClose={() => {
-          const isTrulyMandatory = !!(currentUser && userProfile && !userProfile.is_subscribed && ((userProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT));
-          if (!isTrulyMandatory) {
+          // Only allow closing if it's not a mandatory login/upgrade prompt
+          // This will be determined by the interactionResult state
+          // For now, we'll allow closing if the user is logged in and subscribed, or if they are a guest and haven't hit the hard limit
+          if (currentUser && userProfile && userProfile.is_subscribed) {
+            setShowPaywall(false);
+          } else if (!currentUser && guestInteractionCount < FREE_INTERACTION_LIMIT) {
             setShowPaywall(false);
           } else {
-            toast({title: "Plan Selection Required", description: "Please select a plan to continue using AOLBEAM.", variant: "default"});
+            toast({title: "Action Required", description: "Please log in or select a plan to continue using AOLBEAM.", variant: "default"});
           }
         }}
         onSubscribe={handleSubscribe}
         onLoginRegister={handleLoginForPaywall} 
-        isMandatory={showPaywall && !!(currentUser && userProfile && !userProfile.is_subscribed && ((userProfile.interaction_count || 0) >= FREE_INTERACTION_LIMIT))}
+        isMandatory={showPaywall} // isMandatory will be controlled by the `showPaywall` state which is set by `requireInteraction`
       />
       
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 pb-4 text-center">
