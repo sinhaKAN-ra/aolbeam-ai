@@ -15,8 +15,8 @@ export const metadata: Metadata = {
 export default function AboutUsPage() {
   return (
     <>
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="max-w-3xl mx-auto">
+      <div className="px-4 sm:px-6 lg:px-8 pb-8">
+        <div className="max-w-5xl mx-auto">
           <Card className="shadow-xl">
             <CardHeader className="text-center">
               <div className="mx-auto mb-4">

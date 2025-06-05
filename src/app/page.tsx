@@ -717,7 +717,7 @@ ${currentProblem.answerFormat}` : ''}`;
   }, [isClientMounted, interactionStatus, guestInteractionCount, userProfile]);
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col">
       <section className="py-16 md:py-24 text-center bg-background">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto">

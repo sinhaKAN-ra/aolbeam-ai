@@ -43,8 +43,8 @@ const INSTITUTE_EMAIL = "aolbeam@outlook.com";
 export default function ContactUsPage() {
   return (
     <>
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex justify-center">
-        <Card className="w-full max-w-lg shadow-lg">
+      <div className="px-4 sm:px-6 lg:px-8 pb-8 flex justify-center">
+        <Card className="w-full max-w-5xl shadow-lg">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-semibold">Contact Us</CardTitle>
             <CardDescription>We'd love to hear from you!</CardDescription>
