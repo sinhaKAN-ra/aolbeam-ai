@@ -26,51 +26,104 @@ const GoogleIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-interface PaywallModalProps {
+export interface PaywallModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubscribe: (planId: string) => void;
-  onLoginRegister: () => void; 
-  isMandatory?: boolean;
+  onLoginRegister: () => void;
+  displayContext: 'guestLimitReached' | 'loggedInLimitReached' | 'mandatoryOnboarding' | null;
+  // isMandatory prop can be removed if displayContext covers its functionality
 }
 
 const plans: SubscriptionPlan[] = [
+  // Assuming SubscriptionPlan is imported from '@/types' which should resolve to src/types/index.ts
+  // Adding currency, order, and type properties
   {
     id: 'weekly',
     name: 'Weekly Pass',
     price: '₹249',
+    currency: 'INR',
     duration: '/ week',
     features: ['Unlimited Topic Searches', 'Track Your Progress', 'Ad-Free Experience'],
+    order: 1,
+    type: 'subscription',
   },
   {
     id: 'monthly',
     name: 'Monthly Saver',
     price: '₹699',
+    currency: 'INR',
     duration: '/ month',
     features: ['Unlimited Topic Searches', 'Track Your Progress', 'Ad-Free Experience', 'Priority Support'],
     highlight: true,
+    order: 2,
+    type: 'subscription',
   },
   {
     id: 'quarterly',
     name: 'Quarterly Pro',
     price: '₹1999',
+    currency: 'INR',
     duration: '/ 3 months',
     features: ['Unlimited Topic Searches', 'Track Your Progress', 'Ad-Free Experience', 'Priority Support', 'Early Access to New Features'],
+    order: 3,
+    type: 'subscription',
   },
 ];
 
 const INSTITUTE_CONTACT_EMAIL = "aolbeam@outlook.com";
 
-export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister, isMandatory }: PaywallModalProps) {
-  if (!isOpen) return null;
+export function PaywallModal({ 
+  isOpen,
+  onClose,
+  onSubscribe,
+  onLoginRegister,
+  displayContext,
+}: PaywallModalProps) {
+  console.log('[PaywallModal] Rendering with displayContext:', displayContext); // Debug log isOpen, onClose, onSubscribe, onLoginRegister, displayContext }: PaywallModalProps) {
+  if (!isOpen || !displayContext) return null;
 
-  const dialogTitle = isMandatory ? "Welcome! Choose a Plan to Get Started" : "Unlock Full Access";
-  const dialogDescriptionText = isMandatory 
-    ? "To begin your learning journey with AOLBEAM, please select a subscription plan."
-    : "You've reached your free interaction limit. Choose a plan to continue learning without limits!";
+  let dialogTitle = "";
+  let dialogDescriptionText = "";
+  let showPlansSection = true;
+  let showLoginRegisterButton = true;
+  let showMaybeLaterButton = true;
+  let allowDialogInteractionClose = true; // Whether clicking outside/Esc closes
+
+  switch (displayContext) {
+    case 'guestLimitReached':
+      dialogTitle = "Continue Your Journey";
+      dialogDescriptionText = "You've used your free interactions. Please log in or register to unlock more features and continue learning.";
+      showPlansSection = false;
+      showLoginRegisterButton = true;
+      showMaybeLaterButton = true;
+      allowDialogInteractionClose = true;
+      break;
+    case 'loggedInLimitReached':
+      dialogTitle = "Unlock Full Access";
+      dialogDescriptionText = "You've reached your free interaction limit. Choose a plan to continue learning without limits!";
+      showPlansSection = true;
+      showLoginRegisterButton = false; // User is already logged in
+      showMaybeLaterButton = true;
+      allowDialogInteractionClose = true;
+      break;
+    case 'mandatoryOnboarding':
+      dialogTitle = "Welcome! Choose a Plan to Get Started";
+      dialogDescriptionText = "To begin your learning journey with AOLBEAM, please select a subscription plan.";
+      showPlansSection = true;
+      showLoginRegisterButton = false;
+      showMaybeLaterButton = false;
+      allowDialogInteractionClose = false;
+      break;
+    default:
+      // Fallback or error, should not happen if displayContext is always set
+      return null;
+  }
+
+  console.log('[PaywallModal] Flags after switch:', { showPlansSection, showLoginRegisterButton, showMaybeLaterButton }); // Debug log
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open && !isMandatory) onClose(); }}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open && allowDialogInteractionClose) onClose(); }}>
       <DialogContent className="sm:max-w-3xl p-0">
         <DialogHeader className="p-6 pb-4">
           <DialogTitle className="text-3xl font-bold flex items-center gap-2">
@@ -81,78 +134,92 @@ export function PaywallModal({ isOpen, onClose, onSubscribe, onLoginRegister, is
           </DialogDescription>
         </DialogHeader>
 
-        <div className="px-6 py-4 grid grid-cols-1 md:grid-cols-3 gap-6">
-          {plans.map((plan) => (
-            <Card key={plan.id} className={`flex flex-col ${plan.highlight ? 'border-primary shadow-lg ring-2 ring-primary' : 'shadow-md'}`}>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-xl">{plan.name}</CardTitle>
-                <PlanCardDescription className="text-2xl font-bold text-primary">
-                  {plan.price} <span className="text-sm font-normal text-muted-foreground">{plan.duration}</span>
-                </PlanCardDescription>
-              </CardHeader>
-              <CardContent className="flex-grow space-y-2">
-                <ul className="space-y-1.5">
-                  {plan.features.map((feature, index) => (
-                    <li key={index} className="flex items-center gap-2 text-sm">
-                      <Check className="w-4 h-4 text-green-500" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-              <DialogFooter className="p-4 pt-2 mt-auto">
-                 <Button
-                    onClick={() => onSubscribe(plan.id)} 
-                    className={`w-full ${plan.highlight ? '' : 'bg-accent text-accent-foreground hover:bg-accent/90'} flex items-center justify-center`}
-                  >
-                    <CreditCard className="mr-2 h-4 w-4" /> Choose {plan.name}
-                  </Button>
-              </DialogFooter>
-            </Card>
-          ))}
-        </div>
+        {showPlansSection && (
+          <>
+            <div className="px-6 py-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+              {plans.map((plan) => (
+                <Card key={plan.id} className={`flex flex-col ${plan.highlight ? 'border-primary shadow-lg ring-2 ring-primary' : 'shadow-md'}`}>
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-xl">{plan.name}</CardTitle>
+                    <PlanCardDescription className="text-2xl font-bold text-primary">
+                      {plan.price} <span className="text-sm font-normal text-muted-foreground">{plan.duration}</span>
+                    </PlanCardDescription>
+                  </CardHeader>
+                  <CardContent className="flex-grow space-y-2">
+                    <ul className="space-y-1.5">
+                      {plan.features.map((feature, index) => (
+                        <li key={index} className="flex items-center gap-2 text-sm">
+                          <Check className="w-4 h-4 text-green-500" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                  <DialogFooter className="p-4 pt-2 mt-auto">
+                    <Button
+                        onClick={() => onSubscribe(plan.id)} 
+                        className={`w-full ${plan.highlight ? '' : 'bg-accent text-accent-foreground hover:bg-accent/90'} flex items-center justify-center`}
+                      >
+                        <CreditCard className="mr-2 h-4 w-4" /> Choose {plan.name}
+                      </Button>
+                  </DialogFooter>
+                </Card>
+              ))}
+            </div>
 
-        <div className="px-6 text-center">
-            <p className="text-xs text-muted-foreground">
-                Secure payments will be processed via Cashfree. Details at checkout.
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-                (Other payment options like PayPal, Paddle, or Lemon Squeezy may be added in the future).
-            </p>
-        </div>
-        
-        <div className="px-6 py-4 bg-muted/50 mt-4">
-            <Card className="shadow-none">
-                <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                        <Info className="text-primary"/> For Institutes
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-sm text-muted-foreground mb-3">
-                        We offer custom test series and tailored packages for educational institutions.
-                    </p>
-                    <Button variant="outline" onClick={() => window.location.href = `mailto:${INSTITUTE_CONTACT_EMAIL}?subject=Institute Inquiry`}>
-                        Contact Us For Institutes
-                    </Button>
-                </CardContent>
-            </Card>
-        </div>
-        
+            {/* Payment details text, shown only when plans are visible (i.e., for loggedInLimitReached or mandatoryOnboarding) */}
+            <div className="px-6 text-center">
+              <p className="text-xs text-muted-foreground">
+                  Secure payments will be processed via Cashfree. Details at checkout.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                  (Other payment options like PayPal, Paddle, or Lemon Squeezy may be added in the future).
+              </p>
+            </div>
+
+            {/* "For Institutes" section */}
+            <div className="px-6 py-4 bg-muted/50 mt-4">
+              <Card className="shadow-none">
+                  <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                          <Info className="text-primary"/> For Institutes
+                      </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                      <p className="text-sm text-muted-foreground mb-3">
+                          We offer custom test series and tailored packages for educational institutions.
+                      </p>
+                      <Button variant="outline" onClick={() => window.location.href = `mailto:${INSTITUTE_CONTACT_EMAIL}?subject=Institute Inquiry`}>
+                          Contact Us For Institutes
+                      </Button>
+                  </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
+
         <DialogFooter className="p-6 pt-4 border-t flex flex-col sm:flex-row sm:justify-between items-center">
-          {!isMandatory && (
-            <p className="text-sm text-muted-foreground mb-2 sm:mb-0">
-              Already have an account or need to create one?
+          {displayContext === 'guestLimitReached' && (
+            <p className="text-sm text-muted-foreground mb-2 sm:mb-0 text-center w-full">
+              Please log in or register to continue.
             </p>
           )}
-          <div className="flex flex-wrap gap-2 justify-center">
-            {!isMandatory && (
-              <Button variant="outline" onClick={onLoginRegister} className="flex items-center">
-                <GoogleIcon className="mr-2 h-4 w-4" /> Login / Register with Google
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2 justify-center w-full items-center">
+            {showLoginRegisterButton && (
+              <Button variant="default" size="lg" onClick={onLoginRegister} className="flex items-center w-full sm:w-auto">
+                <GoogleIcon className="mr-2 h-5 w-5" /> Login / Register with Google
               </Button>
             )}
-            {!isMandatory && <Button variant="ghost" onClick={onClose}>Maybe Later</Button>}
-            {isMandatory && <p className="text-xs text-muted-foreground">Account created via Google. Select a plan to activate.</p>}
+            {showMaybeLaterButton && (
+              <Button variant="ghost" onClick={onClose} className="w-full sm:w-auto">
+                Maybe Later
+              </Button>
+            )}
+            {displayContext === 'mandatoryOnboarding' && (
+              <p className="text-xs text-muted-foreground text-center w-full">
+                Account created via Google. Select a plan to activate.
+              </p>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>

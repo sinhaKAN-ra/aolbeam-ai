@@ -13,6 +13,7 @@ export interface InteractionLimitResult extends InteractionLimitBase {
   requiresUpgrade: boolean;
   showLoginModal: boolean;
   showUpgradeModal: boolean;
+  isLoading?: boolean; // Added for async checks
 }
 
 // API response types

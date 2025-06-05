@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { PaywallModal, type PaywallModalProps } from '@/components/PaywallModal';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import type { User } from '@supabase/supabase-js';
@@ -28,7 +29,6 @@ import { ProblemDisplay } from '@/components/ProblemDisplay';
 import { EvaluationResult } from '@/components/EvaluationResult';
 import { ProblemInsights } from '@/components/ProblemInsights';
 import { HistoryView } from '@/components/HistoryView';
-import { PaywallModal } from '@/components/PaywallModal';
 import { UseCaseBanner } from '@/components/UseCaseBanner';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSupabase } from '@/hooks/useSupabase';
@@ -74,9 +74,11 @@ export default function AOLBEAMPage() {
     currentUser,
     guestInteractionCount,
     setGuestInteractionCount,
-    FREE_INTERACTION_LIMIT
+    FREE_INTERACTION_LIMIT,
+    isAuthLoading
   );
-  const [showPaywall, setShowPaywall] = useState<boolean>(false);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [paywallContext, setPaywallContext] = useState<PaywallModalProps['displayContext']>(null);
   const [isClientMounted, setIsClientMounted] = useState(false);
 
   // Refs
@@ -127,7 +129,7 @@ export default function AOLBEAMPage() {
   const fetchAndSetUserProfile = useCallback(
     async (user: User | null) => {
       if (!user?.id) {
-        console.log('Page: No user ID available');
+        // console.log('Page: No user ID available');
         setUserProfile(null);
         setIsLoadingPageProfile(false);
         return;
@@ -137,13 +139,13 @@ export default function AOLBEAMPage() {
       if (hasFetchedProfile.current) return;
       hasFetchedProfile.current = true;
 
-      console.log(`Page: fetchAndSetUserProfile called for user: ${user.id}`);
+      // console.log(`Page: fetchAndSetUserProfile called for user: ${user.id}`);
       setIsLoadingPageProfile(true);
       setUserProfile(null);
 
       const fetchUserProfile = async (user: User) => {
         try {
-          console.log(`Page: Attempting to query user_profiles for user ${user.id}...`);
+          // console.log(`Page: Attempting to query user_profiles for user ${user.id}...`);
           
           // Use the client-side Supabase client for client-side operations
           const { data: profileData, error: fetchError } = await supabase
@@ -154,7 +156,7 @@ export default function AOLBEAMPage() {
 
           if (fetchError) {
             if (fetchError.code === 'PGRST116') { 
-              console.log(`Page: Profile not found for ${user.id}, attempting to create one.`);
+              // console.log(`Page: Profile not found for ${user.id}, attempting to create one.`);
               const newProfilePayload: Partial<UserProfile> = {
                 id: user.id,
                 email: user.email || '',
@@ -179,7 +181,7 @@ export default function AOLBEAMPage() {
                 return;
               }
               
-              console.log(`Page: Created new profile for ${user.id}`);
+              // console.log(`Page: Created new profile for ${user.id}`);
               setUserProfile(createdProfile as UserProfile);
               return;
             }
@@ -189,7 +191,7 @@ export default function AOLBEAMPage() {
           }
 
           if (profileData) {
-            console.log(`Page: Found existing profile for ${user.id}`);
+            // console.log(`Page: Found existing profile for ${user.id}`);
             
             // Check if we need to update any profile fields
             const updates: Partial<UserProfile> = {};
@@ -206,7 +208,7 @@ export default function AOLBEAMPage() {
             }
 
             if (needsUpdate) {
-              console.log(`Page: Profile for ${user.id} missing fields, attempting update:`, updates);
+              // console.log(`Page: Profile for ${user.id} missing fields, attempting update:`, updates);
               const { data: updatedProfileData, error: updateError } = await supabase
                 .from('user_profiles')
                 .update(updates)
@@ -219,11 +221,11 @@ export default function AOLBEAMPage() {
                 // Continue with the existing profile data even if update fails
                 setUserProfile(profileData as UserProfile);
               } else if (updatedProfileData) {
-                console.log(`Page: Successfully updated profile for ${user.id}:`, updatedProfileData);
+                // console.log(`Page: Successfully updated profile for ${user.id}:`, updatedProfileData);
                 setUserProfile(updatedProfileData as UserProfile);
               }
             } else {
-              console.log(`Page: Using existing profile for ${user.id}`);
+              // console.log(`Page: Using existing profile for ${user.id}`);
               setUserProfile(profileData as UserProfile);
             }
           } else {
@@ -238,7 +240,7 @@ export default function AOLBEAMPage() {
             description: error instanceof Error ? error.message : "An error occurred while loading your profile.",
           });
         } finally {
-          console.log(`Page: Finished loading profile for ${user.id}`);
+          // console.log(`Page: Finished loading profile for ${user.id}`);
           setIsLoadingPageProfile(false);
         }
       };
@@ -268,15 +270,15 @@ export default function AOLBEAMPage() {
   }, [currentUser, isAuthLoading, fetchAndSetUserProfile]);
 
   useEffect(() => {
-    console.log(
-      `Page: Profile state updated - isLoadingProfile: ${isLoadingPageProfile} pageCurrentUser: ${!!currentUser} pageUserProfile email: ${userProfile?.email || 'undefined'}`
-    );
+    // console.log(
+      // `Page: Profile state updated - isLoadingProfile: ${isLoadingPageProfile} pageCurrentUser: ${!!currentUser} pageUserProfile email: ${userProfile?.email || 'undefined'}`
+    // );
   }, [isLoadingPageProfile, currentUser, userProfile]);
 
   // Cleanup effect
   useEffect(() => {
     return () => {
-      console.log("Page: Cleaning up AOLBEAMPage component");
+      // console.log("Page: Cleaning up AOLBEAMPage component");
       hasFetchedProfile.current = false;
     };
   }, []);
@@ -315,13 +317,13 @@ export default function AOLBEAMPage() {
             topic_details_content: null 
         };
         try {
-          console.log("Page: Attempting to save new problem to Supabase:", dbRecord);
+          // console.log("Page: Attempting to save new problem to Supabase:", dbRecord);
           const { data: dbData, error: dbError } = await supabase.from('user_interactions').insert(dbRecord).select('id').single();
           if (dbError) {
               console.error("Page: Error saving history to Supabase:", dbError);
               toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account. " + dbError.message });
           } else if (dbData) {
-            console.log("Page: Successfully saved new problem to Supabase, ID:", dbData.id);
+            // console.log("Page: Successfully saved new problem to Supabase, ID:", dbData.id);
             setHistory(prev => {
                 const updatedHistory = prev.map(hItem => 
                     hItem.id === newHistoryItem.id ? { ...hItem, supabase_id: dbData.id } : hItem
@@ -337,7 +339,7 @@ export default function AOLBEAMPage() {
     }
   }, [setHistory, supabase, currentUser, toast, saveHistoryToLocalStorage]); 
 
-  const updateLastHistoryItem = useCallback(async (updates: Partial<InteractionHistoryItem>) => {
+  const updateLastHistoryItem = useCallback(async (updates: any) => {
     let itemToUpdateSupabaseId: string | undefined;
     let updatedItemForSupabase: InteractionHistoryItem | undefined;
     
@@ -376,14 +378,14 @@ export default function AOLBEAMPage() {
       if (updates.timeTakenSeconds !== undefined) dbUpdatePayload.time_taken_seconds = updates.timeTakenSeconds;
       
       if (Object.keys(dbUpdatePayload).length > 0) {
-        console.log("Page: Attempting to update Supabase history item ID:", itemToUpdateSupabaseId, "with payload:", dbUpdatePayload);
+        // console.log("Page: Attempting to update Supabase history item ID:", itemToUpdateSupabaseId, "with payload:", dbUpdatePayload);
         try {
           const { error: dbError } = await supabase.from('user_interactions').update(dbUpdatePayload).eq('id', itemToUpdateSupabaseId).eq('user_id', currentUser.id);
           if (dbError) {
             console.error("Page: Error updating history in Supabase:", dbError);
             toast({ variant: "destructive", title: "Update Error", description: "Could not save updates to your account. " + dbError.message });
           } else {
-            console.log("Page: Successfully updated history item in Supabase, ID:", itemToUpdateSupabaseId);
+            // console.log("Page: Successfully updated history item in Supabase, ID:", itemToUpdateSupabaseId);
           }
         } catch (e) {
             console.error("Page: Exception updating history in Supabase:", e);
@@ -391,145 +393,233 @@ export default function AOLBEAMPage() {
         }
       }
     } else if (supabase && currentUser && !itemToUpdateSupabaseId && history.length > 0 && history[0] && Object.keys(updates).length > 0) {
-        console.warn("Page: Attempted to update history item in Supabase, but supabase_id was missing for the last item. Local history updated.", history[0]);
+      // This condition seems to be the end of the updateLastHistoryItem's else-if chain.
+      // The following content was part of the corruption and will be replaced by the correct functions.
+      console.warn("Page: Attempted to update history item in Supabase, but supabase_id was missing for the last item. Local history updated.", history[0]);
     }
   }, [setHistory, supabase, currentUser, toast, history, saveHistoryToLocalStorage]);
 
-  const handleGenerateProblem = async (topic: string, type: ProblemType, difficulty: DifficultyLevel) => {
-    if (currentUser && isLoadingPageProfile) return; // Still loading user profile
+const handleGenerateProblem = async (topic: string, type: ProblemType, difficulty: DifficultyLevel) => {
+  if (currentUser && isLoadingPageProfile) return; // Still loading user profile
 
-    const interactionResult = await requireInteraction('problem_generation');
+  const interactionResult = await requireInteraction('problem_generation');
 
-    if (!interactionResult.allowed) {
-      if (interactionResult.showLoginModal) {
-        setShowPaywall(true);
-        toast({ 
-          variant: "destructive", 
-          title: "Free Limit Reached", 
-          description: "Please sign up or log in to continue generating problems." 
-        });
-      } else if (interactionResult.showUpgradeModal) {
-        setShowPaywall(true);
-        toast({ 
-          variant: "destructive", 
-          title: "Free Limit Reached", 
-          description: "Please upgrade to continue generating problems." 
-        });
-      }
-      return;
-    }
-
-    setIsLoadingProblem(true);
-    setCurrentTopic(topic);
-    setCurrentDifficulty(difficulty); 
-    setCurrentProblem(null);
-    setEvaluationResult(null);
-    setProblemInsights(null); 
-
-    let actualProblemTypeForAI: Exclude<ProblemType, 'random'>;
-    if (type === 'random') {
-        actualProblemTypeForAI = ALL_CONCRETE_PROBLEM_TYPES[Math.floor(Math.random() * ALL_CONCRETE_PROBLEM_TYPES.length)];
-    } else {
-        actualProblemTypeForAI = type as Exclude<ProblemType, 'random'>;
-    }
-    setCurrentProblemType(actualProblemTypeForAI); 
-
-    try {
-
-      // The interaction has already been recorded by requireInteraction in handleGenerateProblem
-      const result = await generatePracticeProblem({ topic, problemType: actualProblemTypeForAI, difficulty });
-      const problemDifficulty = result.difficulty || difficulty; 
-      const problemWithDifficulty = {...result, difficulty: problemDifficulty};
-      setCurrentProblem(problemWithDifficulty);
-      await addToHistory({ 
-        topic,
-        problemType: type, 
-        actualProblemType: actualProblemTypeForAI, 
-        difficulty: problemDifficulty, 
-        problem: problemWithDifficulty, 
+  // If the action is NOT allowed from the start (e.g., already over limit, or auth still loading)
+  if (!interactionResult.allowed) {
+    if (interactionResult.isLoading) {
+      toast({
+        title: "Loading",
+        description: "Please wait while we verify your authentication status.",
       });
-      toast({ title: "Problem Generated!", description: `A new ${actualProblemTypeForAI} problem on "${topic}" (${problemDifficulty}) is ready.` });
-    } catch (error) {
-      console.error("Page: Error generating problem:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to generate problem. Please try again." });
-    } finally {
-      setIsLoadingProblem(false);
+    } else if (interactionResult.showLoginModal) {
+      setPaywallContext('guestLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Login Required",
+        description: "Please sign up or log in to continue."
+      });
+    } else if (interactionResult.showUpgradeModal) {
+      setPaywallContext('loggedInLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Upgrade Required",
+        description: "Please upgrade to continue generating problems."
+      });
     }
-  };
+    return; // Do not proceed with the AI action
+  }
 
-  const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) => {
-    if (!currentProblem || !currentTopic || (currentUser && isLoadingPageProfile)) return;
+  // If the action IS allowed, proceed with problem generation
+  setIsLoadingProblem(true);
+  setCurrentTopic(topic);
+  setCurrentDifficulty(difficulty);
+  setCurrentProblem(null);
+  setEvaluationResult(null);
+  setProblemInsights(null);
 
-    setIsLoadingEvaluation(true);
-    setEvaluationResult(null);
+  let actualProblemTypeForAI: Exclude<ProblemType, 'random'>;
+  if (type === 'random') {
+      actualProblemTypeForAI = ALL_CONCRETE_PROBLEM_TYPES[Math.floor(Math.random() * ALL_CONCRETE_PROBLEM_TYPES.length)];
+  } else {
+      actualProblemTypeForAI = type as Exclude<ProblemType, 'random'>;
+  }
+  setCurrentProblemType(actualProblemTypeForAI);
 
-    try {
-      let evalOutput: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string; correctAnswer: string };
-      const updatesForHistory: Partial<InteractionHistoryItem> = { timeTakenSeconds };
-      
-      const isMcqStyleProblem = currentProblem.multipleChoiceOptions && currentProblem.multipleChoiceOptions.length > 0;
+  let problemGeneratedSuccessfully = false;
+  try {
+    const result = await generatePracticeProblem({ topic, problemType: actualProblemTypeForAI, difficulty });
+    const problemDifficulty = result.difficulty || difficulty;
+    const problemWithDifficulty = {...result, difficulty: problemDifficulty};
+    setCurrentProblem(problemWithDifficulty);
+    await addToHistory({
+      topic,
+      problemType: type,
+      actualProblemType: actualProblemTypeForAI,
+      difficulty: problemDifficulty,
+      problem: problemWithDifficulty,
+    });
+    toast({ title: "Problem Generated!", description: `A new ${actualProblemTypeForAI} problem on "${topic}" (${problemDifficulty}) is ready.` });
+    problemGeneratedSuccessfully = true;
+  } catch (error) {
+    console.error("Page: Error generating problem:", error);
+    toast({ variant: "destructive", title: "Error", description: "Failed to generate problem. Please try again." });
+    problemGeneratedSuccessfully = false;
+  } finally {
+    setIsLoadingProblem(false);
+  }
 
-      if (!isMcqStyleProblem) { 
-        let insightsForEval = problemInsights;
-      if (!insightsForEval) {
-        const result = await generateProblemInsights({ 
-          problemStatement: currentProblem.problemStatement, 
-          topic: currentTopic 
-        });
-        insightsForEval = JSON.stringify(result, null, 2);
+  // After the AI action has been attempted, if it was successful,
+  // check the interactionResult again to see if *this action* resulted in hitting the limit.
+  if (problemGeneratedSuccessfully) {
+    if (interactionResult.showLoginModal) { // Guest user hit limit with this action
+      setPaywallContext('guestLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Free Limit Reached",
+        description: "Please sign up or log in to continue generating problems."
+      });
+    } else if (interactionResult.showUpgradeModal) { // Logged-in user hit limit with this action
+      setPaywallContext('loggedInLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Interaction Limit Reached",
+        description: "Your current plan's interaction limit has been reached. Please upgrade to continue."
+      });
+    }
+  }
+  await refreshInteractionStatus();
+};
+
+const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) => {
+  if (!currentProblem || !currentTopic || (currentUser && isLoadingPageProfile)) return;
+
+  const interactionResult = await requireInteraction('evaluate');
+
+  if (!interactionResult.allowed) {
+    if (interactionResult.isLoading) {
+      toast({
+        title: "Loading",
+        description: "Please wait while we verify your authentication status.",
+      });
+    } else if (interactionResult.showLoginModal) {
+      setPaywallContext('guestLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Login Required",
+        description: "Please sign up or log in to continue evaluating answers."
+      });
+    } else if (interactionResult.showUpgradeModal) {
+      setPaywallContext('loggedInLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Upgrade Required",
+        description: "Please upgrade to continue evaluating answers."
+      });
+    }
+    return;
+  }
+
+  setIsLoadingEvaluation(true);
+  setEvaluationResult(null);
+
+  let evaluationSuccessful = false;
+  try {
+    let evalOutput: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string; correctAnswer: string };
+    const updatesForHistory: Partial<InteractionHistoryItem> = { timeTakenSeconds };
+
+    const isMcqStyleProblem = currentProblem.multipleChoiceOptions && currentProblem.multipleChoiceOptions.length > 0;
+
+    if (!isMcqStyleProblem) {
+      let insightsForEval: string;
+
+      if (problemInsights) {
+        insightsForEval = problemInsights;
+      } else if (currentProblem?.problemStatement && currentTopic) {
+        try {
+          // console.log("Page: No existing insights for evaluation, attempting to generate on-the-fly using AI utility.");
+          const insightGenResult: GenerateProblemInsightsOutput = await generateProblemInsights({
+            problemStatement: currentProblem.problemStatement,
+            topic: currentTopic
+          });
+          insightsForEval = JSON.stringify(insightGenResult, null, 2);
+          // Optionally, consider if these on-the-fly insights should update the 'problemInsights' state:
+          // setProblemInsights(insightsForEval);
+        } catch (insightsError) {
+          console.warn("Page: Failed to auto-generate insights for evaluation, proceeding with default.", insightsError);
+          insightsForEval = "No detailed insights available for this problem at the moment.";
+        }
+      } else {
+        insightsForEval = "No detailed insights available due to missing problem details or topic.";
       }
-      
+
       const evalInput: EvaluateTheoryAnswerInput = {
         question: currentProblem.problemStatement,
         studentAnswer: answer,
-        answerFormat: currentProblem.answerFormat, 
-        topicDetails: insightsForEval,
+        answerFormat: currentProblem.answerFormat,
+        topicDetails: insightsForEval, // insightsForEval is now guaranteed to be a string
       };
       evalOutput = await evaluateTheoryAnswer(evalInput);
-      
-      // Ensure correctAnswer exists and contains step-by-step solution
+
       if (!evalOutput.correctAnswer) {
         evalOutput.correctAnswer = currentProblem.correctAnswer;
       }
-      
       updatesForHistory.userAnswer = answer;
-    } else { 
+    } else {
       const isCorrect = answer === currentProblem.correctAnswer;
-      
-      // Create a comprehensive step-by-step explanation for MCQ problems
-      const stepByStepSolution = `## Step-by-Step Solution
-
-${currentProblem.answerFormat}
-
-### Correct Answer: ${currentProblem.correctAnswer}
-
-${currentProblem.correctAnswer ? `### Explanation:
-${currentProblem.answerFormat}` : ''}`;
-      
+      const stepByStepSolution = `## Step-by-Step Solution\n\n${currentProblem.answerFormat}\n\n### Correct Answer: ${currentProblem.correctAnswer}\n\n${currentProblem.correctAnswer ? `### Explanation:\n${currentProblem.answerFormat}` : ''}`;
       evalOutput = {
         isCorrect,
         feedback: isCorrect
-          ? `Correct! ${currentProblem.answerFormat}` 
+          ? `Correct! ${currentProblem.answerFormat}`
           : `Incorrect. The correct option was: ${currentProblem.correctAnswer}`,
         correctAnswer: stepByStepSolution
       };
       updatesForHistory.selectedOption = answer;
-    }  
-      updatesForHistory.evaluation = evalOutput;
-      await updateLastHistoryItem(updatesForHistory); 
-      setEvaluationResult(evalOutput);
-      toast({ title: "Answer Evaluated", description: evalOutput.isCorrect ? "Your answer is correct!" : "Your answer needs improvement." });
-    } catch (error) {
-      console.error("Page: Error evaluating answer:", error);
-      toast({ variant: "destructive", title: "Error", description: "Failed to evaluate answer. Please try again." });
-    } finally {
-      setIsLoadingEvaluation(false);
     }
-  };
+    updatesForHistory.evaluation = evalOutput;
+    await updateLastHistoryItem(updatesForHistory);
+    setEvaluationResult(evalOutput);
+    toast({ title: "Answer Evaluated", description: evalOutput.isCorrect ? "Your answer is correct!" : "Your answer needs improvement." });
+    evaluationSuccessful = true;
+  } catch (error) {
+    console.error("Page: Error evaluating answer:", error);
+    toast({ variant: "destructive", title: "Error", description: "Failed to evaluate answer. Please try again." });
+    evaluationSuccessful = false;
+  } finally {
+    setIsLoadingEvaluation(false);
+  }
+
+  if (evaluationSuccessful) {
+    if (interactionResult.showLoginModal) {
+      setPaywallContext('guestLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Free Limit Reached",
+        description: "Please sign up or log in to continue."
+      });
+    } else if (interactionResult.showUpgradeModal) {
+      setPaywallContext('loggedInLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Interaction Limit Reached",
+        description: "Your current plan's interaction limit has been reached. Please upgrade to continue."
+      });
+    }
+  }
+  await refreshInteractionStatus();
+};
 
   const handleGenerateProblemInsights = async (problemStatement: string, topicToFetch: string) => { 
     try {
-      console.log("handleGenerateProblemInsights called with:", { problemStatement, topicToFetch });
+      // console.log("handleGenerateProblemInsights called with:", { problemStatement, topicToFetch });
       
       if (currentUser && isLoadingPageProfile) return; // Still loading user profile
 
@@ -537,24 +627,26 @@ ${currentProblem.answerFormat}` : ''}`;
 
       if (!interactionResult.allowed) {
         if (interactionResult.showLoginModal) {
+          setPaywallContext('guestLimitReached');
           setShowPaywall(true);
           toast({ 
             variant: "destructive", 
-            title: "Free Limit Reached", 
+            title: "Login Required", 
             description: "Please sign up or log in to continue generating insights." 
           });
         } else if (interactionResult.showUpgradeModal) {
+          setPaywallContext('loggedInLimitReached');
           setShowPaywall(true);
           toast({ 
             variant: "destructive", 
-            title: "Free Limit Reached", 
+            title: "Upgrade Required", 
             description: "Please upgrade to continue generating insights." 
           });
         }
         return;
       }
       
-      console.log("Fetching insights for:", { problemStatement, topicToFetch });
+      // console.log("Fetching insights for:", { problemStatement, topicToFetch });
       setIsLoadingInsights(true); 
       
 
@@ -564,7 +656,7 @@ ${currentProblem.answerFormat}` : ''}`;
         topic: topicToFetch 
       });
       
-      console.log("Generated insights:", result);
+      // console.log("Generated insights:", result);
       
       // Store the complete insights object
       const insightsString = JSON.stringify(result, null, 2);
@@ -595,6 +687,7 @@ ${currentProblem.answerFormat}` : ''}`;
     } finally {
       setIsLoadingInsights(false);
     }
+    await refreshInteractionStatus();
   };
 
   const handleProblemFeedback = async (rating: string, comment: string) => {
@@ -602,7 +695,7 @@ ${currentProblem.answerFormat}` : ''}`;
       toast({variant: "destructive", title: "Cannot Submit Feedback", description: "No active problem or profile still loading."});
       return;
     };
-    console.log("Page: Submitting feedback to history - Rating:", rating, "Comment:", comment);
+    // console.log("Page: Submitting feedback to history - Rating:", rating, "Comment:", comment);
     await updateLastHistoryItem({ 
       feedbackRating: rating,
       feedbackComment: comment,
@@ -656,8 +749,18 @@ ${currentProblem.answerFormat}` : ''}`;
 
   const handleLoginForPaywall = async () => {
     setShowPaywall(false); 
-    toast({title: "Login to Subscribe", description: "Please use the Login/Sign Up option in the header."})
+    // console.log('Attempting to redirect to /login?redirect=%2F'); // Debug log
+    router.push('/login?redirect=%2F');
+    toast({title: "Redirecting", description: "Please wait while we take you to the login page."}) // Updated toast
   };
+
+  const refreshInteractionStatus = useCallback(async () => {
+    if (isClientMounted && !isLoadingPageProfile) {
+      // console.log("Page: Refreshing interaction status explicitly...");
+      const status = await checkInteractionLimit('problem_generation'); // Using a general type for status display
+      setInteractionStatus(status);
+    }
+  }, [isClientMounted, isLoadingPageProfile, checkInteractionLimit]);
 
   useEffect(() => {
     if (isClientMounted && !isLoadingPageProfile && !currentUser && !currentProblem && !isLoadingProblem && history.length > 0) {
@@ -823,23 +926,15 @@ ${currentProblem.answerFormat}` : ''}`;
         </div>
       </div>
 
-      <PaywallModal
+      <PaywallModal 
         isOpen={showPaywall}
         onClose={() => {
-          // Only allow closing if it's not a mandatory login/upgrade prompt
-          // This will be determined by the interactionResult state
-          // For now, we'll allow closing if the user is logged in and subscribed, or if they are a guest and haven't hit the hard limit
-          if (currentUser && userProfile && userProfile.is_subscribed) {
-            setShowPaywall(false);
-          } else if (!currentUser && guestInteractionCount < FREE_INTERACTION_LIMIT) {
-            setShowPaywall(false);
-          } else {
-            toast({title: "Action Required", description: "Please log in or select a plan to continue using AOLBEAM.", variant: "default"});
-          }
+          setShowPaywall(false);
+          setPaywallContext(null); // Reset context on close
         }}
         onSubscribe={handleSubscribe}
         onLoginRegister={handleLoginForPaywall} 
-        isMandatory={showPaywall} // isMandatory will be controlled by the `showPaywall` state which is set by `requireInteraction`
+        displayContext={paywallContext}
       />
       
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 pb-4 text-center">

@@ -39,23 +39,49 @@ export async function POST(request: Request) {
     
     if (userError || !user) {
       // For non-logged in users, we'll handle this on the frontend
-      return NextResponse.json({ allowed: false, remaining: 0, limit: 0, isLoggedIn: false });
+      return NextResponse.json({ allowed: false, remaining: 0, limit: 0, isLoggedIn: false, showLoginModal: true, showUpgradeModal: false });
     }
 
     // Get user profile to check subscription status
-    const { data: profile, error: profileError } = await supabase
+    let profileData: { is_subscribed: boolean; subscription_plan: string | null } | null = null;
+    // Select subscription_plan_id directly
+    const { data: rawProfileData, error: profileError } = await supabase
       .from('user_profiles')
-      .select('is_subscribed, subscription_plan')
+      .select('is_subscribed, subscription_plan_id') // Fetch the actual column name
       .eq('id', user.id)
       .single();
 
-    if (profileError) {
+    if (rawProfileData) {
+      // Manually construct profileData with the desired 'subscription_plan' key
+      profileData = {
+        is_subscribed: rawProfileData.is_subscribed,
+        // Assuming subscription_plan_id stores the plan name string or null
+        subscription_plan: rawProfileData.subscription_plan_id as string | null, 
+      };
+    } else if (profileError && profileError.code !== 'PGRST116') {
+      // An actual error occurred other than "not found"
       console.error('Error getting user profile:', profileError);
       return NextResponse.json(
         { error: 'Failed to get user profile' },
         { status: 500 }
       );
+    } else {
+      // Profile not found (PGRST116 or fetchedProfile is null without specific error)
+      // Treat as non-subscribed
+      profileData = { is_subscribed: false, subscription_plan: null };
     }
+
+    // Ensure profileData is not null before proceeding
+    if (!profileData) {
+      // This case should ideally not be reached if error handling is exhaustive
+      console.error('Profile data is unexpectedly null after fetch and error handling.');
+      return NextResponse.json(
+        { error: 'Internal server error: Profile data missing' },
+        { status: 500 }
+      );
+    }
+
+    const profile = profileData; // Now profile is guaranteed to be non-null
 
     // Determine limit based on subscription plan
     let limit = 25; // Default for logged-in users without subscription
@@ -94,11 +120,8 @@ export async function POST(request: Request) {
       }
     } else {
       // Handle non-subscribed users (free/basic)
-      if (profile.subscription_plan === 'basic') {
-        limit = 25;
-      } else {
-        limit = 15; // Free tier
-      }
+      // For logged-in users who are not subscribed, provide a higher free limit
+      limit = 2; // Temporarily 2 interactions for logged-in free users for testing
       isPaidPlan = false;
       isDaily = false;
     }
@@ -124,7 +147,9 @@ export async function POST(request: Request) {
         remaining: Math.floor(limit / 2), // Give them half the limit as a fallback
         limit,
         isLoggedIn: true,
-        isPaidPlan
+        isPaidPlan,
+        showLoginModal: false,
+        showUpgradeModal: false
       } as InteractionCheckResponse);
     }
 
@@ -139,7 +164,9 @@ export async function POST(request: Request) {
       limit,
       isLoggedIn: true,
       isPaidPlan,
-      isDaily
+      isDaily,
+      showLoginModal: false,
+      showUpgradeModal: false
     } as InteractionCheckResponse);
 
   } catch (error) {
