@@ -40,7 +40,7 @@ import { InteractionType, InteractionLimitResult } from '@/types/interaction';
 // Server-side data fetching should be moved to a Server Component
 // and passed as props to this component
 
-const FREE_INTERACTION_LIMIT = 25;
+const FREE_INTERACTION_LIMIT = 10;
 const ALL_CONCRETE_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
 
 export default function AOLBEAMPage() {
