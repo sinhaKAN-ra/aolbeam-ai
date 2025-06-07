@@ -43,11 +43,11 @@ interface ExamLink {
 }
 
 const examLinks: ExamLink[] = [
-  { name: 'JEE (Main & Advanced)', href: 'https://jeemain.nta.nic.in/', icon: GraduationCap },
-  { name: 'NEET', href: 'https://neet.nta.nic.in/', icon: Award },
-  { name: 'UPSC Civil Services', href: 'https://upsc.gov.in/', icon: BriefcaseBusiness },
-  { name: 'CAT', href: 'https://iimcat.ac.in/', icon: Scaling },
-  { name: 'GATE', href: 'https://gate.iitk.ac.in/', icon: BookOpen },
+  // { name: 'JEE (Main & Advanced)', href: 'https://jeemain.nta.nic.in/', icon: GraduationCap },
+  // { name: 'NEET', href: 'https://neet.nta.nic.in/', icon: Award },
+  // { name: 'UPSC Civil Services', href: 'https://upsc.gov.in/', icon: BriefcaseBusiness },
+  // { name: 'CAT', href: 'https://iimcat.ac.in/', icon: Scaling },
+  // { name: 'GATE', href: 'https://gate.iitk.ac.in/', icon: BookOpen },
 ];
 
 
@@ -120,7 +120,7 @@ export default function Footer() {
         <div className="mb-6">
           {/* <h3 className="text-md font-semibold text-foreground mb-3">Popular Exam Resources</h3> */}
           <div className="flex justify-center gap-x-6 gap-y-3 flex-wrap text-sm">
-            {examLinks.map((exam) => (
+            {examLinks?.map((exam) => (
               <Link
                 key={exam.name}
                 href={exam.href}
