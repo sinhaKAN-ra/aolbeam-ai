@@ -84,7 +84,7 @@ export async function POST(request: Request) {
     const profile = profileData; // Now profile is guaranteed to be non-null
 
     // Determine limit based on subscription plan
-    let limit = 25; // Default for logged-in users without subscription
+    let limit = 15; // Default for logged-in users without subscription
     let isPaidPlan = false;
     let isDaily = false;
 
@@ -121,7 +121,7 @@ export async function POST(request: Request) {
     } else {
       // Handle non-subscribed users (free/basic)
       // For logged-in users who are not subscribed, provide a higher free limit
-      limit = 2; // Temporarily 2 interactions for logged-in free users for testing
+      limit = 15; // Free interactions for logged-in users without subscription
       isPaidPlan = false;
       isDaily = false;
     }

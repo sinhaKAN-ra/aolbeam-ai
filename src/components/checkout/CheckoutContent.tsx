@@ -164,13 +164,13 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
                             <Label htmlFor="option-oneTime" className="cursor-pointer">
                               <div className="flex items-center gap-2 mb-2">
                                 <span className="text-lg font-semibold">One-Time Purchase</span>
-                                <Badge variant="outline">One Week Access</Badge>
+                                <Badge variant="outline">One Time Access</Badge>
                               </div>
                               <div className="text-2xl font-bold text-primary mb-2">
                                 {plan.currencySymbol}{oneTimePriceMarkedUp.toFixed(2)}
                               </div>
                               <p className="text-sm text-gray-600">
-                                Includes current features with single time access for 7 days.
+                                Includes current features with single time access.
                               </p>
                             </Label>
                           </div>
