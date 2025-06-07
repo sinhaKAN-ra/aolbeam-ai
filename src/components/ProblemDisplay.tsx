@@ -2,7 +2,7 @@
 "use client";
 
 import type * as React from 'react';
-import { useState, useEffect, useRef } from 'react';
+import { forwardRef, useState, useEffect, useRef, useImperativeHandle } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -32,7 +32,20 @@ const formatDisplayTime = (totalSeconds: number): string => {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
-export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbackSubmit, isLoading, currentTopic, evaluationSubmitted = false }: ProblemDisplayProps) {
+export interface ProblemDisplayRefs {
+  timerRef: React.RefObject<HTMLDivElement>;
+  answerInputRef: React.RefObject<HTMLDivElement>;
+}
+
+export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps>(({ problem, problemType, onSubmitAnswer, onFeedbackSubmit, isLoading, currentTopic, evaluationSubmitted = false }: ProblemDisplayProps, ref) => {
+  const timerRef = useRef<HTMLDivElement>(null);
+  const answerInputRef = useRef<HTMLDivElement>(null);
+  
+  // Directly expose the refs to parent component
+  useImperativeHandle(ref, () => ({
+    timerRef,
+    answerInputRef
+  }));
   const [userAnswer, setUserAnswer] = useState<string>('');
   const [selectedOption, setSelectedOption] = useState<string>('');
   const [feedbackRating, setFeedbackRating] = useState<FeedbackRating>("");
@@ -145,7 +158,7 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
               {isTimerActive && intervalRef.current ? <PauseCircle className="mr-1 h-4 w-4" /> : <PlayCircle className="mr-1 h-4 w-4" />}
               {isTimerActive && intervalRef.current ? 'Pause' : (elapsedTimeInSeconds > 0 ? 'Resume' : 'Start')}
             </Button>
-            <div className="flex items-center text-lg sm:text-xl font-mono font-semibold text-primary">
+            <div ref={timerRef} className="flex items-center text-lg sm:text-xl font-mono font-semibold text-primary">
               <TimerIcon className="mr-1 h-5 w-5" />
               <span>{formatDisplayTime(elapsedTimeInSeconds)}</span>
             </div>
@@ -154,7 +167,7 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {isMcqStyleProblem ? (
-            <div className="space-y-2">
+            <div ref={answerInputRef} className="space-y-2">
               <Label className="text-base font-medium">Select an Option</Label>
               <RadioGroup
                 value={selectedOption}
@@ -182,7 +195,7 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
               </RadioGroup>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div ref={answerInputRef} className="space-y-2">
               <Label htmlFor="theory-answer" className="text-base font-medium">Your Answer</Label>
               <Textarea
                 id="theory-answer"
@@ -253,4 +266,4 @@ export function ProblemDisplay({ problem, problemType, onSubmitAnswer, onFeedbac
       </CardContent>
     </Card>
   );
-}
+});

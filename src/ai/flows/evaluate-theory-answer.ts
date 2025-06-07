@@ -51,17 +51,20 @@ const prompt = ai.definePrompt({
   name: 'evaluateTheoryAnswerPrompt',
   input: {schema: EvaluateTheoryAnswerInputSchema},
   output: {schema: EvaluateTheoryAnswerOutputSchema},
-  prompt: `You are an expert educator providing feedback on student answers to theory questions.
+  prompt: `
+  You are an expert educator providing feedback on student answers to theory questions.
 
 Content Formatting Rules for your outputs:
-1.  **Mathematical Formulas**: Use LaTeX notation. For inline math, use single dollar signs (e.g., $E=mc^2$). For display/block math, use double dollar signs (e.g., $$x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$$).
-2.  **Code Snippets**: Use Markdown fenced code blocks with language identifiers (e.g., \`\`\`python\nprint("Hello World")\n\`\`\` or \`\`\`javascript\nconsole.log("Hi");\n\`\`\`).
-3.  **Diagrams**: If a diagram is relevant, first try to represent it using Mermaid.js syntax within a Markdown code block (e.g., \`\`\`mermaid\ngraph TD;\nA[Start] --> B(Process);\nB --> C{Decision};\nC --> D[End];\n\`\`\`). If Mermaid.js is not suitable, provide a clear textual description of the diagram.
+1.  **Mathematical Formulas**: Use LaTeX notation. For inline math, use single dollar signs (e.g., $E=mc^2$). For display/block math, use double dollar signs (e.g., $$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$).
+2.  **Code Snippets**: Use Markdown fenced code blocks with language identifiers (e.g., \`\`\`python\\nprint(\"Hello World\")\\n\`\`\` or \`\`\`javascript\\nconsole.log(\"Hi\");\\n\`\`\`).
+3.  **Diagrams**: If a diagram is relevant, first try to represent it using Mermaid.js syntax within a Markdown code block (e.g., \`\`\`mermaid\\ngraph TD;\\nA[Start] --> B(Process);\\nB --> C{Decision};\\nC --> D[End];\\n\`\`\`). If Mermaid.js is not suitable, provide a clear textual description of the diagram.
 
 Ensure the LaTeX, Markdown, and Mermaid syntax is syntactically correct and properly escaped within the JSON string for all fields.
 
 Evaluate the student's answer to the following question. Use the provided 'Expected Answer Guidelines/Format' and 'Topic Details' to form your evaluation.
 Determine if the answer is correct, and provide detailed feedback adhering to the formatting rules above. Set the isCorrect output field appropriately.
+
+**IMPORTANT: The 'isCorrect' field must be set to 'true' ONLY if the student's answer is functionally equivalent to the 'correctAnswer' you derive, considering all relevant context and expected format. If there is any any significant deviation or error, it must be 'false'.**
 
 Question:
 {{{question}}}
@@ -75,15 +78,16 @@ Expected Answer Guidelines/Format:
 Topic Details (for context, may contain formatted content):
 {{{topicDetails}}}
 
-**CRITICAL REQUIREMENT: For the 'correctAnswer' field, you MUST provide a comprehensive step-by-step solution that:**
-1. Breaks down the problem-solving process into clear sequential steps
-2. Explains the reasoning behind each step
-3. Shows all intermediate calculations or logical reasoning
-4. Arrives at the final answer with a clear conclusion
-5. Uses appropriate formatting (LaTeX for math, Markdown for code, Mermaid for diagrams)
+**CRITICAL REQUIREMENT: For the 'correctAnswer' field, you MUST provide a comprehensive, pedagogically sound, and strategically helpful step-by-step solution that:**
+1. Breaks down the problem-solving process into clear sequential steps, guiding the student through the thought process.
+2. Explains the reasoning and underlying concepts behind each step, anticipating common student misconceptions.
+3. Shows all intermediate calculations or logical reasoning, making the progression transparent.
+4. Arrives at the final answer with a clear conclusion.
+5. Uses appropriate formatting (LaTeX for math, Markdown for code, Mermaid for diagrams).
 
-This step-by-step solution will be shown to the student to help them understand how to solve the problem correctly.
-  `,
+This step-by-step solution will be shown to the student to help them understand how to solve the problem correctly and learn effective problem-solving strategies.
+  
+**CRITICAL REQUIREMENT: For the 'solutionSteps' field, you MUST break down the 'correctAnswer' into clear, sequential steps. Each step should have a \`stepNumber\`, \`stepDescription\` (a concise summary of the step), and \`stepExplanation\` (the detailed reasoning and content for that step). If the \`correctAnswer\` is a single, continuous explanation, you can put it as one step with \`stepNumber: 1\`, an appropriate \`stepDescription\`, and the full content in \`stepExplanation\`. Ensure all formatting (LaTeX, Markdown, Mermaid) is correctly applied within \`stepExplanation\`.** `
 });
 
 const evaluateTheoryAnswerFlow = ai.defineFlow(

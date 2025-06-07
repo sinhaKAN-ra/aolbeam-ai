@@ -49,7 +49,7 @@ export function UseCaseBanner() {
           {useCases.map((useCase, index) => (
             <div
               key={index}
-              className="flex flex-col items-center text-center p-3 bg-card rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300"
+              className="flex flex-col items-center text-center p-3 bg-card rounded-lg"
             >
               <div className="mb-2 flex-shrink-0">
                 <useCase.icon className="h-8 w-8 text-primary" />
