@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { PaywallModal, type PaywallModalProps } from '@/components/PaywallModal';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -904,10 +905,21 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
-              <span className="text-black dark:text-primary">Access of Learning</span>
+              <span className="text-black dark:text-primary">AOLBEAM</span>
             </h1>
+            <div className="mt-4 flex justify-center">
+              <a href="https://www.producthunt.com/products/aolbeam?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-aolbeam" target="_blank" rel="noopener noreferrer">
+                <img 
+                  src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=975222&theme=light&t=1749297505262" 
+                  alt="AOLBeam - Learn and practice with AI. Be truly PREPARED for any EXAM | Product Hunt" 
+                  style={{ width: '250px', height: '54px' }} 
+                  width="250" 
+                  height="54" 
+                />
+              </a>
+            </div>
             <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
-              Beam into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
+              <span className="font-bold text-xl md:text-2xl">Access of Learning - Beam </span> into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
               Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
             </p>
             <div className="mt-10 py-16 text-center">
