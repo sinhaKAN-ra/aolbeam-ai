@@ -16,7 +16,7 @@ export interface InteractionHistoryItem {
   problem: GeneratePracticeProblemOutput; // This will contain the actual problem type generated
   userAnswer?: string; // For theory
   selectedOption?: string; // For practical
-  evaluation?: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string };
+  evaluation?: EvaluateTheoryAnswerOutput;
   isTopicRevised?: boolean;
   topicDetails?: string | null;
   feedbackRating?: string; // e.g., "good", "unclear", "incorrect_ans", "irrelevant"

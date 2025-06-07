@@ -25,7 +25,7 @@ import { RefreshCw, FilePlus2, ArrowRight, Loader2 } from 'lucide-react';
 
 import type { InteractionHistoryItem, ProblemType, UserProfile, DifficultyLevel } from '@/types';
 import { ProblemGenerator, ProblemGeneratorHandles } from '@/components/ProblemGenerator';
-import { ProblemDisplay } from '@/components/ProblemDisplay';
+import { ProblemDisplay, ProblemDisplayRefs } from '@/components/ProblemDisplay';
 import { EvaluationResult } from '@/components/EvaluationResult';
 import { ProblemInsights } from '@/components/ProblemInsights';
 import { HistoryView } from '@/components/HistoryView';
@@ -70,7 +70,7 @@ export default function AOLBEAMPage() {
   const [currentProblemType, setCurrentProblemType] = useState<ProblemType>('theory');
   const [currentDifficulty, setCurrentDifficulty] = useState<DifficultyLevel>('medium');
   const [currentProblem, setCurrentProblem] = useState<GeneratePracticeProblemOutput | null>(null);
-  const [evaluationResult, setEvaluationResult] = useState<EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string } | null>(null);
+  const [evaluationResult, setEvaluationResult] = useState<EvaluateTheoryAnswerOutput | null>(null);
   const [problemInsights, setProblemInsights] = useState<string | null>(null);
 
   // Loading states
@@ -78,7 +78,20 @@ export default function AOLBEAMPage() {
   const [isLoadingEvaluation, setIsLoadingEvaluation] = useState<boolean>(false);
   const [isLoadingInsights, setIsLoadingInsights] = useState<boolean>(false);
 
-  // History and interactions
+  const problemDisplayRef = useRef<ProblemDisplayRefs>(null);
+  const evaluationResultRef = useRef<HTMLDivElement>(null);
+
+
+
+  useEffect(() => {
+    // Cleanup function to remove highlight when component unmounts or state changes
+    return () => {
+      if (evaluationResultRef.current) {
+        evaluationResultRef.current.classList.remove('highlight-border');
+      }
+    };
+  }, [currentProblem, evaluationResult]);
+
   const [history, setHistory] = useState<InteractionHistoryItem[]>([]);
   const [guestInteractionCount, setGuestInteractionCount] = useLocalStorage<number>('aolbeamGuestInteractionCount', 0);
   const { checkInteractionLimit, recordInteraction, requireInteraction } = useInteractionLimit(
@@ -95,7 +108,9 @@ export default function AOLBEAMPage() {
   // Refs
   const problemGeneratorRef = useRef<HTMLDivElement>(null);
   const problemGeneratorComponentRef = useRef<ProblemGeneratorHandles>(null);
-  
+  const paywallModalRef = useRef<PaywallModalProps | null>(null);
+
+
   // Initialize client-side state and fetch initial data
   useEffect(() => {
     setIsClientMounted(true);
@@ -464,6 +479,20 @@ const handleGenerateProblem = async (topic: string, type: ProblemType, difficult
     const problemDifficulty = result.difficulty || difficulty;
     const problemWithDifficulty = {...result, difficulty: problemDifficulty};
     setCurrentProblem(problemWithDifficulty);
+    console.log('Page: Attempting to highlight and scroll with direct refs');
+    if (problemDisplayRef.current?.timerRef.current) {
+      // Add highlight border class
+      problemDisplayRef.current.timerRef.current.classList.add('highlight-border');
+      // Scroll to timer
+      problemDisplayRef.current.timerRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      // Set a timer to scroll to the answer input after 2 seconds
+      setTimeout(() => {
+        if (problemDisplayRef.current?.answerInputRef.current) {
+          problemDisplayRef.current.answerInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 2000); // 2 second delay before scrolling to answer section
+    }
     await addToHistory({
       topic,
       problemType: type,
@@ -609,6 +638,10 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
     updatesForHistory.evaluation = evalOutput;
     await updateLastHistoryItem(updatesForHistory);
     setEvaluationResult(evalOutput);
+    if (evaluationResultRef.current) {
+      evaluationResultRef.current.classList.add('highlight-border');
+      evaluationResultRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
     toast({ title: "Answer Evaluated", description: evalOutput.isCorrect ? "Your answer is correct!" : "Your answer needs improvement." });
     evaluationSuccessful = true;
   } catch (error: any) {
@@ -937,6 +970,7 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
                   </div>
                   
                   <ProblemDisplay
+                    ref={problemDisplayRef}
                     problem={currentProblem}
                     problemType={currentProblemType} 
                     onSubmitAnswer={handleEvaluateAnswer}
@@ -947,7 +981,14 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
                   />
                   
                   {evaluationResult && (
-                    <EvaluationResult evaluation={evaluationResult} />
+                    <>
+                      <EvaluationResult ref={evaluationResultRef} evaluation={evaluationResult} />
+                      {currentProblem && evaluationResult.isCorrect !== undefined && ( // Only show insights prompt if there's a current problem and evaluation is complete
+                        <div className="mt-4 p-4 bg-blue-100 border border-blue-200 text-blue-800 rounded-md">
+                          <p>Want to understand how to solve similar problems? Click "View Insights" below!</p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </>
               )}

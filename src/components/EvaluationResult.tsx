@@ -2,7 +2,7 @@
 "use client";
 
 import type * as React from 'react';
-import { useState } from 'react';
+import { forwardRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle, XCircle, Info, ChevronDown, ChevronUp, Lightbulb } from 'lucide-react';
 import type { EvaluateTheoryAnswerOutput } from '@/ai/flows/evaluate-theory-answer';
@@ -10,7 +10,7 @@ import MathRenderer from './MathRenderer';
 import { Button } from '@/components/ui/button';
 
 interface EvaluationResultProps {
-  evaluation: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string; correctAnswer?: string } | null;
+  evaluation: EvaluateTheoryAnswerOutput | null;
 }
 
 // Function to format the step-by-step solution and remove duplicated content
@@ -52,7 +52,7 @@ const formatStepByStepSolution = (content: string): string => {
   return content;
 };
 
-export function EvaluationResult({ evaluation }: EvaluationResultProps) {
+export const EvaluationResult = forwardRef<HTMLDivElement, EvaluationResultProps>(({ evaluation }, ref) => {
   const [showSolution, setShowSolution] = useState(false);
   
   if (!evaluation) return null;
@@ -60,7 +60,7 @@ export function EvaluationResult({ evaluation }: EvaluationResultProps) {
   const { isCorrect, feedback, correctAnswer } = evaluation;
 
   return (
-    <Card className={`shadow-lg ${isCorrect ? 'border-green-500' : 'border-red-500'} bg-opacity-10`}>
+    <Card ref={ref} className={`shadow-lg ${isCorrect ? 'border-green-500' : 'border-red-500'} bg-opacity-10`}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-xl font-semibold">
           {isCorrect ? <CheckCircle className="text-green-500" /> : <XCircle className="text-red-500" />}
@@ -92,7 +92,18 @@ export function EvaluationResult({ evaluation }: EvaluationResultProps) {
             
             {showSolution && (
               <div className="prose prose-sm max-w-none text-base bg-muted/50 p-3 rounded-md dark:prose-invert mt-2 border-l-4 border-amber-500 overflow-x-auto">
-                <MathRenderer content={formatStepByStepSolution(correctAnswer)} />
+                {evaluation.solutionSteps && evaluation.solutionSteps.length > 0 ? (
+                  <ol className="list-decimal list-inside space-y-4">
+                    {evaluation.solutionSteps.map((step, index) => (
+                      <li key={index}>
+                        <h5 className="font-semibold text-lg mb-1">Step {step.stepNumber}: {step.stepDescription}</h5>
+                        <MathRenderer content={step.stepExplanation} />
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <MathRenderer content={formatStepByStepSolution(correctAnswer)} />
+                )}
               </div>
             )}
           </div>
@@ -100,4 +111,4 @@ export function EvaluationResult({ evaluation }: EvaluationResultProps) {
       </CardContent>
     </Card>
   );
-}
+});

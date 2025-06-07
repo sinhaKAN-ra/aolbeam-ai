@@ -51,12 +51,13 @@ const prompt = ai.definePrompt({
   name: 'evaluateTheoryAnswerPrompt',
   input: {schema: EvaluateTheoryAnswerInputSchema},
   output: {schema: EvaluateTheoryAnswerOutputSchema},
-  prompt: `You are an expert educator providing feedback on student answers to theory questions.
+  prompt: `
+  You are an expert educator providing feedback on student answers to theory questions.
 
 Content Formatting Rules for your outputs:
-1.  **Mathematical Formulas**: Use LaTeX notation. For inline math, use single dollar signs (e.g., $E=mc^2$). For display/block math, use double dollar signs (e.g., $$x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$$).
-2.  **Code Snippets**: Use Markdown fenced code blocks with language identifiers (e.g., \`\`\`python\nprint("Hello World")\n\`\`\` or \`\`\`javascript\nconsole.log("Hi");\n\`\`\`).
-3.  **Diagrams**: If a diagram is relevant, first try to represent it using Mermaid.js syntax within a Markdown code block (e.g., \`\`\`mermaid\ngraph TD;\nA[Start] --> B(Process);\nB --> C{Decision};\nC --> D[End];\n\`\`\`). If Mermaid.js is not suitable, provide a clear textual description of the diagram.
+1.  **Mathematical Formulas**: Use LaTeX notation. For inline math, use single dollar signs (e.g., $E=mc^2$). For display/block math, use double dollar signs (e.g., $$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$).
+2.  **Code Snippets**: Use Markdown fenced code blocks with language identifiers (e.g., \`\`\`python\\nprint(\"Hello World\")\\n\`\`\` or \`\`\`javascript\\nconsole.log(\"Hi\");\\n\`\`\`).
+3.  **Diagrams**: If a diagram is relevant, first try to represent it using Mermaid.js syntax within a Markdown code block (e.g., \`\`\`mermaid\\ngraph TD;\\nA[Start] --> B(Process);\\nB --> C{Decision};\\nC --> D[End];\\n\`\`\`). If Mermaid.js is not suitable, provide a clear textual description of the diagram.
 
 Ensure the LaTeX, Markdown, and Mermaid syntax is syntactically correct and properly escaped within the JSON string for all fields.
 
@@ -85,7 +86,8 @@ Topic Details (for context, may contain formatted content):
 5. Uses appropriate formatting (LaTeX for math, Markdown for code, Mermaid for diagrams).
 
 This step-by-step solution will be shown to the student to help them understand how to solve the problem correctly and learn effective problem-solving strategies.
-  `,
+  
+**CRITICAL REQUIREMENT: For the 'solutionSteps' field, you MUST break down the 'correctAnswer' into clear, sequential steps. Each step should have a \`stepNumber\`, \`stepDescription\` (a concise summary of the step), and \`stepExplanation\` (the detailed reasoning and content for that step). If the \`correctAnswer\` is a single, continuous explanation, you can put it as one step with \`stepNumber: 1\`, an appropriate \`stepDescription\`, and the full content in \`stepExplanation\`. Ensure all formatting (LaTeX, Markdown, Mermaid) is correctly applied within \`stepExplanation\`.** `
 });
 
 const evaluateTheoryAnswerFlow = ai.defineFlow(
