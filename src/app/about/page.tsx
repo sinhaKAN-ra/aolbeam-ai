@@ -1,4 +1,3 @@
-
 // src/app/about/page.tsx
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -15,8 +14,8 @@ export const metadata: Metadata = {
 export default function AboutUsPage() {
   return (
     <>
-      <div className="px-4 sm:px-6 lg:px-8 pb-8">
-        <div className="max-w-5xl mx-auto">
+      <div className="pb-8">
+        <div>
           <Card className="shadow-xl">
             <CardHeader className="text-center">
               <div className="mx-auto mb-4">

@@ -97,8 +97,8 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
 
   return (
     <React.Fragment>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 py-8 px-4">
-        <div className="container mx-auto max-w-7xl">
+      <div className="bg-gradient-to-br from-slate-50 via-white to-slate-50 py-8">
+        <div>
           {/* Header Section */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-4">
@@ -111,7 +111,7 @@ export const CheckoutContent: React.FC<CheckoutContentProps> = ({ plan, isLoadin
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3">
             {/* Left Column - Purchase Options & Order Summary */}
             <div className="lg:col-span-2 space-y-6">
               {/* Purchase Options Card */}

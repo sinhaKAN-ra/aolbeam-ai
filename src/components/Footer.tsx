@@ -156,7 +156,7 @@ export default function Footer() {
         */}
 
         <p className="text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} AOLBEAM. All rights reserved. Powered by GenAI.
+          &copy; {new Date().getFullYear()} AOLBEAM. All rights reserved.
         </p>
       </div>
     </footer>

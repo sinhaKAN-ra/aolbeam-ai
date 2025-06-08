@@ -200,25 +200,23 @@ export default function PricingPage() {
 
   return (
     <>
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <Zap className="w-6 h-6 text-primary" />
-            </div>
-            <h1 className="text-4xl font-bold text-primary">
+      <div className="py-12">
+        <div className="inline-flex items-center justify-center gap-3 mb-4">
+          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+            <Zap className="w-6 h-6 text-primary" />
+             <h1 className="text-4xl font-bold text-primary">
               AOLBEAM
             </h1>
           </div>
           <h2 className="text-3xl font-semibold mb-4">
             Choose Your Learning Plan
           </h2>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-xl text-muted-foreground">
             Select the perfect plan to unlock unlimited learning and achieve your exam goals.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {plans.map((plan) => (
             <Card key={plan.id} className={`flex flex-col ${plan.highlight ? 'border-primary shadow-xl ring-2 ring-primary' : 'shadow-lg'}`}>
               <CardHeader className="pb-4">
@@ -259,7 +257,7 @@ export default function PricingPage() {
           ))}
         </div>
 
-        <div className="mt-16 max-w-2xl mx-auto">
+        <div className="mt-16">
           <Card className="shadow-lg">
             <CardHeader>
               <CardTitle className="text-xl flex items-center gap-2">

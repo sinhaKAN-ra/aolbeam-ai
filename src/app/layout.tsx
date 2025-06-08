@@ -37,7 +37,7 @@ export default function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning className={`h-full ${inter.variable}`}>
-      <body className="antialiased flex flex-col h-full font-sans">
+      <body className="antialiased flex flex-col min-h-full font-sans overflow-y-auto">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -46,9 +46,9 @@ export default function RootLayout({
         >
           <AuthProvider>
             <SidebarProvider>
-              <div className="flex flex-col h-full relative">
+              <div className="flex flex-col flex-1 relative">
                 <Header />
-                <div className="flex flex-1 overflow-hidden pt-16 overflow-y-auto">
+                <div className="flex flex-1 pt-16">
                   <Sidebar>
                     <SidebarContent />
                   </Sidebar>

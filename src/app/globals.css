@@ -31,14 +31,22 @@ html {
   height: 100vh;
   max-width: 100%;
   overflow-x: hidden;
+  /* overflow-y: hidden; /* Removed to allow main content to scroll */
 }
 
 body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
-
+  /* overflow-y: hidden; */ /* Removed to allow main content to scroll */
   position: relative;
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+::-webkit-scrollbar {
+  display: none;
 }
 
 /* Ensure all elements respect their container's width */

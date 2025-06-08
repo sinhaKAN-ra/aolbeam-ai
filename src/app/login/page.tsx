@@ -28,7 +28,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user, isLoading, signInWithGoogle } = useAuth();
-  const redirectTo = searchParams.get('redirect') || '/';
+  const redirectTo = searchParams?.get('redirect') || '/';
 
   // If user is already logged in, redirect them
   useEffect(() => {
@@ -57,8 +57,8 @@ function LoginContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <Card className="w-full max-w-md mx-auto">
+    <div className="bg-background">
+      <Card className="w-full">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl text-center">Welcome to AOLBEAM</CardTitle>
           <CardDescription className="text-center">

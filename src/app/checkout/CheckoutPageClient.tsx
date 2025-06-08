@@ -130,7 +130,7 @@ export default function CheckoutPageClient() {
   return (
     <PayPalScriptProvider options={paypalOptions}>
       <AuthGuard>
-        <div className="container mx-auto py-6 space-y-6">
+        <div className="w-full">
           <CheckoutContent 
             plan={plan} // plan is now CheckoutPlanInfo | null
             isLoading={isLoading}

@@ -31,6 +31,7 @@ import { EvaluationResult } from '@/components/EvaluationResult';
 import { ProblemInsights } from '@/components/ProblemInsights';
 import { HistoryView } from '@/components/HistoryView';
 import { UseCaseBanner } from '@/components/UseCaseBanner';
+import MainLayoutContainer from '@/components/MainLayoutContainer';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSupabase } from '@/hooks/useSupabase';
 import { useRouter } from 'next/navigation';
@@ -900,9 +901,9 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
   }, [isClientMounted, interactionStatus, guestInteractionCount, userProfile]);
 
   return (
-    <div className="flex flex-col">
+    <>
       <section className="py-16 md:py-24 text-center bg-background">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
               <span className="text-black dark:text-primary">AOLBEAM</span>
@@ -946,7 +947,7 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
       <UseCaseBanner />
       
       <div className="flex-1 bg-background">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 overflow-hidden">
+        <div className="py-8 overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6 w-full">
               <div ref={problemGeneratorRef}>
@@ -1036,7 +1037,7 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
           {interactionsLeftText()}
         </p>
       </div>
-    </div>
+    </>
   );
 }
 
