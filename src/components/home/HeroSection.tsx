@@ -43,7 +43,7 @@ export const HeroSection = ({ scrollToProblemGenerator }: HeroSectionProps) => {
                 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
             >
               <span className="mr-2 transition-transform duration-300 group-hover:-translate-x-1">
-                Practice Your First Problem
+                Practice Your First Question
               </span>
               <ArrowRight className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
             </Button>
