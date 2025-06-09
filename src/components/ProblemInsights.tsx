@@ -1,7 +1,7 @@
 
 "use client";
 
-import type * as React from 'react';
+import React, { forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -17,7 +17,10 @@ interface ProblemInsightsProps {
   isLoading: boolean;
 }
 
-export function ProblemInsights({ problem, topic, insights, onFetchInsights, isLoading }: ProblemInsightsProps) {
+export const ProblemInsights = forwardRef<HTMLDivElement, ProblemInsightsProps>((
+  { problem, topic, insights, onFetchInsights, isLoading }, 
+  ref
+) => {
   const explanatoryMessage = "Understand the core patterns and principles for the current problem. This helps you recognize how to approach similar challenges effectively, a key skill for top performers.";
 
   const handleFetchInsights = async () => {
@@ -40,7 +43,7 @@ export function ProblemInsights({ problem, topic, insights, onFetchInsights, isL
 
   if (!problem || !topic) {
     return (
-      <Card className="shadow-lg">
+      <Card className="shadow-lg" ref={ref as React.RefObject<HTMLDivElement> | null | undefined}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl font-semibold">
             <Lightbulb className="text-primary" /> Problem-Solving Insights
@@ -70,7 +73,7 @@ export function ProblemInsights({ problem, topic, insights, onFetchInsights, isL
   });
 
   return (
-    <Card className="h-full flex flex-col">
+    <Card className="h-full flex flex-col" ref={ref as React.RefObject<HTMLDivElement> | null | undefined}>
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-xl font-semibold">
           <Lightbulb className="text-primary" /> <span className="font-normal">Understand pattern</span> for - <span className="font-normal truncate" title={topic}>{topic}</span>
@@ -118,4 +121,6 @@ export function ProblemInsights({ problem, topic, insights, onFetchInsights, isL
       </CardContent>
     </Card>
   );
-}
+});
+
+ProblemInsights.displayName = 'ProblemInsights';

@@ -22,15 +22,18 @@ import {
   type GenerateProblemInsightsInput,
   type GenerateProblemInsightsOutput,
 } from '@/ai/flows/generate-problem-insights';
-import { RefreshCw, FilePlus2, ArrowRight, Loader2 } from 'lucide-react';
+import { RefreshCw, FilePlus2, ArrowRight, Loader2, History } from 'lucide-react';
 
 import type { InteractionHistoryItem, ProblemType, UserProfile, DifficultyLevel } from '@/types';
 import { ProblemGenerator, ProblemGeneratorHandles } from '@/components/ProblemGenerator';
 import { ProblemDisplay, ProblemDisplayRefs } from '@/components/ProblemDisplay';
 import { EvaluationResult } from '@/components/EvaluationResult';
 import { ProblemInsights } from '@/components/ProblemInsights';
-import { HistoryView } from '@/components/HistoryView';
-import { UseCaseBanner } from '@/components/UseCaseBanner';
+
+import Link from 'next/link';
+import { HeroSection } from '@/components/home/HeroSection';
+import { GenerateSection } from '@/components/home/GenerateSection';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import MainLayoutContainer from '@/components/MainLayoutContainer';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSupabase } from '@/hooks/useSupabase';
@@ -902,53 +905,12 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
 
   return (
     <>
-      <section className="py-16 md:py-24 text-center bg-background">
-       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl mx-auto">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-primary-foreground brightness-125">
-              <span className="text-black dark:text-primary">AOLBEAM</span>
-            </h1>
-            <div className="mt-4 flex justify-center">
-              <a href="https://www.producthunt.com/products/aolbeam?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-aolbeam" target="_blank" rel="noopener noreferrer">
-                <img 
-                  src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=975222&theme=light&t=1749297505262" 
-                  alt="AOLBeam - Learn and practice with AI. Be truly PREPARED for any EXAM | Product Hunt" 
-                  style={{ width: '250px', height: '54px' }} 
-                  width="250" 
-                  height="54" 
-                />
-              </a>
-            </div>
-            <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
-              <span className="font-bold text-xl md:text-2xl">Access of Learning - Beam </span> into the world of knowledge! Master complex subjects with AI-driven practice problems and targeted topic revision. 
-              Build pattern recognition, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve exam success.
-            </p>
-            <div className="mt-10 py-16 text-center">
-              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">Ready to Start Practicing?</h2>
-              <Button
-                size="lg"
-                onClick={scrollToProblemGenerator}
-                className="group relative inline-flex items-center justify-center text-lg font-semibold px-8 py-3 
-                  rounded-2xl bg-gradient-to-r from-primary to-primary/80 
-                  text-white shadow-xl hover:shadow-2xl transition-all duration-300 ease-in-out 
-                  hover:from-primary/90 hover:to-primary/70 
-                  focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
-              >
-                <span className="mr-2 transition-transform duration-300 group-hover:-translate-x-1">
-                  Generate Your First Problem
-                </span>
-                <ArrowRight className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
+      <HeroSection scrollToProblemGenerator={scrollToProblemGenerator} />
+      <GenerateSection />
       
-      <UseCaseBanner />
-      
-      <div className="flex-1 bg-background">
+      <div id="generate" className="flex-1 bg-background">
         <div className="py-8 overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid px-28 gap-6">
             <div className="lg:col-span-2 space-y-6 w-full">
               <div ref={problemGeneratorRef}>
                 <ProblemGenerator
@@ -1005,10 +967,30 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
                   )}
                 </>
               )}
-              {isClientMounted && <HistoryView history={history} />}
-            </div>
-            
-            <div className="space-y-6">
+              {isClientMounted && (
+                <Card className="mt-8">
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span>Interaction History</span>
+                      <History className="h-6 w-6 text-muted-foreground" /> 
+                    </CardTitle>
+                    <CardDescription>
+                      {history.length > 0 
+                        ? `You have ${history.length} item(s) in your history. Review your past practice problems and evaluations.`
+                        : "Review your past practice problems and evaluations."}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Link href="/history" passHref>
+                      <Button className="w-full" variant="outline">
+                        View Full History
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              )}
+              <div className="pt-4">
               <ProblemInsights
                 problem={currentProblem} 
                 topic={currentTopic}    
@@ -1017,6 +999,9 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
                 isLoading={!!(isLoadingInsights || (!!currentUser && isLoadingPageProfile))}
               />
             </div>
+            </div>
+            
+            
           </div>
         </div>
       </div>

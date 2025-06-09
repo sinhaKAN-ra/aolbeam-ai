@@ -16,7 +16,7 @@ export default function MainLayoutContainer({ children }: MainLayoutContainerPro
   const { isMobile, open } = useSidebar();
 
   return (
-    <div className={cn("flex flex-col flex-1 transition-all duration-300 ease-in-out px-4")}>
+    <div className={cn("flex flex-col flex-1 transition-all duration-300 ease-in-out")}>
 
       <MainContentWrapper>
         {children}

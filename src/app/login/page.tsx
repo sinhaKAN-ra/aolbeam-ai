@@ -57,8 +57,8 @@ function LoginContent() {
   }
 
   return (
-    <div className="bg-background">
-      <Card className="w-full">
+    <div className="bg-background px-12 py-28">
+      <Card className="w-auto center">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl text-center">Welcome to AOLBEAM</CardTitle>
           <CardDescription className="text-center">
@@ -86,7 +86,7 @@ function LoginContent() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen px-8 flex items-center justify-center bg-background">
         <div className="flex flex-col items-center space-y-4">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-muted-foreground">Loading...</p>
