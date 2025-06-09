@@ -909,9 +909,9 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
       <GenerateSection />
       
       <div id="generate" className="flex-1 bg-background">
-        <div className="py-8 overflow-hidden">
-          <div className="grid px-28 gap-6">
-            <div className="lg:col-span-2 space-y-6 w-full">
+        <div className="py-4 sm:py-8 overflow-hidden">
+          <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
+            <div className="max-w-4xl mx-auto space-y-6 w-full">
               <div ref={problemGeneratorRef}>
                 <ProblemGenerator
                   ref={problemGeneratorComponentRef}
@@ -925,24 +925,26 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
               
               {currentProblem && (
                 <>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <Button 
-                      onClick={handleNewProblemSameTopic} 
-                      variant="outline" 
-                      className="flex-1 text-sm whitespace-nowrap overflow-hidden text-ellipsis" 
-                      disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
-                    >
-                      <RefreshCw className="mr-2 h-4 w-4 flex-shrink-0" /> <span>Another (Same Topic)</span>
-                    </Button>
-                    <Button 
-                      onClick={handleStartNew} 
-                      variant="outline" 
-                      className="flex-1 text-sm whitespace-nowrap overflow-hidden text-ellipsis" 
-                      disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
-                    >
-                      <FilePlus2 className="mr-2 h-4 w-4 flex-shrink-0" /> <span>Start New Topic</span>
-                    </Button>
-                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 w-full">
+                <Button 
+                  onClick={handleNewProblemSameTopic} 
+                  variant="outline" 
+                  className="flex-1 text-xs sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis px-2 sm:px-4" 
+                  disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
+                >
+                  <RefreshCw className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" /> 
+                  <span className="truncate">Another (Same Topic)</span>
+                </Button>
+                <Button 
+                  onClick={handleStartNew} 
+                  variant="outline" 
+                  className="flex-1 text-xs sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis px-2 sm:px-4" 
+                  disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
+                >
+                  <FilePlus2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" /> 
+                  <span className="truncate">Start New Topic</span>
+                </Button>
+              </div>
                   
                   <ProblemDisplay
                     ref={problemDisplayRef}
@@ -990,15 +992,15 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
                   </CardContent>
                 </Card>
               )}
-              <div className="pt-4">
-              <ProblemInsights
-                problem={currentProblem} 
-                topic={currentTopic}    
-                insights={problemInsights}
-                onFetchInsights={handleGenerateProblemInsights}
-                isLoading={!!(isLoadingInsights || (!!currentUser && isLoadingPageProfile))}
-              />
-            </div>
+              <div className="pt-4 w-full">
+                <ProblemInsights
+                  problem={currentProblem} 
+                  topic={currentTopic}    
+                  insights={problemInsights}
+                  onFetchInsights={handleGenerateProblemInsights}
+                  isLoading={!!(isLoadingInsights || (!!currentUser && isLoadingPageProfile))}
+                />
+              </div>
             </div>
             
             
