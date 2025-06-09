@@ -27,8 +27,9 @@ export const HeroSection = ({ scrollToProblemGenerator }: HeroSectionProps) => {
             </a>
           </div>
           <p className="mt-6 text-lg sm:text-xl text-foreground/90 leading-relaxed">
-            <span className="font-bold text-xl md:text-2xl">Access of Learning - Beam </span> into the world of knowledge! Master subjects - practice problems of your specific topic. 
-            Build Solution pattern faster, <span className="font-semibold text-primary">prepare like a topper</span>, and achieve success.
+            <span className="font-bold text-xl md:text-2xl">Access of Learning - Beam </span>
+             into the world of knowledge! Master subjects - practice questions of any topic. 
+             <span className="font-semibold text-primary">Prepare like a topper</span>, and achieve success.
           </p>
           <div className="mt-10 py-16 text-center">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">Ready to Start Practicing?</h2>
@@ -42,7 +43,7 @@ export const HeroSection = ({ scrollToProblemGenerator }: HeroSectionProps) => {
                 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
             >
               <span className="mr-2 transition-transform duration-300 group-hover:-translate-x-1">
-                Generate Your First Problem
+                Practice Your First Problem
               </span>
               <ArrowRight className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
             </Button>
