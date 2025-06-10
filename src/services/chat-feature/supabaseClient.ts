@@ -1,16 +1,19 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { Database } from '@/types/supabase';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase credentials not found. Using demo mode.');
+let supabase: SupabaseClient<Database> | null = null;
+
+if (supabaseUrl && supabaseAnonKey) {
+  supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+} else {
+  console.error('Supabase URL or Anon Key is not set. Supabase client will not be initialized.');
 }
 
-export const supabase = supabaseUrl && supabaseAnonKey 
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+export { supabase };
 
-export const isSupabaseConfigured = () => {
+export const isSupabaseConfigured = (): boolean => {
   return supabase !== null;
 };

@@ -1,7 +1,9 @@
+"use client"
+
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Target, Clock, Calendar, BookOpen, Sparkles, Brain, CheckCircle2, ArrowRight, Zap } from 'lucide-react';
-import { CustomLearningGoal } from '../types';
-import { learningPathService } from '../services/learningPathService';
+import { X, Plus, Target, Clock, Calendar, BookOpen, Sparkles, Brain, CheckCircle2, ArrowRight, Zap, Loader2 } from 'lucide-react';
+import { CustomLearningGoal } from '../../types/chat-feature';
+import { learningPathService } from '../../services/chat-feature/learningPathService';
 
 interface CustomLearningPathModalProps {
   isOpen: boolean;
@@ -52,7 +54,8 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
       targetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Default 30 days
       topics: currentGoal.topics || [],
       difficulty: currentGoal.difficulty as any,
-      estimatedHours: currentGoal.estimatedHours || 10
+      estimatedHours: currentGoal.estimatedHours || 10,
+      priority: 'medium'
     };
 
     setGoals([...goals, newGoal]);
@@ -117,23 +120,23 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-card rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-primary-600 via-secondary-500 to-accent-500 p-6 text-white">
+        <div className="bg-gradient-to-r from-primary to-secondary p-6 text-primary-foreground">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-sm">
+              <div className="p-3 bg-primary-foreground/20 rounded-2xl backdrop-blur-sm">
                 <Target className="w-8 h-8" />
               </div>
               <div>
                 <h2 className="text-2xl font-bold">Create Your Learning Path</h2>
-                <p className="text-white/80">Design a personalized learning journey</p>
+                <p className="text-primary-foreground/80">Design a personalized learning journey</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white/20 rounded-xl transition-colors"
+              className="p-2 hover:bg-primary-foreground/20 rounded-xl transition-colors"
             >
               <X className="w-6 h-6" />
             </button>
@@ -145,14 +148,14 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
               <div key={stepNum} className="flex items-center gap-2">
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all duration-300 ${
                   step >= stepNum 
-                    ? 'bg-white text-primary-600 shadow-lg' 
-                    : 'bg-white/20 text-white/60'
+                    ? 'bg-primary-foreground text-primary shadow-lg' 
+                    : 'bg-primary-foreground/20 text-primary-foreground/60'
                 }`}>
                   {step > stepNum ? <CheckCircle2 className="w-5 h-5" /> : stepNum}
                 </div>
                 {stepNum < 3 && (
                   <div className={`w-12 h-1 rounded-full transition-all duration-300 ${
-                    step > stepNum ? 'bg-white' : 'bg-white/20'
+                    step > stepNum ? 'bg-primary-foreground' : 'bg-primary-foreground/20'
                   }`} />
                 )}
               </div>
@@ -160,20 +163,21 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
           </div>
         </div>
 
-        <div className="overflow-y-auto max-h-[calc(90vh-200px)]"> {/* Adjusted height for scroll */}
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto p-8 space-y-8">
           {/* Step 1: Add Goals */}
           {step === 1 && (
-            <div className="p-8 space-y-8">
+            <>
               <div className="text-center">
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">Define Your Learning Goals</h3>
-                <p className="text-gray-600">What do you want to achieve? Set specific, measurable goals.</p>
+                <h3 className="text-2xl font-bold text-foreground mb-2">Define Your Learning Goals</h3>
+                <p className="text-muted-foreground">What do you want to achieve? Set specific, measurable goals.</p>
               </div>
 
               {/* Search History Suggestions */}
               {searchHistory.length > 0 && (
-                <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-2xl p-6">
-                  <h4 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-accent-600" />
+                <div className="bg-card-foreground/5 rounded-2xl p-6 border border-border">
+                  <h4 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-accent" />
                     Quick Add from Recent Topics
                   </h4>
                   <div className="flex flex-wrap gap-2">
@@ -181,7 +185,7 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
                       <button
                         key={index}
                         onClick={() => addTopicToCurrentGoal(topic)}
-                        className="px-4 py-2 text-sm bg-white hover:bg-accent-100 text-gray-700 hover:text-accent-700 rounded-xl transition-all duration-200 border border-orange-200 hover:border-accent-300 shadow-sm hover:shadow-md"
+                        className="px-4 py-2 text-sm bg-background hover:bg-accent/10 text-foreground hover:text-accent rounded-xl transition-all duration-200 border border-border hover:border-accent shadow-sm hover:shadow-md"
                       >
                         {topic}
                       </button>
@@ -191,232 +195,205 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
               )}
 
               {/* Add New Goal Form */}
-              <div className="bg-gray-50 rounded-2xl p-6 space-y-6">
-                <h4 className="font-semibold text-gray-800 flex items-center gap-2">
-                  <Plus className="w-5 h-5 text-primary-600" />
+              <div className="bg-muted/20 rounded-2xl p-6 space-y-6 border border-border">
+                <h4 className="font-semibold text-foreground flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-primary" />
                   Add Learning Goal
                 </h4>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Goal Title
-                    </label>
+                    <label htmlFor="goal-title" className="block text-sm font-medium text-foreground mb-1">Goal Title</label>
                     <input
                       type="text"
-                      placeholder="e.g., Master React Fundamentals"
-                      value={currentGoal.title}
-                      onChange={(e) => setCurrentGoal(prev => ({ ...prev, title: e.target.value }))}
-                      className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none transition-colors"
+                      id="goal-title"
+                      value={currentGoal.title || ''}
+                      onChange={(e) => setCurrentGoal({ ...currentGoal, title: e.target.value })}
+                      placeholder="e.g., Master React Hooks"
+                      className="w-full p-3 rounded-lg bg-input border border-border focus:ring-2 focus:ring-primary focus:border-transparent text-foreground placeholder-muted-foreground"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Estimated Hours
-                    </label>
+                    <label htmlFor="goal-description" className="block text-sm font-medium text-foreground mb-1">Description</label>
+                    <textarea
+                      id="goal-description"
+                      value={currentGoal.description || ''}
+                      onChange={(e) => setCurrentGoal({ ...currentGoal, description: e.target.value })}
+                      placeholder="What specific skills will you gain?"
+                      rows={3}
+                      className="w-full p-3 rounded-lg bg-input border border-border focus:ring-2 focus:ring-primary focus:border-transparent text-foreground placeholder-muted-foreground"
+                    ></textarea>
+                  </div>
+                  <div>
+                    <label htmlFor="goal-difficulty" className="block text-sm font-medium text-foreground mb-1">Difficulty</label>
+                    <select
+                      id="goal-difficulty"
+                      value={currentGoal.difficulty || 'beginner'}
+                      onChange={(e) => setCurrentGoal({ ...currentGoal, difficulty: e.target.value as 'beginner' | 'intermediate' | 'advanced' })}
+                      className="w-full p-3 rounded-lg bg-input border border-border focus:ring-2 focus:ring-primary focus:border-transparent text-foreground"
+                    >
+                      <option value="beginner">Beginner</option>
+                      <option value="intermediate">Intermediate</option>
+                      <option value="advanced">Advanced</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="goal-hours" className="block text-sm font-medium text-foreground mb-1">Estimated Hours</label>
                     <input
                       type="number"
-                      min="1"
-                      value={currentGoal.estimatedHours}
-                      onChange={(e) => setCurrentGoal(prev => ({ ...prev, estimatedHours: parseInt(e.target.value) || 10 }))}
-                      className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none transition-colors"
+                      id="goal-hours"
+                      value={currentGoal.estimatedHours || 10}
+                      onChange={(e) => setCurrentGoal({ ...currentGoal, estimatedHours: parseInt(e.target.value) })}
+                      className="w-full p-3 rounded-lg bg-input border border-border focus:ring-2 focus:ring-primary focus:border-transparent text-foreground"
                     />
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    placeholder="Briefly describe this goal..."
-                    value={currentGoal.description}
-                    onChange={(e) => setCurrentGoal(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none transition-colors min-h-[80px]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Key Topics (comma-separated or add from history)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Components, State, Props"
-                    value={currentGoal.topics?.join(', ')}
-                    onChange={(e) => setCurrentGoal(prev => ({ ...prev, topics: e.target.value.split(',').map(t => t.trim()).filter(t => t) }))}
-                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none transition-colors"
-                  />
-                  {currentGoal.topics && currentGoal.topics.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {currentGoal.topics.map(topic => (
-                        <span key={topic} className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm flex items-center gap-1">
-                          {topic}
-                          <button onClick={() => removeTopicFromCurrentGoal(topic)} className="text-primary-500 hover:text-primary-700">
-                            <X size={14} />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Difficulty Level
-                  </label>
-                  <select
-                    value={currentGoal.difficulty}
-                    onChange={(e) => setCurrentGoal(prev => ({ ...prev, difficulty: e.target.value as any }))}
-                    className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none transition-colors"
-                  >
-                    <option value="beginner">Beginner</option>
-                    <option value="intermediate">Intermediate</option>
-                    <option value="advanced">Advanced</option>
-                  </select>
+                  <div>
+                    <label htmlFor="goal-topics" className="block text-sm font-medium text-foreground mb-1">Key Topics (comma-separated)</label>
+                    <input
+                      type="text"
+                      id="goal-topics"
+                      value={currentGoal.topics?.join(', ') || ''}
+                      onChange={(e) => setCurrentGoal({ ...currentGoal, topics: e.target.value.split(',').map(t => t.trim()).filter(t => t) })}
+                      placeholder="e.g., JavaScript, State Management, API Integration"
+                      className="w-full p-3 rounded-lg bg-input border border-border focus:ring-2 focus:ring-primary focus:border-transparent text-foreground placeholder-muted-foreground"
+                    />
+                  </div>
                 </div>
                 <button
                   onClick={addGoal}
-                  disabled={!currentGoal.title || !currentGoal.description}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-secondary-600 text-white rounded-xl hover:from-primary-700 hover:to-secondary-700 transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-60"
+                  className="w-full flex items-center justify-center gap-2 p-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors duration-200"
                 >
                   <Plus className="w-5 h-5" /> Add Goal
                 </button>
               </div>
 
-              {/* Added Goals List */}
+              {/* Current Goals List */}
               {goals.length > 0 && (
-                <div className="bg-gray-50 rounded-2xl p-6 space-y-4">
-                  <h4 className="font-semibold text-gray-800 flex items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
-                    Your Learning Goals ({goals.length})
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-foreground flex items-center gap-2">
+                    <BookOpen className="w-5 h-5 text-secondary" />
+                    Your Learning Goals
                   </h4>
-                  {goals.map(goal => (
-                    <div key={goal.id} className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm flex justify-between items-start">
+                  {goals.map((goal) => (
+                    <div key={goal.id} className="bg-muted/20 rounded-2xl p-6 border border-border flex justify-between items-start">
                       <div>
-                        <h5 className="font-bold text-gray-800">{goal.title}</h5>
-                        <p className="text-sm text-gray-600">{goal.description}</p>
-                        <div className="flex items-center gap-3 text-xs text-gray-500 mt-2">
-                          <span><Clock size={14} /> {goal.estimatedHours} hrs</span>
-                          <span className="capitalize"><Zap size={14} /> {goal.difficulty}</span>
+                        <h5 className="font-bold text-lg text-foreground mb-1">{goal.title}</h5>
+                        <p className="text-sm text-muted-foreground mb-2">{goal.description}</p>
+                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {goal.estimatedHours} hrs</span>
+                          <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> {goal.difficulty}</span>
+                          {goal.topics && goal.topics.length > 0 && (
+                            <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" /> {goal.topics.join(', ')}</span>
+                          )}
                         </div>
-                        {goal.topics.length > 0 && (
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {goal.topics.map(t => <span key={t} className="text-xs bg-gray-100 px-2 py-0.5 rounded">{t}</span>)}
-                          </div>
-                        )}
                       </div>
-                      <button onClick={() => removeGoal(goal.id)} className="text-red-500 hover:text-red-700 p-1">
-                        <X size={18} />
+                      <button
+                        onClick={() => removeGoal(goal.id)}
+                        className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full transition-colors"
+                      >
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
+
+              <div className="flex justify-end mt-8">
+                <button
+                  onClick={() => setStep(2)}
+                  disabled={goals.length === 0}
+                  className="flex items-center gap-2 px-6 py-3 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next: Review Path <ArrowRight className="w-5 h-5" />
+                </button>
+              </div>
+            </>
           )}
 
-          {/* Step 2: Review and Confirm */}
+          {/* Step 2: Review & Create */}
           {step === 2 && (
-            <div className="p-8 space-y-8">
+            <>
               <div className="text-center">
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">Review Your Path</h3>
-                <p className="text-gray-600">Ensure your goals are set correctly before creating the path.</p>
+                <h3 className="text-2xl font-bold text-foreground mb-2">Review Your Learning Path</h3>
+                <p className="text-muted-foreground">Confirm your goals before creating your personalized path.</p>
               </div>
-              {goals.map(goal => (
-                <div key={goal.id} className="p-6 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-2xl border border-orange-200/50">
-                  <h4 className="font-bold text-gray-800 text-lg mb-2">{goal.title}</h4>
-                  <p className="text-gray-600 mb-3">{goal.description}</p>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-gray-500" /> Estimated: {goal.estimatedHours} hours</div>
-                    <div className="flex items-center gap-2 capitalize"><Zap className="w-4 h-4 text-gray-500" /> Difficulty: {goal.difficulty}</div>
-                  </div>
-                  {goal.topics.length > 0 && (
-                    <div className="mt-3">
-                      <h5 className="text-sm font-semibold text-gray-700 mb-1">Key Topics:</h5>
-                      <div className="flex flex-wrap gap-2">
-                        {goal.topics.map(topic => (
-                          <span key={topic} className="px-3 py-1 bg-white text-gray-700 rounded-full text-xs border border-gray-200">{topic}</span>
-                        ))}
-                      </div>
+
+              <div className="space-y-4">
+                {goals.map((goal) => (
+                  <div key={goal.id} className="bg-muted/20 rounded-2xl p-6 border border-border">
+                    <h5 className="font-bold text-lg text-foreground mb-1">{goal.title}</h5>
+                    <p className="text-sm text-muted-foreground mb-2">{goal.description}</p>
+                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {goal.estimatedHours} hrs</span>
+                      <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> {goal.difficulty}</span>
+                      {goal.topics && goal.topics.length > 0 && (
+                        <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" /> {goal.topics.join(', ')}</span>
+                      )}
                     </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-between mt-8">
+                <button
+                  onClick={() => setStep(1)}
+                  className="flex items-center gap-2 px-6 py-3 bg-muted text-muted-foreground rounded-lg hover:bg-muted/90 transition-colors duration-200"
+                >
+                  <ArrowRight className="w-5 h-5 rotate-180" /> Back to Goals
+                </button>
+                <button
+                  onClick={createCustomPath}
+                  disabled={isCreating}
+                  className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isCreating ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" /> Creating...
+                    </>
+                  ) : (
+                    <>
+                      Create Path <Sparkles className="w-5 h-5" />
+                    </>
                   )}
-                </div>
-              ))}
-              {goals.length === 0 && (
-                 <p className="text-center text-gray-500 py-8">No goals added yet. Go back to Step 1 to add some learning goals.</p>
-              )}
-            </div>
+                </button>
+              </div>
+            </>
           )}
 
           {/* Step 3: Confirmation */}
           {step === 3 && (
-            <div className="p-8 text-center space-y-6">
-              <CheckCircle2 className="w-20 h-20 text-green-500 mx-auto animate-pulse" />
-              <h3 className="text-3xl font-bold text-gray-800">Learning Path Created!</h3>
-              <p className="text-gray-600 text-lg max-w-md mx-auto">
-                Your personalized learning path "{createdPath?.mainTopic || 'Custom Journey'}" is ready. 
-                You can now close this window and see it in your learning tracker.
-              </p>
-              <div className="p-6 bg-gradient-to-r from-primary-50 to-secondary-50 rounded-2xl border border-primary-200/50">
-                <h4 className="font-bold text-primary-700 text-xl mb-2">{createdPath?.mainTopic}</h4>
-                <p className="text-primary-600 mb-1">Total Steps: {createdPath?.totalSteps}</p>
-                <p className="text-primary-600">Estimated Timeline: {createdPath?.timeline}</p>
-              </div>
+            <div className="text-center p-8">
+              <CheckCircle2 className="w-20 h-20 text-green-500 mx-auto mb-6 animate-bounce" />
+              <h3 className="text-3xl font-bold text-foreground mb-3">Learning Path Created!</h3>
+              <p className="text-muted-foreground text-lg mb-8">Your personalized learning journey is ready.</p>
+              <button
+                onClick={handleFinish}
+                className="flex items-center justify-center gap-2 px-8 py-4 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors duration-200 text-lg font-semibold mx-auto"
+              >
+                Start Learning Now <ArrowRight className="w-6 h-6" />
+              </button>
             </div>
-          )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="p-6 bg-gray-50 border-t border-gray-200 flex justify-end items-center gap-4">
-          {step === 1 && (
-            <>
-              <button
-                onClick={onClose}
-                className="px-6 py-3 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => setStep(2)}
-                disabled={goals.length === 0}
-                className="px-8 py-3 bg-gradient-to-r from-primary-600 to-secondary-600 text-white font-semibold rounded-xl hover:from-primary-700 hover:to-secondary-700 transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-60 flex items-center gap-2"
-              >
-                Next: Review Path <ArrowRight className="w-5 h-5" />
-              </button>
-            </>
-          )}
-          {step === 2 && (
-            <>
-              <button
-                onClick={() => setStep(1)}
-                className="px-6 py-3 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors"
-              >
-                Back to Goals
-              </button>
-              <button
-                onClick={createCustomPath}
-                disabled={isCreating || goals.length === 0}
-                className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-60 flex items-center gap-2"
-              >
-                {isCreating ? (
-                  <Brain className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Sparkles className="w-5 h-5" />
-                )}
-                {isCreating ? 'Creating Path...' : 'Create Learning Path'}
-              </button>
-            </>
-          )}
-          {step === 3 && (
-            <button
-              onClick={handleFinish}
-              className="px-8 py-3 bg-gradient-to-r from-primary-600 to-secondary-600 text-white font-semibold rounded-xl hover:from-primary-700 hover:to-secondary-700 transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2"
-            >
-              Finish & View Path <CheckCircle2 className="w-5 h-5" />
-            </button>
           )}
         </div>
       </div>
     </div>
   );
 };
+
+// Helper to generate tags if not provided by AI (for demo) - This function is not used in this component.
+// const generateTagsFromSuggestions = (suggestions: any[]): TopicTag[] => {
+//   if (!suggestions || suggestions.length === 0) return [];
+  
+//   const allSuggestionTags = suggestions.flatMap(s => s.tags || []);
+//   const uniqueTags = Array.from(new Set(allSuggestionTags.slice(0, 10))); 
+
+//   return uniqueTags.map((tag, index) => ({
+//     id: `generated-${index}`,
+//     name: tag,
+//     category: ['fundamental', 'advanced', 'practical'][index % 3],
+//     color: ['bg-primary/10', 'bg-secondary/10', 'bg-accent/10'][index % 3],
+//     relatedTopics: suggestions.map(s => s.title)
+//   }));
+// };
 
 export default CustomLearningPathModal;

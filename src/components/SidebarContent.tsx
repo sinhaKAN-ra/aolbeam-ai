@@ -25,9 +25,12 @@ import {
   Mail as ContactIcon,
   Info as AboutIcon,
   DollarSign,
+  FileText,
   Settings,
   Loader2,
-  History
+  History,
+  Navigation2,
+  Navigation
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Image from 'next/image';
@@ -126,10 +129,14 @@ export default function SidebarContent() {
   const navItems = useMemo<NavItem[]>(() => [
     { href: "/", label: "Home", icon: <Home className="h-4 w-4" /> },
     { href: "/#generate", label: "Practice Problem", icon: <Brain className="h-4 w-4" /> },
+    { href: "/chat", label: "Learn (Beta)", icon: <Navigation className='h-4 w-4'/>},
     { href: "/history", label: "History", icon: <History className="h-4 w-4" /> },
     { href: "/blog", label: "Blog", icon: <Newspaper className="h-4 w-4" /> },
     { href: "/about", label: "About Us", icon: <AboutIcon className="h-4 w-4" /> },
     { href: "/contact-us", label: "Contact", icon: <ContactIcon className="h-4 w-4" /> },
+    { href: "/terms-of-service", label: "Terms", icon: <FileText className="h-4 w-4" /> },
+    { href: "/privacy-policy", label: "Privacy", icon: <ShieldCheck className="h-4 w-4" /> },
+    { href: "/pricing", label: "Pricing", icon: <DollarSign className="h-4 w-4" /> },
   ], []);
 
   // User menu items

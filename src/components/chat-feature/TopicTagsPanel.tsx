@@ -1,172 +1,92 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { Message, TopicSuggestion, LearningPath, TopicTag } from '../types';
-import { generateLearningPath, createCustomLearningPath } from '../services/learningPathService';
-import { searchWeb } from '../services/braveService';
-import { generateLearningContext, generateTopicSuggestions, generatePracticeProblem } from '../services/geminiService';
+import React from 'react';
+import { Tag, X, BookOpen, Code, Layers, Zap, Clock, BarChart2, Award } from 'lucide-react';
+import { TopicTag } from '../../types/chat-feature';
 
-const useChat = (userId: string) => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [learningPath, setLearningPath] = useState<LearningPath | null>(null);
-  const [searchHistory, setSearchHistory] = useState<string[]>([]);
-  const [topicSuggestions, setTopicSuggestions] = useState<TopicSuggestion[]>([]);
-  const [topicTags, setTopicTags] = useState<TopicTag[]>([]);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+interface TopicTagsPanelProps {
+  tags: TopicTag[];
+  selectedTags: string[];
+  onTagClick: (tag: TopicTag) => void;
+}
 
-  // Load search history from localStorage on mount
-  useEffect(() => {
-    const savedHistory = localStorage.getItem('searchHistory');
-    if (savedHistory) {
-      setSearchHistory(JSON.parse(savedHistory));
-    }
-  }, []);
+const getTagColor = (category: string) => {
+  switch (category) {
+    case 'beginner':
+      return 'bg-green-100 text-green-800 hover:bg-green-200 border-green-200';
+    case 'intermediate':
+      return 'bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200';
+    case 'advanced':
+      return 'bg-purple-100 text-purple-800 hover:bg-purple-200 border-purple-200';
+    case 'practical':
+      return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-200';
+    default:
+      return 'bg-gray-100 text-gray-800 hover:bg-gray-200 border-gray-200';
+  }
+};
 
-  // Save search history to localStorage when it changes
-  useEffect(() => {
-    if (searchHistory.length > 0) {
-      localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
-    }
-  }, [searchHistory]);
+const getTagIcon = (category: string) => {
+  switch (category) {
+    case 'beginner':
+      return <BookOpen className="w-4 h-4 mr-1" />;
+    case 'intermediate':
+      return <BarChart2 className="w-4 h-4 mr-1" />;
+    case 'advanced':
+      return <Zap className="w-4 h-4 mr-1" />;
+    case 'practical':
+      return <Code className="w-4 h-4 mr-1" />;
+    default:
+      return <Tag className="w-4 h-4 mr-1" />;
+  }
+};
 
-  const updateSearchHistory = useCallback((query: string) => {
-    setSearchHistory(prev => {
-      const updated = [query, ...prev.filter(item => item.toLowerCase() !== query.toLowerCase())];
-      return updated.slice(0, 10); // Keep only the 10 most recent searches
-    });
-  }, []);
+export const TopicTagsPanel: React.FC<TopicTagsPanelProps> = ({
+  tags,
+  selectedTags,
+  onTagClick,
+}) => {
+  if (!tags || tags.length === 0) return null;
 
-  const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
-    const newMessage: Message = {
-      id: uuidv4(),
-      ...message,
-      timestamp: new Date().toISOString(),
-    };
-    setMessages(prev => [...prev, newMessage]);
-    return newMessage;
-  }, []);
-
-  const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim()) return;
-
-    const userMessage = addMessage({
-      text: content,
-      sender: 'user',
-      type: 'text',
-    });
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Add a typing indicator
-      const typingMessageId = uuidv4();
-      setMessages(prev => [
-        ...prev,
-        {
-          id: typingMessageId,
-          text: '...',
-          sender: 'ai',
-          type: 'text',
-          isTyping: true,
-          timestamp: new Date().toISOString(),
-        }
-      ]);
-
-      // Update search history
-      updateSearchHistory(content);
-
-      // Step 1: Generate initial response
-      const initialResponse = await generateLearningContext(content);
+  return (
+    <div className="mt-8 bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-orange-200/50 shadow-sm">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="p-2 bg-gradient-to-r from-accent-100 to-accent-200 rounded-xl">
+          <Layers className="w-5 h-5 text-accent-600" />
+        </div>
+        <h3 className="text-xl font-bold text-gray-800">Explore Related Topics</h3>
+      </div>
       
-      // Remove typing indicator
-      setMessages(prev => prev.filter(msg => msg.id !== typingMessageId));
-
-      // Add AI's response
-      const aiMessage = addMessage({
-        text: initialResponse,
-        sender: 'ai',
-        type: 'learning_context',
-        context: initialResponse,
-      });
-
-      // Step 2: Generate topic suggestions
-      const suggestions = await generateTopicSuggestions(content, 3);
-      setTopicSuggestions(suggestions);
-
-      // Step 3: Generate learning path
-      const path = await generateLearningPath(content, userId);
-      setLearningPath(path);
-
-      // Step 4: Extract topics for tags
-      const tags = extractTagsFromSuggestions(suggestions);
-      setTopicTags(tags);
-
-      // Step 5: (Optional) Generate a practice problem
-      if (Math.random() > 0.5) { // 50% chance to include a practice problem
-        const problem = await generatePracticeProblem(content);
-        if (problem) {
-          addMessage({
-            text: `Here's a practice problem to test your understanding: ${problem.question}`,
-            sender: 'ai',
-            type: 'practice_problem',
-            problem: problem,
-          });
-        }
-      }
-
-      return aiMessage;
-    } catch (err) {
-      console.error('Error sending message:', err);
-      setError('Failed to get response. Please try again.');
+      <div className="flex flex-wrap gap-3">
+        {tags.map((tag) => {
+          const isSelected = selectedTags.includes(tag.id);
+          const tagColor = getTagColor(tag.category || 'general');
+          const TagIcon = getTagIcon(tag.category || 'general');
+          
+          return (
+            <button
+              key={tag.id}
+              onClick={() => onTagClick(tag)}
+              className={`flex items-center px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border-2
+                ${tagColor} 
+                ${isSelected ? 'ring-2 ring-offset-2 ring-primary-400' : ''}
+                hover:shadow-md transform hover:-translate-y-0.5`}
+            >
+              {TagIcon}
+              {tag.name}
+              {isSelected && (
+                <X className="ml-2 w-3.5 h-3.5" />
+              )}
+            </button>
+          );
+        })}
+      </div>
       
-      // Remove typing indicator if there was an error
-      setMessages(prev => prev.filter(msg => msg.id !== typingMessageId));
-      
-      // Add error message
-      addMessage({
-        text: 'Sorry, I encountered an error. Please try again.',
-        sender: 'ai',
-        type: 'error',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [addMessage, updateSearchHistory, userId]);
+      {selectedTags.length > 0 && (
+        <div className="mt-4 text-sm text-gray-600 flex items-center">
+          <Award className="w-4 h-4 mr-2 text-yellow-500" />
+          <span>Selected topics will help personalize your learning experience.</span>
+        </div>
+      )}
+    </div>
+  );
+};
 
-  const extractTagsFromSuggestions = (suggestions: TopicSuggestion[]): TopicTag[] => {
-    if (!suggestions || suggestions.length === 0) return [];
-    
-    const allTags = new Map<string, TopicTag>();
-    
-    suggestions.forEach(suggestion => {
-      if (suggestion.tags) {
-        suggestion.tags.forEach(tagName => {
-          const normalizedTag = tagName.toLowerCase().trim();
-          if (!allTags.has(normalizedTag)) {
-            allTags.set(normalizedTag, {
-              id: `tag-${normalizedTag}`,
-              name: tagName,
-              category: suggestion.difficulty?.toLowerCase() || 'general',
-              relatedTopics: [suggestion.title]
-            });
-          } else {
-            const existingTag = allTags.get(normalizedTag)!;
-            if (suggestion.title && !existingTag.relatedTopics?.includes(suggestion.title)) {
-              existingTag.relatedTopics = [...(existingTag.relatedTopics || []), suggestion.title];
-            }
-          }
-        });
-      }
-    });
-    
-    return Array.from(allTags.values());
-  };
-
-  const handleTagClick = useCallback((tag: TopicTag) => {
-    const newSelectedTags = selectedTags.includes(tag.id)
-      ? selectedTags.filter(id => id !== tag.id)
-      : [...selectedTags, tag.id];
-    
-    setSelectedTags(newSelectedTags);
+export default TopicTagsPanel;

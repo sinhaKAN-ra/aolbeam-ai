@@ -6,7 +6,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { Analytics } from "@vercel/analytics/next";
 import Header from '@/components/Header';
-import Footer from '@/components/Footer'; // Import the Footer
 import { AuthProvider } from '@/contexts/AuthContext';
 import { Sidebar, SidebarProvider } from '@/components/ui/sidebar';
 import SidebarContent from '@/components/SidebarContent';

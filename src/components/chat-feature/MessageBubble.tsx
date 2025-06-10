@@ -1,5 +1,5 @@
 import React from 'react';
-import { Message } from '../../types';
+import { Message } from '../../types/chat-feature/index';
 import { User, Bot, Lightbulb, MessageSquare } from 'lucide-react';
 
 interface MessageBubbleProps {
@@ -9,7 +9,7 @@ interface MessageBubbleProps {
 const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.sender === 'user';
   const bubbleClass = isUser
-    ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-bl-3xl rounded-tr-3xl rounded-tl-xl'
+    ? 'bg-gradient-to-br from-primary to-secondary text-white rounded-bl-3xl rounded-tr-3xl rounded-tl-xl'
     : 'bg-white text-gray-800 rounded-br-3xl rounded-tl-3xl rounded-tr-xl border border-gray-200 shadow-sm';
   const containerClass = isUser ? 'justify-end' : 'justify-start';
   const iconClass = isUser ? 'bg-primary-200 text-primary-700' : 'bg-gray-200 text-gray-600';
@@ -23,13 +23,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
           </div>
         )}
         <div className={`p-4 text-lg leading-relaxed shadow-md ${bubbleClass}`}>
-          <p className="whitespace-pre-wrap">{message.text}</p>
-          {message.type === 'learning_context' && message.context && (
-            <div className="mt-3 p-3 bg-white/20 rounded-lg text-sm flex items-center gap-2">
-              <Lightbulb className="w-4 h-4 text-white/80" />
-              <span className="font-medium">Context:</span> {message.context}
-            </div>
-          )}
+          {/* Helper function to render basic markdown (bold, newlines) */}
+          {(() => {
+            const renderMarkdown = (markdownText: string) => {
+              let html = markdownText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); // Bold
+              html = html.replace(/\n/g, '<br />'); // Newlines
+              return <div dangerouslySetInnerHTML={{ __html: html }} />;
+            };
+            return renderMarkdown(message.text);
+          })()}
           {message.type === 'practice_problem' && message.problem && (
             <div className="mt-3 p-3 bg-white/20 rounded-lg text-sm">
               <h4 className="font-bold text-white/90 mb-1">Practice Problem:</h4>

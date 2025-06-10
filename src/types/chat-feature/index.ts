@@ -1,8 +1,25 @@
+// Message types
+export type MessageSender = 'user' | 'ai';
+export type MessageType = 'text' | 'learning_context' | 'practice_problem' | 'error' | 'career_advice';
+
 export interface Message {
   id: string;
-  content: string;
-  role: 'user' | 'assistant';
-  timestamp: Date;
+  text: string;
+  sender: MessageSender;
+  type: MessageType;
+  timestamp: string;
+  isTyping?: boolean;
+  context?: string;
+  problem?: {
+    question: string;
+    options?: string[];
+    answer?: string;
+    explanation?: string;
+  };
+  advice?: string;
+  // Maintain backward compatibility
+  content?: string;
+  role?: 'user' | 'assistant';
   suggestions?: TopicSuggestion[];
   tags?: TopicTag[];
 }

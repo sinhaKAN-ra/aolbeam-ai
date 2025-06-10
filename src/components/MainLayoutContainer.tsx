@@ -21,7 +21,7 @@ export default function MainLayoutContainer({ children }: MainLayoutContainerPro
       <MainContentWrapper>
         {children}
       </MainContentWrapper>
-      <Footer />
+      {/* <Footer /> */}
     </div>
   );
 }
