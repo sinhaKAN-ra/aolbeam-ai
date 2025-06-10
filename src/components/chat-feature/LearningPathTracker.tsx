@@ -1,19 +1,23 @@
 "use client"
 
+// Triggering TypeScript re-evaluation
+
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, CheckCircle, BookOpen, Clock, PlayCircle } from 'lucide-react';
+import { ChevronDown, CheckCircle, BookOpen, Clock, PlayCircle, GitBranch, Route, GitMerge, GitFork } from 'lucide-react';
 import { LearningPath, LearningStep } from '../../types/chat-feature';
 
 interface LearningPathTrackerProps {
   learningPath: LearningPath;
   onStepToggle?: (stepId: string, completed: boolean) => void;
+  onBranchSelect?: (branchId: string) => void;
   className?: string;
 }
 
-const LearningPathTracker: React.FC<LearningPathTrackerProps> = ({ 
-  learningPath, 
+const LearningPathTracker: React.FC<LearningPathTrackerProps> = ({
+  learningPath,
   onStepToggle,
-  className = '' 
+  onBranchSelect,
+  className = ''
 }) => {
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
   const [completedSteps, setCompletedSteps] = useState<Set<string>>(
@@ -56,15 +60,41 @@ const LearningPathTracker: React.FC<LearningPathTrackerProps> = ({
     ? Math.round((completedSteps.size / learningPath.steps.length) * 100) 
     : 0;
 
-  // Group steps by category if available
+  // Group steps by category and identify potential branches
   const stepsByCategory = learningPath.steps.reduce<Record<string, LearningStep[]>>((acc, step) => {
-    const category = 'Learning Path';
+    // Check if step has a category or branch indicator
+    const category = step.category || 'Main Path';
+    
     if (!acc[category]) {
       acc[category] = [];
     }
     acc[category].push(step);
     return acc;
   }, {});
+  
+  // Identify branch points and merge points
+  const [branchPoints, setBranchPoints] = useState<Record<string, string[]>>({}); 
+  const [activeBranch, setActiveBranch] = useState<string>('Main Path');
+  
+  useEffect(() => {
+    // Extract branch relationships from steps if they exist
+    const newBranchPoints: Record<string, string[]> = {};
+    
+    learningPath.steps.forEach(step => {
+      if (step.branches && step.branches.length > 0) {
+        newBranchPoints[step.id] = step.branches;
+      }
+    });
+    
+    setBranchPoints(newBranchPoints);
+  }, [learningPath.steps]);
+  
+  const handleBranchSelect = (branchId: string) => {
+    setActiveBranch(branchId);
+    if (onBranchSelect) {
+      onBranchSelect(branchId);
+    }
+  };
 
   return (
     <div className={`bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-sm border border-orange-200/50 ${className}`}>
@@ -85,6 +115,27 @@ const LearningPathTracker: React.FC<LearningPathTrackerProps> = ({
       </div>
 
       {/* Difficulty and tags */}
+      {/* Learning path visualization */}
+      <div className="mt-4 mb-6">
+        <div className="w-full bg-gray-50 rounded-xl p-3 flex items-center overflow-x-auto hide-scrollbar">
+          {Object.keys(stepsByCategory).map((category, idx) => (
+            <div 
+              key={category} 
+              onClick={() => handleBranchSelect(category)}
+              className={`flex items-center ${idx > 0 ? 'ml-1' : ''}`}
+            >
+              {idx > 0 && <GitFork className="w-4 h-4 text-gray-400 mx-1" />}
+              <div 
+                className={`px-3 py-1.5 rounded-lg text-sm whitespace-nowrap cursor-pointer transition-all ${activeBranch === category ? 'bg-primary text-white font-medium' : 'bg-white border text-gray-600 hover:border-primary/30'}`}
+              >
+                {category}
+                <span className="ml-2 text-xs opacity-70">{stepsByCategory[category].length}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      
       <div className="mt-6 pt-6 border-t border-gray-100 flex flex-wrap gap-2">
         {learningPath.difficulty && (
           <span className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -145,6 +196,13 @@ const LearningPathTracker: React.FC<LearningPathTrackerProps> = ({
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
+                        {/* Indicate if this step has branch options */}
+                        {branchPoints[step.id] && branchPoints[step.id].length > 0 && (
+                          <span className="flex items-center bg-orange-50 text-orange-600 px-2 py-0.5 rounded text-xs">
+                            <GitBranch className="w-3 h-3 mr-1" />
+                            {branchPoints[step.id].length}
+                          </span>
+                        )}
                         {step.estimatedTime && (
                           <span className="text-xs text-gray-500 flex items-center">
                             <Clock className="w-3 h-3 mr-1" />
@@ -194,6 +252,27 @@ const LearningPathTracker: React.FC<LearningPathTrackerProps> = ({
                                 </a>
                               ))}
                             </div>
+                            
+                            {/* Branch options if available */}
+                            {branchPoints[step.id] && branchPoints[step.id].length > 0 && (
+                              <div className="mt-3 border-t border-gray-100 pt-3">
+                                <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                                  Branch Options
+                                </h4>
+                                <div className="flex flex-wrap gap-2">
+                                  {branchPoints[step.id].map((branch) => (
+                                    <button
+                                      key={branch}
+                                      onClick={() => handleBranchSelect(branch)}
+                                      className="flex items-center px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-sm transition-colors"
+                                    >
+                                      <GitBranch className="w-3.5 h-3.5 mr-1.5 text-gray-600" />
+                                      {branch}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

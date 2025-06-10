@@ -26,6 +26,8 @@ export interface TopicSuggestion {
   imageUrl?: string;
   icon?: JSX.Element; // Added icon property
   color?: string; // Added color property
+  branches?: string[]; // Path branches available from this topic
+  relatedTopics?: TopicSuggestion[]; // Related topics for deeper exploration
 }
 
 // Learning path types
@@ -37,6 +39,9 @@ export interface LearningStep {
   resources?: LearningResource[];
   order: number;
   estimatedTime?: string;
+  category?: string; // For categorizing steps into branches/paths
+  branches?: string[]; // Branching options from this step
+  difficulty?: 'beginner' | 'intermediate' | 'advanced';
 }
 
 export interface LearningResource {
@@ -178,7 +183,8 @@ export interface TopicSuggestionCardProps {
 
 export interface LearningPathTrackerProps {
   learningPath: LearningPath;
-  onStepComplete: (stepId: string, completed: boolean) => void;
+  onStepComplete?: (stepId: string, completed: boolean) => void;
+  onBranchSelect?: (branchId: string) => void; // Added for branch selection
   className?: string;
 }
 

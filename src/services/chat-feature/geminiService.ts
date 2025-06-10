@@ -1,11 +1,11 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { TopicSuggestion } from '../types';
+import { TopicSuggestion } from '../../types/chat-feature';
 
 export class GeminiService {
   private genAI: GoogleGenerativeAI | null = null;
 
   constructor() {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     if (apiKey) {
       this.genAI = new GoogleGenerativeAI(apiKey);
     }

@@ -4,9 +4,10 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { 
   Message, 
-  TopicSuggestion, 
   LearningPath, 
-  TopicTag,
+  TopicTag, 
+  TopicSuggestion, 
+  EnhancedMessage,
   MessageSender,
   MessageType
 } from '../../types/chat-feature';
@@ -50,6 +51,24 @@ const useChat = (userId: string | null) => {
       ...message,
       timestamp: new Date().toISOString(),
     };
+    
+    // For AI messages, ensure they have enhancedContent structure when needed
+    if (message.sender === 'ai' && message.type === 'learning_context') {
+      // Cast to EnhancedMessage to add enhancedContent
+      const enhancedMessage = newMessage as unknown as EnhancedMessage;
+      if (!enhancedMessage.enhancedContent) {
+        enhancedMessage.enhancedContent = {
+          mainContent: message.text,
+          detailedContent: message.content || '',
+          suggestions: [],
+          branchingPaths: [],
+          resources: []
+        };
+      }
+      setMessages(prev => [...prev, enhancedMessage]);
+      return enhancedMessage;
+    }
+    
     setMessages(prev => [...prev, newMessage]);
     return newMessage;
   }, []);
@@ -164,20 +183,79 @@ const useChat = (userId: string | null) => {
       setTypingMessageId(null);
       setMessages(prev => prev.filter(msg => msg.id !== typingMessageId));
 
+      // Step 2: Generate topic suggestions
+      const { suggestions = [] } = await callGeminiAPI('generateTopicSuggestions', { 
+        topic: content,
+        count: 4 
+      });
+      setTopicSuggestions(suggestions);
+      
       // Add AI's response
       const aiMessage = addMessage({
         text: context,
         sender: 'ai',
         type: 'learning_context',
         context: context,
-      });
-
-      // Step 2: Generate topic suggestions
-      const { suggestions = [] } = await callGeminiAPI('generateTopicSuggestions', { 
-        topic: content,
-        count: 3 
-      });
-      setTopicSuggestions(suggestions);
+      }) as EnhancedMessage;
+      
+      // Add enhanced content to the message after creation
+      aiMessage.enhancedContent = {
+        mainContent: context,
+        detailedContent: context,
+        suggestions: suggestions,
+        branchingPaths: [
+          {
+            id: 'branch-1',
+            title: `${content} Fundamentals`,
+            description: `Master the core concepts of ${content} with hands-on exercises and practical examples.`,
+            difficulty: 'beginner',
+            estimatedTime: '2-3 weeks',
+            tags: []
+          },
+          {
+            id: 'branch-2',
+            title: `Advanced ${content} Techniques`,
+            description: `Dive deeper into advanced ${content} concepts and professional applications.`,
+            difficulty: 'intermediate',
+            estimatedTime: '3-4 weeks',
+            tags: []
+          },
+          {
+            id: 'branch-3',
+            title: `${content} Projects and Applications`,
+            description: `Apply your knowledge through real-world projects and build your portfolio.`,
+            difficulty: 'advanced',
+            estimatedTime: '4-6 weeks',
+            tags: []
+          }
+        ],
+        resources: [
+          {
+            id: 'resource-1',
+            title: `${content} Documentation`,
+            url: `https://example.com/${content.toLowerCase().replace(/\s+/g, '-')}-docs`,
+            type: 'documentation',
+            duration: '10 min read'
+          },
+          {
+            id: 'resource-2',
+            title: `${content} Tutorial: Getting Started`,
+            url: `https://example.com/${content.toLowerCase().replace(/\s+/g, '-')}-tutorial`,
+            type: 'tutorial',
+            duration: '25 min'
+          },
+          {
+            id: 'resource-3',
+            title: `Introduction to ${content}`,
+            url: `https://example.com/${content.toLowerCase().replace(/\s+/g, '-')}-video`,
+            type: 'video',
+            duration: '15 min watch'
+          }
+        ]
+      };
+      
+      // Update the messages array with the enhanced message
+      setMessages(prev => prev.map(msg => msg.id === aiMessage.id ? aiMessage : msg));
 
       // Step 3: Generate learning path
       const pathData = await callGeminiAPI('generateLearningPath', { 
@@ -260,7 +338,7 @@ const useChat = (userId: string | null) => {
     
     suggestions.forEach(suggestion => {
       if (suggestion.tags) {
-        suggestion.tags.forEach(tagName => {
+        suggestion.tags.forEach((tagName: string) => {
           const normalizedTag = tagName.toLowerCase().trim();
           if (!allTags.has(normalizedTag)) {
             allTags.set(normalizedTag, {

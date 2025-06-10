@@ -63,7 +63,7 @@ const ChatTeacherPage: React.FC = () => {
     <div className="flex flex-col h-auto bg-background text-foreground">
       <div className="container mx-auto p-4 max-w-6xl flex-grow">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-primary">Explore Topics (Beta)</h1>
+          <h1 className="text-3xl font-bold text-primary">Explore Topics (Alpha)</h1>
           <Button onClick={startNewChat} variant="outline" className="text-sm text-muted-foreground hover:text-foreground">
             New Chat
           </Button>

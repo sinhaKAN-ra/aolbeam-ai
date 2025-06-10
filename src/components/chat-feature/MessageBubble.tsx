@@ -4,9 +4,11 @@ import { User, Bot, Lightbulb, MessageSquare } from 'lucide-react';
 
 interface MessageBubbleProps {
   message: Message;
+  isCurrentUser: boolean;
+  onRetry?: () => void; // Make onRetry optional
 }
 
-const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
+const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isCurrentUser, onRetry }) => {
   const isUser = message.sender === 'user';
   const bubbleClass = isUser
     ? 'bg-gradient-to-br from-primary to-secondary text-white rounded-bl-3xl rounded-tr-3xl rounded-tl-xl'
