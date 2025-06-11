@@ -11,7 +11,14 @@ const TestSeriesList: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [testSeriesToDelete, setTestSeriesToDelete] = useState<TestSeries | null>(null);
-  
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [testSeriesToShare, setTestSeriesToShare] = useState<TestSeries | null>(null);
+  const [shareEmail, setShareEmail] = useState('');
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+const [selectedTestSeries, setSelectedTestSeries] = useState<TestSeries | null>(null);
+const [isSharing, setIsSharing] = useState(false);
+
   const router = useRouter();
   const { user } = useAuth();
 
@@ -48,6 +55,8 @@ const TestSeriesList: React.FC = () => {
     }
   };
 
+  
+
   const handleTabChange = (newValue: number) => {
     setTabValue(newValue);
   };
@@ -71,6 +80,60 @@ const TestSeriesList: React.FC = () => {
   const confirmDelete = (testSeries: TestSeries) => {
     setTestSeriesToDelete(testSeries);
     setDeleteDialogOpen(true);
+  };
+
+  const handleShare = (series: TestSeries) => {
+    setSelectedTestSeries(series);
+    setShareEmail(''); // Clear previous email
+    setShareMessage(null); // Clear previous messages
+    setIsShareModalOpen(true);
+  };
+
+  const handleShareSubmit = async () => {
+    if (!selectedTestSeries || !shareEmail) {
+      setShareMessage('Please select a test series and enter a recipient email.');
+      return;
+    }
+  
+    setIsSharing(true);
+    setShareMessage(null);
+  
+    try {
+      // Call the backend API to share the test series
+      const response = await fetch('/api/test-series/share', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          testSeriesId: selectedTestSeries.id,
+          recipientEmail: shareEmail,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to share test series');
+      }
+      
+      setShareMessage(`Test series "${selectedTestSeries.title}" successfully shared with ${shareEmail}.`);
+      
+      // Close modal after a delay on success
+      setTimeout(() => {
+        setIsShareModalOpen(false);
+        
+        // Optionally refresh the test series list if we're on the "Shared with me" tab
+        if (tabValue === 1) {
+          loadTestSeries();
+        }
+      }, 2000);
+      
+    } catch (error: any) {
+      setShareMessage(`Failed to share: ${error.message || 'An unknown error occurred.'}`);
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -148,7 +211,7 @@ const TestSeriesList: React.FC = () => {
 
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6 mt-6 p-2">
-  {testSeries.map((series) => (
+    {testSeries.map((series) => (
     <div key={series.id} className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-300 ease-in-out flex flex-col h-full overflow-hidden">
       {/* Header Section */}
       <div className="px-5 pt-5 pb-3 flex-grow">
@@ -158,6 +221,16 @@ const TestSeriesList: React.FC = () => {
           </h3>
           {(tabValue === 0 || tabValue === 1) && series.creator_id === getCurrentUserId() && (
             <div className="flex gap-1 ml-2 flex-shrink-0">
+              <button
+    onClick={() => handleShare(series)} // Pass the 'series' object here
+    className="p-1.5 text-gray-500 hover:orange-700 hover:bg-orange-100 rounded-lg transition-colors"
+    title="Share"
+>
+    {/* SVG for share icon */}
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+    </svg>
+</button>
               <button
                 onClick={() => handleEdit(series.id)}
                 className="p-1.5 text-gray-500 hover:text-orange-700 hover:bg-orange-100 rounded-lg transition-colors"
@@ -326,6 +399,45 @@ const TestSeriesList: React.FC = () => {
           </div>
         </div>
       )}
+
+{isShareModalOpen && (
+  <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
+    <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md mx-4">
+      <h2 className="text-2xl font-semibold mb-4 text-gray-800">Share Test Series</h2>
+      <p className="text-gray-600 mb-6">Enter the email of the user you want to share "{selectedTestSeries?.title}" with.</p>
+
+      <input
+        type="email"
+        placeholder="Recipient's Email"
+        value={shareEmail}
+        onChange={(e) => setShareEmail(e.target.value)}
+        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 mb-4"
+      />
+
+      {shareMessage && (
+        <p className={`mb-4 text-sm ${shareMessage.includes('successfully') ? 'text-green-600' : 'text-red-600'}`}>
+          {shareMessage}
+        </p>
+      )}
+
+      <div className="flex justify-end space-x-3">
+        <button
+          onClick={() => setIsShareModalOpen(false)}
+          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleShareSubmit}
+          disabled={isSharing}
+          className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {isSharing ? 'Sharing...' : 'Share'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 };

@@ -42,7 +42,19 @@ export async function GET(
 
     // If the test series is private, only the creator can access it
     if (!data.is_public && data.creator_id !== user.id) {
-      return NextResponse.json({ error: 'Unauthorized. This is a private test series.' }, { status: 403 });
+      // Allow access if the test series is shared with this user
+      const { data: shareEntry, error: shareError } = await supabase
+        .from('test_series_shares')
+        .select('id')
+        .eq('test_series_id', id)
+        .eq('shared_with_id', user.id)
+        .single();
+      if (shareError || !shareEntry) {
+        return NextResponse.json(
+          { error: 'Unauthorized. This is a private test series.' },
+          { status: 403 }
+        );
+      }
     }
 
     return NextResponse.json({ data });
