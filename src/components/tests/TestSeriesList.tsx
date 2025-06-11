@@ -16,10 +16,9 @@ const TestSeriesList: React.FC = () => {
   const { user } = useAuth();
 
   const tabs = [
-    { label: 'All', value: 0 },
-    { label: 'Created by me', value: 1 },
-    { label: 'Shared with me', value: 2 },
-    { label: 'Public', value: 3 }
+    { label: 'Created by me', value: 0 },
+    { label: 'Shared with me', value: 1 },
+    { label: 'Public', value: 2 }
   ];
 
   useEffect(() => {
@@ -32,11 +31,11 @@ const TestSeriesList: React.FC = () => {
       setError(null);
       
       let filter = {};
-      if (tabValue === 1) {
+      if (tabValue === 0) {
         filter = { createdOnly: true };
-      } else if (tabValue === 2) {
+      } else if (tabValue === 1) {
         filter = { sharedOnly: true };
-      } else if (tabValue === 3) {
+      } else if (tabValue === 2) {
         filter = { publicOnly: true };
       }
       
@@ -66,7 +65,7 @@ const TestSeriesList: React.FC = () => {
   };
 
   const handleViewAttempts = (id: string) => {
-    router.push(`/tests/attempts/${id}`);
+    router.push(`/tests/attempts?test_series_id=${id}`);
   };
 
   const confirmDelete = (testSeries: TestSeries) => {
@@ -120,15 +119,14 @@ const TestSeriesList: React.FC = () => {
       return (
         <div className="p-8 text-center">
           <p className="text-gray-500 mb-4">
-            {tabValue === 0 ? "You don't have any test series yet." :
-             tabValue === 1 ? "You haven't created any test series yet." :
-             tabValue === 2 ? "No test series have been shared with you." :
+            {tabValue === 0 ? "You haven't created any test series yet." :
+             tabValue === 1 ? "No test series have been shared with you." :
              "No public test series found."}
           </p>
-          {(tabValue === 0 || tabValue === 1) && (
+          {(tabValue === 0) && (
             <button
               onClick={handleCreateNew}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -149,92 +147,111 @@ const TestSeriesList: React.FC = () => {
     });
 
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-        {testSeries.map((series) => (
-          <div key={series.id} className="bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col h-full">
-            <div className="p-4 flex-grow">
-              <h3 className="text-lg font-semibold text-gray-900 truncate mb-2">
-                {series.title}
-              </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6 mt-6 p-2">
+  {testSeries.map((series) => (
+    <div key={series.id} className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-300 ease-in-out flex flex-col h-full overflow-hidden">
+      {/* Header Section */}
+      <div className="px-5 pt-5 pb-3 flex-grow">
+        <div className="flex items-start justify-between mb-3">
+          <h3 className="text-lg font-semibold text-gray-900 line-clamp-2 leading-tight pr-2">
+            {series.title}
+          </h3>
+          {(tabValue === 0 || tabValue === 1) && series.creator_id === getCurrentUserId() && (
+            <div className="flex gap-1 ml-2 flex-shrink-0">
+              <button
+                onClick={() => handleEdit(series.id)}
+                className="p-1.5 text-gray-500 hover:text-orange-700 hover:bg-orange-100 rounded-lg transition-colors"
+                title="Edit"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828L17.586 3.586z" />
+                </svg>
+              </button>
               
-              <div className="flex gap-2 mb-3">
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  series.is_public 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-gray-100 text-gray-800'
-                }`}>
-                  {series.is_public ? 'Public' : 'Private'}
-                </span>
-                {series.tags && series.tags.length > 0 && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
-                    {series.tags[0]}
-                  </span>
-                )}
-              </div>
-              
-              <p className="text-sm text-gray-600 mb-2">
-                {series.description ? 
-                  (series.description.length > 100 
-                    ? `${series.description.substring(0, 100)}...` 
-                    : series.description)
-                  : 'No description'}
-              </p>
-              
-              <p className="text-sm text-gray-500">
-                Est. duration: {series.estimated_duration_minutes || 'N/A'} min
-              </p>
+              <button
+                onClick={() => confirmDelete(series)}
+                className="p-1.5 text-gray-500 hover:text-red-700 hover:bg-red-100 rounded-lg transition-colors"
+                title="Delete"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
             </div>
-            
-            <div className="p-3 border-t border-gray-200 flex justify-between items-center">
-              <div className="flex space-x-1">
-                <button
-                  onClick={() => handleTakeTest(series.id)}
-                  className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full transition-colors"
-                  title="Take Test"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h8m-9-4V8a3 3 0 016 0v2M6 20h12a2 2 0 002-2V8a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                </button>
-                
-                <button
-                  onClick={() => handleViewAttempts(series.id)}
-                  className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-full transition-colors"
-                  title="View Attempts"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </button>
-              </div>
-              
-              {(tabValue === 0 || tabValue === 1) && series.creator_id === getCurrentUserId() && (
-                <div className="flex space-x-1">
-                  <button
-                    onClick={() => handleEdit(series.id)}
-                    className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-full transition-colors"
-                    title="Edit"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828L17.586 3.586z" />
-                    </svg>
-                  </button>
-                  
-                  <button
-                    onClick={() => confirmDelete(series)}
-                    className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-full transition-colors"
-                    title="Delete"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+          )}
+        </div>
+        
+        {/* Status and Tags */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+            series.is_public 
+              ? 'bg-green-100 text-green-700 border border-green-200' 
+              : 'bg-gray-100 text-gray-700 border border-gray-200'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+              series.is_public ? 'bg-green-500' : 'bg-gray-500'
+            }`}></span>
+            {series.is_public ? 'Public' : 'Private'}
+          </span>
+          {series.tags && series.tags.length > 0 && (
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-50 text-yellow-700 border border-yellow-200">
+              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+              </svg>
+              {series.tags[0]}
+            </span>
+          )}
+        </div>
+        
+        {/* Description */}
+        <p className="text-sm text-gray-600 mb-4 line-clamp-3">
+          {series.description ? 
+            (series.description.length > 120 
+              ? `${series.description.substring(0, 120)}...` 
+              : series.description)
+            : 'No description available'}
+        </p>
+        
+        {/* Duration */}
+        <div className="flex items-center text-sm text-gray-500">
+          <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>Duration: {series.estimated_duration_minutes || 'N/A'} min</span>
+        </div>
       </div>
+      
+      {/* Action Buttons Section */}
+      <div className="p-4 bg-gray-50 border-t border-gray-100">
+        <div className="flex flex-col sm:flex-row gap-2">
+          {/* Primary Action - Take Test */}
+          <button
+            onClick={() => handleTakeTest(series.id)}
+            className="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-colors"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="hidden sm:inline">Start Test</span>
+            <span className="sm:hidden">Start</span>
+          </button>
+          
+          {/* Secondary Action - View Attempts */}
+          <button
+            onClick={() => handleViewAttempts(series.id)}
+            className="flex-1 inline-flex items-center justify-center px-4 py-2.5 bg-white text-gray-700 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <span className="hidden sm:inline">View Attempts</span>
+            <span className="sm:hidden">Attempts</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  ))}
+</div>
     );
   };
 
@@ -244,7 +261,7 @@ const TestSeriesList: React.FC = () => {
         <h1 className="text-2xl font-bold text-gray-900">Test Series</h1>
         <button
           onClick={handleCreateNew}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
         >
           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -261,7 +278,7 @@ const TestSeriesList: React.FC = () => {
               onClick={() => handleTabChange(tab.value)}
               className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                 tabValue === tab.value
-                  ? 'border-blue-500 text-blue-600'
+                  ? 'border-orange-500 text-orange-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >

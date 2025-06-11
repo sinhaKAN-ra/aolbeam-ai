@@ -79,7 +79,8 @@ export async function POST(
     }
     
     const userId = session.user.id;
-    const { id } = params;
+    // Fix Next.js warning by using params.id directly
+    const id = params.id;
     const body = await request.json();
     
     // Validate required fields
@@ -119,7 +120,7 @@ export async function POST(
     
     // Check if the problem exists and belongs to the test
     const { data: problem, error: problemError } = await supabase
-      .from('test_problems')
+      .from('test_series_problems')  // Fixed table name
       .select('*')
       .eq('id', body.test_problem_id)
       .single();
@@ -191,10 +192,11 @@ export async function POST(
 // Helper function to determine if answer is correct
 function determineIsCorrect(problem: any, userResponse: string): boolean | null {
   // For MCQ problems, we can automatically check
-  if (problem.problem_type === 'practical' && problem.correct_answer && userResponse) {
+  if (problem.problem_type === 'mcq' && problem.correct_answer !== null && userResponse !== null) {
+    // Assuming correct_answer for MCQ is the correct option's value
     return problem.correct_answer.trim().toLowerCase() === userResponse.trim().toLowerCase();
   }
   
-  // For non-MCQ problems, we need manual grading or AI evaluation
+  // For other problem types, or if correct_answer/userResponse is null, we need manual grading or AI evaluation
   return null;
 }

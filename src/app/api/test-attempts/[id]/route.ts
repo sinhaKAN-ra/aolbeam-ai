@@ -18,7 +18,8 @@ export async function GET(
     }
     
     const userId = session.user.id;
-    const { id } = params;
+    // Fix Next.js warning by using params.id directly
+const id = params.id;
     
     // Get the test attempt
     const { data: attempt, error: attemptError } = await supabase
@@ -49,10 +50,13 @@ export async function GET(
     
     // Get all problems for this test series
     const { data: problems, error: problemsError } = await supabase
-      .from('test_problems')
+      .from('test_series_problems')
       .select('*')
       .eq('test_series_id', attempt.test_series_id)
       .order('order_index');
+      
+    // Log for debugging
+    console.log(`Fetched ${problems ? problems.length : 0} problems for test series ${attempt.test_series_id}`);
     
     if (problemsError) {
       console.error('Error fetching test problems:', problemsError);
@@ -99,7 +103,8 @@ export async function PUT(
     }
     
     const userId = session.user.id;
-    const { id } = params;
+    // Fix Next.js warning by using params.id directly
+const id = params.id;
     const body = await request.json();
     
     // Check if user is authorized to update this attempt
@@ -141,31 +146,6 @@ export async function PUT(
       // Calculate and set score if it's provided
       if (typeof body.score === 'number') {
         updateData.score = body.score;
-      } else {
-        // Get all responses and calculate score
-        const { data: responses, error: responsesError } = await supabase
-          .from('test_problem_responses')
-          .select('is_correct')
-          .eq('test_attempt_id', id);
-        
-        if (responsesError) {
-          console.error('Error calculating score:', responsesError);
-        } else {
-          // Get all problems for this test
-          const { data: problemCount, error: problemCountError } = await supabase
-            .from('test_problems')
-            .select('id', { count: 'exact' })
-            .eq('test_series_id', attempt.test_series_id);
-          
-          if (!problemCountError && problemCount !== null) {
-            const totalProblems = problemCount.length;
-            const correctAnswers = responses.filter(r => r.is_correct).length;
-            
-            if (totalProblems > 0) {
-              updateData.score = (correctAnswers / totalProblems) * 100;
-            }
-          }
-        }
       }
     }
     

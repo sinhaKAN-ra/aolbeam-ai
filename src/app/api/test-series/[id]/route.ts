@@ -9,6 +9,7 @@ export async function GET(
   context: { params: { id: string } }
 ) {
   const { id } = context.params;
+  console.log(`GET request for test series with ID: ${id}`);
   try {
     const supabase = await createSupabaseServerClient();
     

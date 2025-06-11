@@ -13,6 +13,8 @@ export interface TestSeries {
   tags: string[] | null;
   creator?: User;
   problem_count?: number;
+  test_problems?: TestProblem[]; // Include associated problems
+  test_series_problems?: TestProblem[]; // Alternative name used by API
 }
 
 export interface TestProblem {
@@ -53,7 +55,7 @@ export interface TestAttempt {
   created_at: string;
   updated_at: string;
   test_series?: TestSeries;
-  user?: User;
+  user_profiles?: { full_name: string }; // Updated to reflect the API's returned user_profiles data
   responses?: TestProblemResponse[];
 }
 

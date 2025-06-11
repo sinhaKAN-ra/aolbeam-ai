@@ -67,7 +67,9 @@ export async function fetchTestSeriesById(id: string): Promise<{
   problems: TestProblem[];
 }> {
   try {
-    const response = await fetch(`/api/test-series/${id}`, {
+    const url = `/api/test-series/${id}`;
+    console.log(`Fetching test series from: ${url}`);
+    const response = await fetch(url, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     });
@@ -78,13 +80,21 @@ export async function fetchTestSeriesById(id: string): Promise<{
     }
 
     const { data } = await response.json();
+    console.log('API response data:', data);
+
+    // Make sure test_problems is properly extracted
+    const problems = data.test_series_problems || [];
+    console.log(`Found ${problems.length} problems in test series`);
+    
+    // Create a copy of the data with test_problems explicitly set
+    const testSeries = {
+      ...data,
+      test_problems: problems
+    };
     
     return {
-      testSeries: {
-        ...data,
-        test_problems: undefined // Remove the problems from the test series object to avoid duplication
-      },
-      problems: data.test_problems || []
+      testSeries,
+      problems
     };
   } catch (error) {
     console.error(`Error fetching test series ${id}:`, error);

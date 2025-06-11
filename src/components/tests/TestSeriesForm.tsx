@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { TestSeries, TestProblem } from '@/types';
+import { TestSeries, TestProblem } from '@/types/custom';
 import { 
   createTestSeries, 
   fetchTestSeriesById, 
@@ -9,7 +9,7 @@ import {
   updateProblemOrder
 } from '@/services/testSeriesService';
 import TestProblemForm from './TestProblemForm';
-import TestProblemGeneratorForm from './TestProblemGeneratorForm';
+import { TestProblemGeneratorForm } from './TestProblemGeneratorForm';
 import TestProblemList from './TestProblemList';
 import { PlusCircle, Sparkles } from 'lucide-react';
 
@@ -43,7 +43,7 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
       const loadTestSeriesData = async () => {
         try {
           setLoading(true);
-          const { testSeries, problems } = await fetchTestSeriesById(testSeriesId);
+          const { testSeries } = await fetchTestSeriesById(testSeriesId);
           
           // Set form fields
           setTitle(testSeries.title);
@@ -53,7 +53,7 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
           setTags(testSeries.tags || []);
           
           // Set problems
-          setProblems(problems);
+          setProblems(testSeries.test_problems || []);
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Failed to load test series');
         } finally {
@@ -90,6 +90,7 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
         setSuccess('Test series updated successfully');
       } else {
         const newTestSeries = await createTestSeries(testSeriesData);
+        setProblems(newTestSeries.test_problems || []);
         setSuccess('Test series created successfully');
         // Redirect to edit page to add problems
         router.push(`/tests/edit/${newTestSeries.id}`);
@@ -132,6 +133,12 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
     setProblems([...problems, newProblem]);
     setShowGenerateProblemForm(false);
     setSuccess('Problem added successfully');
+  };
+
+  const handleGenerateNewProblem = () => {
+    // This will trigger a new generation by resetting the generated problem state in the child.
+    // The TestProblemGeneratorForm component itself will handle the actual API call for generation.
+    setShowGenerateProblemForm(true); // Ensure the form is visible to trigger generation
   };
   
   const handleReorderProblems = async (reorderedProblems: TestProblem[]) => {
@@ -356,6 +363,7 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
                   testSeriesId={testSeriesId as string}
                   onProblemAdded={handleProblemGenerated}
                   onCancel={() => setShowGenerateProblemForm(false)}
+                  onGenerateNewProblem={handleGenerateNewProblem}
                 />
               </div>
             ) : (

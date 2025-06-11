@@ -10,12 +10,14 @@ import {
   type GeneratePracticeProblemOutput,
 } from '@/ai/flows/generate-practice-problem';
 import { Loader2, Save, RefreshCw } from 'lucide-react';
+import MathRenderer from '../MathRenderer';
 import { useToast } from '@/hooks/use-toast';
 
 interface TestProblemGeneratorFormProps {
   testSeriesId: string;
   onProblemAdded: (problem: TestProblem) => void;
   onCancel: () => void;
+  onGenerateNewProblem: () => void;
 }
 
 // Map between frontend problem types and backend problem types
@@ -32,11 +34,12 @@ const problemTypeMap: Record<ProblemType, string> = {
   'random': 'theory', // Default random to theory
 };
 
-export default function TestProblemGeneratorForm({
+export const TestProblemGeneratorForm: React.FC<TestProblemGeneratorFormProps> = ({
   testSeriesId,
   onProblemAdded,
-  onCancel
-}: TestProblemGeneratorFormProps) {
+  onCancel,
+  onGenerateNewProblem,
+}) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [generatedProblem, setGeneratedProblem] = useState<GeneratePracticeProblemOutput | null>(null);
@@ -154,15 +157,14 @@ export default function TestProblemGeneratorForm({
   const handleGenerateAnother = () => {
     setGeneratedProblem(null);
     problemGeneratorRef.current?.focusTopicInput();
+    onGenerateNewProblem();
   };
 
   return (
     <div className="space-y-6">
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-xl">Generate Test Problem</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <div className=" p-2">
+
+        <div>
           {!generatedProblem ? (
             <ProblemGenerator
               ref={problemGeneratorRef}
@@ -180,8 +182,8 @@ export default function TestProblemGeneratorForm({
                   <span className="font-medium">Topic:</span> {currentTopic}
                 </div>
                 <div className="mb-4">
-                  <span className="font-medium">Problem:</span> 
-                  <div className="mt-1">{generatedProblem.problemStatement}</div>
+                  <span className="font-medium">Problem Statement:</span>
+                  <div className="mt-1 prose prose-sm max-w-none dark:prose-invert"><MathRenderer content={generatedProblem.problemStatement} /></div>
                 </div>
                 
                 {generatedProblem.multipleChoiceOptions && generatedProblem.multipleChoiceOptions.length > 0 && (
@@ -189,7 +191,7 @@ export default function TestProblemGeneratorForm({
                     <span className="font-medium">Options:</span>
                     <ul className="mt-1 list-disc pl-5">
                       {generatedProblem.multipleChoiceOptions.map((option, index) => (
-                        <li key={index}>{option}</li>
+                        <li key={index} className="mb-2 last:mb-0 prose prose-sm max-w-none dark:prose-invert"><MathRenderer content={option} /></li>
                       ))}
                     </ul>
                   </div>
@@ -198,14 +200,14 @@ export default function TestProblemGeneratorForm({
                 {generatedProblem.correctAnswer && (
                   <div className="mb-4">
                     <span className="font-medium">Correct Answer:</span> 
-                    <div className="mt-1">{generatedProblem.correctAnswer}</div>
+                    <div className="mt-1 prose prose-sm max-w-none dark:prose-invert"><MathRenderer content={generatedProblem.correctAnswer} /></div>
                   </div>
                 )}
                 
                 {generatedProblem.answerFormat && (
                   <div className="mb-4">
-                    <span className="font-medium">Explanation:</span> 
-                    <div className="mt-1">{generatedProblem.answerFormat}</div>
+                    <span className="font-medium">Answer Format:</span> 
+                    <div className="mt-1 prose prose-sm max-w-none dark:prose-invert"><MathRenderer content={generatedProblem.answerFormat} /></div>
                   </div>
                 )}
               </div>
@@ -233,8 +235,8 @@ export default function TestProblemGeneratorForm({
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
       
       <div className="flex justify-end">
         <Button variant="outline" onClick={onCancel}>

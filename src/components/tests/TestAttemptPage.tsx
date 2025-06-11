@@ -43,9 +43,27 @@ const TestAttemptPage: React.FC<TestAttemptPageProps> = ({ testSeriesId, attempt
         setError(null);
 
         // Fetch test series with problems
+        console.log('Fetching test series with ID:', testSeriesId);
         const { testSeries, problems } = await fetchTestSeriesById(testSeriesId);
+        console.log('Received test series:', testSeries);
+        console.log('Received problems:', problems);
+        
         setTestSeries(testSeries);
-        setProblems(problems);
+        
+        // Make sure we have problems data
+        if (problems && problems.length > 0) {
+          console.log(`Setting ${problems.length} problems from API response`);
+          setProblems(problems);
+        } else if (testSeries.test_problems && testSeries.test_problems.length > 0) {
+          console.log(`Setting ${testSeries.test_problems.length} problems from testSeries.test_problems`);
+          setProblems(testSeries.test_problems);
+        } else if (testSeries.test_series_problems && testSeries.test_series_problems.length > 0) {
+          console.log(`Setting ${testSeries.test_series_problems.length} problems from testSeries.test_series_problems`);
+          setProblems(testSeries.test_series_problems);
+        } else {
+          console.warn('No problems found for this test series');
+          setProblems([]);
+        }
 
         // If we have an attempt ID, fetch that attempt
         if (attemptId) {
@@ -64,7 +82,8 @@ const TestAttemptPage: React.FC<TestAttemptPageProps> = ({ testSeriesId, attempt
           setAttempt(newAttempt);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to initialize test');
+        console.error('TestAttemptPage: Error initializing test:', err);
+        setError('Failed to initialize test');
       } finally {
         setLoading(false);
       }
@@ -127,14 +146,23 @@ const TestAttemptPage: React.FC<TestAttemptPageProps> = ({ testSeriesId, attempt
     }
   };
 
+  const calculateScore = (): number => {
+    if (problems.length === 0) return 0;
+    const correctResponses = Object.values(responses).filter(response => response.is_correct).length;
+    return Math.round((correctResponses / problems.length) * 100);
+  };
+
   const handleFinishTest = async () => {
     setConfirmSubmitOpen(false);
     
     try {
       if (!attempt) return;
       
+      const finalScore = calculateScore();
+
       await completeTestAttempt(attempt.id, {
-        total_time_seconds: totalTimeSeconds
+        total_time_seconds: totalTimeSeconds,
+        score: finalScore
       });
 
       // Navigate to results page
@@ -156,12 +184,11 @@ const TestAttemptPage: React.FC<TestAttemptPageProps> = ({ testSeriesId, attempt
     ].filter(Boolean).join(' ');
   };
 
-  const getCurrentProblem = (): TestProblem | null => {
+  const currentProblem = React.useMemo(() => {
     return problems.length > activeStep ? problems[activeStep] : null;
-  };
+  }, [problems, activeStep]);
 
   const getResponseForCurrentProblem = (): TestProblemResponse | undefined => {
-    const currentProblem = getCurrentProblem();
     return currentProblem ? responses[currentProblem.id] : undefined;
   };
 
@@ -201,8 +228,8 @@ const TestAttemptPage: React.FC<TestAttemptPageProps> = ({ testSeriesId, attempt
     );
   }
 
-  const currentProblem = getCurrentProblem();
   const currentResponse = getResponseForCurrentProblem();
+  const problemIndex = problems.findIndex(p => p.id === currentProblem?.id);
 
   return (
     <>
@@ -211,9 +238,17 @@ const TestAttemptPage: React.FC<TestAttemptPageProps> = ({ testSeriesId, attempt
         <p className="text-gray-600 mb-4">
           {testSeries.description}
         </p>
-        <div className="flex items-center mb-4">
-          <span className="mr-2 text-gray-500">&#9200;</span> {/* Timer icon placeholder */}
-          <h2 className="text-xl font-semibold">Time Elapsed: {formatTime(totalTimeSeconds)}</h2>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+          <div className="flex items-center">
+            <span className="mr-2 text-gray-500">&#9200;</span> {/* Timer icon */}
+            <h2 className="text-xl font-semibold">Time Elapsed: {formatTime(totalTimeSeconds)}</h2>
+          </div>
+          {attempt.score !== null && (
+            <div className="flex items-center bg-blue-100 text-blue-800 px-4 py-2 rounded-md">
+              <span className="font-semibold">Score:</span>
+              <span className="ml-2 text-lg font-bold">{attempt.score}%</span>
+            </div>
+          )}
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
           <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${calculateProgress()}%` }}></div>
@@ -233,20 +268,15 @@ const TestAttemptPage: React.FC<TestAttemptPageProps> = ({ testSeriesId, attempt
         {currentProblem ? (
           <div className="mb-6">
             <ProblemDisplay
-              problem={{
-                problemStatement: currentProblem.problem_statement,
-                multipleChoiceOptions: currentProblem.multiple_choice_options || [],
-                difficulty: currentProblem.difficulty,
-                answerFormat: currentProblem.answer_format || '',
-                correctAnswer: currentProblem.correct_answer || '',
+              problem={currentProblem}
+              problemType={currentProblem.problem_type}
+              onSubmitAnswer={(answer: string, timeSeconds?: number) => {
+                handleAnswerSubmit(currentProblem.id, answer, timeSeconds);
               }}
-              problemType={currentProblem.problem_type === 'mcq' ? 'mcq' : 'theory'}
-              onSubmitAnswer={(answer: string, timeSeconds?: number) =>
-                handleAnswerSubmit(currentProblem.id, answer, timeSeconds)
-              }
-              onFeedbackSubmit={() => {}}
+              onFeedbackSubmit={() => {}} // No feedback in test mode
               isLoading={false}
-              currentTopic={''}
+              currentTopic={currentProblem.topic || "Test Problem"}
+              evaluationSubmitted={!!responses[currentProblem.id]}
             />
           </div>
         ) : (

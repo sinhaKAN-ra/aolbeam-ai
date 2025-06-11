@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { createBrowserClient as createSupabaseBrowserClientInternal } from '@supabase/ssr';
+import { createBrowserClient as createSupabaseBrowserClientInternal, createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
   throw new Error('Missing env.NEXT_PUBLIC_SUPABASE_URL');

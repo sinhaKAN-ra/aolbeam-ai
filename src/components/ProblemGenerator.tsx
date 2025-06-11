@@ -9,10 +9,12 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BookText, MessageSquareText, ListChecks, Sparkles, Loader2, BarChartBig, Brain, Sigma, GitFork, Shuffle } from 'lucide-react';
-import type { ProblemType, DifficultyLevel } from '@/types';
+import type { ProblemType, DifficultyLevel, AIGeneratedProblemType } from '@/types';
+
+const ALL_CONCRETE_PROBLEM_TYPES: AIGeneratedProblemType[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
 
 interface ProblemGeneratorProps {
-  onGenerate: (topic: string, type: ProblemType, difficulty: DifficultyLevel) => void;
+  onGenerate: (topic: string, type: AIGeneratedProblemType, difficulty: DifficultyLevel) => void;
   isLoading: boolean;
   defaultTopic?: string;
   defaultProblemType?: ProblemType;
@@ -71,7 +73,13 @@ export const ProblemGenerator = forwardRef<ProblemGeneratorHandles, ProblemGener
       e.preventDefault();
       const trimmedTopic = topic.trim();
       if (trimmedTopic) {
-        onGenerate(trimmedTopic, problemType, difficulty);
+        let actualProblemType: AIGeneratedProblemType;
+        if (problemType === 'random') {
+          actualProblemType = ALL_CONCRETE_PROBLEM_TYPES[Math.floor(Math.random() * ALL_CONCRETE_PROBLEM_TYPES.length)];
+        } else {
+          actualProblemType = problemType as AIGeneratedProblemType;
+        }
+        onGenerate(trimmedTopic, actualProblemType, difficulty);
       }
     };
 

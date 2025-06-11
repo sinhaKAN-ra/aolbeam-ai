@@ -24,7 +24,7 @@ import {
 } from '@/ai/flows/generate-problem-insights';
 import { RefreshCw, FilePlus2, ArrowRight, Loader2, History } from 'lucide-react';
 
-import type { InteractionHistoryItem, ProblemType, UserProfile, DifficultyLevel } from '@/types';
+import type { InteractionHistoryItem, ProblemType, UserProfile, DifficultyLevel, AIGeneratedProblemType } from '@/types';
 import { ProblemGenerator, ProblemGeneratorHandles } from '@/components/ProblemGenerator';
 import { ProblemDisplay, ProblemDisplayRefs } from '@/components/ProblemDisplay';
 import { EvaluationResult } from '@/components/EvaluationResult';
@@ -34,6 +34,9 @@ import Link from 'next/link';
 import { HeroSection } from '@/components/home/HeroSection';
 import { GenerateSection } from '@/components/home/GenerateSection';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import MainLayoutContainer from '@/components/MainLayoutContainer';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSupabase } from '@/hooks/useSupabase';
@@ -46,7 +49,8 @@ import { InteractionType, InteractionLimitResult } from '@/types/interaction';
 // and passed as props to this component
 
 const FREE_INTERACTION_LIMIT = 10;
-const ALL_CONCRETE_PROBLEM_TYPES: Exclude<ProblemType, 'random'>[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
+const CONCRETE_AI_PROBLEM_TYPES: AIGeneratedProblemType[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
+
 
 export default function AOLBEAMPage() {
 
@@ -65,6 +69,7 @@ export default function AOLBEAMPage() {
   const supabase = useSupabase();
   const router = useRouter();
   
+  
   // User profile state
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoadingPageProfile, setIsLoadingPageProfile] = useState<boolean>(true);
@@ -78,15 +83,20 @@ export default function AOLBEAMPage() {
   const [evaluationResult, setEvaluationResult] = useState<EvaluateTheoryAnswerOutput | null>(null);
   const [problemInsights, setProblemInsights] = useState<string | null>(null);
 
+  const problemDisplayRef = useRef<ProblemDisplayRefs>(null);
+  const evaluationResultRef = useRef<HTMLDivElement>(null);
+
+  // State for 'Add to Test Series' feature
+  const [showAddToTestSeriesModal, setShowAddToTestSeriesModal] = useState<boolean>(false);
+  const [userTestSeries, setUserTestSeries] = useState<{ id: string; title: string }[]>([]);
+  const [selectedTestSeriesId, setSelectedTestSeriesId] = useState<string | null>(null);
+  const [isLoadingTestSeries, setIsLoadingTestSeries] = useState<boolean>(false);
+  const [isAddingProblem, setIsAddingProblem] = useState<boolean>(false);
+
   // Loading states
   const [isLoadingProblem, setIsLoadingProblem] = useState<boolean>(false);
   const [isLoadingEvaluation, setIsLoadingEvaluation] = useState<boolean>(false);
   const [isLoadingInsights, setIsLoadingInsights] = useState<boolean>(false);
-
-  const problemDisplayRef = useRef<ProblemDisplayRefs>(null);
-  const evaluationResultRef = useRef<HTMLDivElement>(null);
-
-
 
   useEffect(() => {
     // Cleanup function to remove highlight when component unmounts or state changes
@@ -430,7 +440,7 @@ export default function AOLBEAMPage() {
     }
   }, [setHistory, supabase, currentUser, toast, history, saveHistoryToLocalStorage]);
 
-const handleGenerateProblem = async (topic: string, type: ProblemType, difficulty: DifficultyLevel) => {
+const handleGenerateProblem = async (topic: string, type: AIGeneratedProblemType | 'random', difficulty: DifficultyLevel) => {
   if (currentUser && isLoadingPageProfile) return; // Still loading user profile
 
   const interactionResult = await requireInteraction('problem_generation');
@@ -470,11 +480,12 @@ const handleGenerateProblem = async (topic: string, type: ProblemType, difficult
   setEvaluationResult(null);
   setProblemInsights(null);
 
-  let actualProblemTypeForAI: Exclude<ProblemType, 'random'>;
+  let actualProblemTypeForAI: AIGeneratedProblemType;
+  const concreteProblemTypes: AIGeneratedProblemType[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
   if (type === 'random') {
-      actualProblemTypeForAI = ALL_CONCRETE_PROBLEM_TYPES[Math.floor(Math.random() * ALL_CONCRETE_PROBLEM_TYPES.length)];
+      actualProblemTypeForAI = concreteProblemTypes[Math.floor(Math.random() * concreteProblemTypes.length)];
   } else {
-      actualProblemTypeForAI = type as Exclude<ProblemType, 'random'>;
+      actualProblemTypeForAI = type;
   }
   setCurrentProblemType(actualProblemTypeForAI);
 
@@ -783,7 +794,8 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
 
   const handleNewProblemSameTopic = () => {
     if (currentTopic) {
-      handleGenerateProblem(currentTopic, history[0]?.problemType || currentProblemType, currentDifficulty);
+      const problemTypeToUse = history[0]?.problemType === 'random' ? CONCRETE_AI_PROBLEM_TYPES[Math.floor(Math.random() * CONCRETE_AI_PROBLEM_TYPES.length)] : (history[0]?.problemType || currentProblemType);
+      handleGenerateProblem(currentTopic, problemTypeToUse as AIGeneratedProblemType | 'random', currentDifficulty);
     } else {
       toast({ title: "No Topic", description: "Please generate a problem first to use this option.", variant: "default" });
     }
@@ -870,6 +882,98 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
     fetchInteractionStatus();
   }, [isClientMounted, isLoadingPageProfile, checkInteractionLimit, currentUser, guestInteractionCount, userProfile]);
 
+  // Function to fetch user's test series
+  const fetchUserTestSeries = useCallback(async () => {
+    if (!currentUser) return;
+
+    // Explicitly refresh session to ensure cookies are up-to-date
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    console.log('Supabase session in fetchUserTestSeries:', session);
+    if (sessionError || !session) {
+      console.error('Failed to refresh session:', sessionError?.message);
+      toast({
+        title: 'Authentication Error',
+        description: 'Could not refresh user session. Please try logging in again.',
+        variant: 'destructive',
+      });
+      setIsLoadingTestSeries(false);
+      return;
+    }
+
+    setIsLoadingTestSeries(true);
+    try {
+      const response = await fetch('/api/test-series/my-series', {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error(`Error fetching test series: ${response.statusText}`);
+      }
+      const data = await response.json();
+      setUserTestSeries(data);
+    } catch (error: any) {
+      console.error('Failed to fetch user test series:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to load your test series: ${error.message || 'Unknown error'}`, 
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingTestSeries(false);
+    }
+  }, [currentUser, toast]);
+
+  // Function to handle adding problem to test series
+  const handleAddProblemToTestSeries = useCallback(async () => {
+    if (!currentProblem || !selectedTestSeriesId || !currentUser) {
+      toast({
+        title: 'Error',
+        description: 'Problem data, selected test series, or user not available.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsAddingProblem(true);
+    try {
+      const response = await fetch('/api/test-series/add-problem', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          problemData: {
+            ...currentProblem,
+            problemType: currentProblemType, // Add problemType from state
+            difficulty: currentDifficulty,   // Add difficulty from state
+            topic: currentTopic,             // Add topic from state
+          }, 
+          testSeriesId: selectedTestSeriesId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Error adding problem: ${errorData.error || response.statusText}`);
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Problem successfully added to your test series!',
+      });
+      setShowAddToTestSeriesModal(false);
+      setSelectedTestSeriesId(null);
+    } catch (error: any) {
+      console.error('Failed to add problem to test series:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to add problem: ${error.message || 'Unknown error'}`, 
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAddingProblem(false);
+    }
+  }, [currentProblem, selectedTestSeriesId, currentUser, toast, currentProblemType, currentDifficulty, currentTopic]);
+
   const interactionsLeftText = useCallback(() => {
     if (!isClientMounted || !interactionStatus) {
       return "Loading interactions...";
@@ -925,38 +1029,54 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
               
               {currentProblem && (
                 <>
-                  <div className="flex flex-col sm:flex-row gap-3 w-full">
-                <Button 
-                  onClick={handleNewProblemSameTopic} 
-                  variant="outline" 
-                  className="flex-1 text-xs sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis px-2 sm:px-4" 
-                  disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
-                >
-                  <RefreshCw className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" /> 
-                  <span className="truncate">Another (Same Topic)</span>
-                </Button>
-                <Button 
-                  onClick={handleStartNew} 
-                  variant="outline" 
-                  className="flex-1 text-xs sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis px-2 sm:px-4" 
-                  disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
-                >
-                  <FilePlus2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" /> 
-                  <span className="truncate">Start New Topic</span>
-                </Button>
-              </div>
-                  
-                  <ProblemDisplay
-                    ref={problemDisplayRef}
-                    problem={currentProblem}
-                    problemType={currentProblemType} 
-                    onSubmitAnswer={handleEvaluateAnswer}
-                    onFeedbackSubmit={handleProblemFeedback} 
-                    isLoading={!!(isLoadingEvaluation || (!!currentUser && isLoadingPageProfile))}
-                    currentTopic={currentTopic}
-                    evaluationSubmitted={!!evaluationResult} 
-                  />
-                  
+
+                <div className="flex flex-col sm:flex-row gap-3 w-full mb-4">
+                  <Button 
+                    onClick={handleNewProblemSameTopic} 
+                    variant="outline" 
+                    className="flex-1 text-xs sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis px-2 sm:px-4" 
+                    disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
+                  >
+                    <RefreshCw className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" /> 
+                    <span className="truncate">Another (Same Topic)</span>
+                  </Button>
+                  {currentUser && currentProblem && ( // Show button only if logged in and problem exists
+                    <Button 
+                      onClick={() => { 
+                        setShowAddToTestSeriesModal(true);
+                        fetchUserTestSeries(); // Fetch series when modal opens
+                      }}
+                      variant="outline" 
+                      className="flex-1 text-xs sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis px-2 sm:px-4" 
+                      disabled={isLoadingProblem || isLoadingPageProfile || isLoadingTestSeries}
+                    >
+                      <FilePlus2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" /> 
+                      <span className="truncate">Add to Test Series</span>
+                    </Button>
+                  )}
+                  <Button 
+                    onClick={handleStartNew} 
+                    variant="outline" 
+                    className="flex-1 text-xs sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis px-2 sm:px-4" 
+                    disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
+                  >
+                    <FilePlus2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" /> 
+                    <span className="truncate">Start New Topic</span>
+                  </Button>
+                </div>
+                
+                <ProblemDisplay
+                  ref={problemDisplayRef}
+                  problem={currentProblem}
+                  problemType={currentProblemType} 
+                  onSubmitAnswer={handleEvaluateAnswer}
+                  onFeedbackSubmit={handleProblemFeedback} 
+                  isLoading={!!(isLoadingEvaluation || (!!currentUser && isLoadingPageProfile))}
+                  currentTopic={currentTopic}
+                  evaluationSubmitted={!!evaluationResult} 
+                />
+                
+
                   {evaluationResult && (
                     <>
                       <EvaluationResult ref={evaluationResultRef} evaluation={evaluationResult} />
@@ -1018,6 +1138,51 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
         onLoginRegister={handleLoginForPaywall} 
         displayContext={paywallContext}
       />
+
+      {/* Add to Test Series Modal */}
+      <Dialog open={showAddToTestSeriesModal} onOpenChange={setShowAddToTestSeriesModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Problem to Test Series</DialogTitle>
+            <DialogDescription>
+              Select a test series to add the current problem to.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="test-series" className="text-right">
+                Test Series
+              </Label>
+              <Select onValueChange={setSelectedTestSeriesId} value={selectedTestSeriesId || ''} disabled={isLoadingTestSeries || isAddingProblem}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select a test series" />
+                </SelectTrigger>
+                <SelectContent>
+                  {isLoadingTestSeries ? (
+                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                  ) : userTestSeries.length === 0 ? (
+                    <SelectItem value="no-series" disabled>No test series found. Create one first!</SelectItem>
+                  ) : (
+                    userTestSeries.map((series) => (
+                      <SelectItem key={series.id} value={series.id}>
+                        {series.title}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              onClick={handleAddProblemToTestSeries} 
+              disabled={!selectedTestSeriesId || isAddingProblem || isLoadingTestSeries}
+            >
+              {isAddingProblem ? 'Adding...' : 'Add Problem'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 pb-4 text-center">
         <p className="text-xs text-muted-foreground">

@@ -24,16 +24,45 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('test_attempts')
       .select(`
-        *,
-        test_series!test_attempts_test_series_id_fkey(title, description)
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+        id,
+        created_at,
+        completed_at,
+        total_time_seconds,
+        score,
+        test_series_id,
+        user_id,
+        test_series ( title ),
+        user_profiles ( full_name )
+      `);
     
-    // Apply test series filter if provided
     if (testSeriesId) {
-      query = query.eq('test_series_id', testSeriesId);
+      // If testSeriesId is provided, check if the current user is the creator of this test series
+      const { data: testSeries, error: testSeriesError } = await supabase
+        .from('test_series')
+        .select('creator_id')
+        .eq('id', testSeriesId)
+        .single();
+
+      if (testSeriesError || !testSeries) {
+        console.error('Error fetching test series for authorization:', testSeriesError);
+        return NextResponse.json({ error: 'Test series not found or unauthorized' }, { status: 404 });
+      }
+
+      if (testSeries.creator_id === userId) {
+        // Current user is the creator, fetch all attempts for this test series
+        query = query.eq('test_series_id', testSeriesId);
+      } else {
+        // Not the creator, only show current user's attempts for this series
+        query = query
+          .eq('test_series_id', testSeriesId)
+          .eq('user_id', userId);
+      }
+    } else {
+      // No testSeriesId, so only fetch current user's attempts
+      query = query.eq('user_id', userId);
     }
+    
+    query = query.order('created_at', { ascending: false });
     
     // Execute query
     const { data, error } = await query;

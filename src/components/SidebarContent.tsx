@@ -126,7 +126,7 @@ export default function SidebarContent() {
   const navItems = useMemo<NavItem[]>(() => [
     { href: "/", label: "Home", icon: <Home className="h-4 w-4" /> },
     { href: "/#generate", label: "Practice Problem", icon: <Brain className="h-4 w-4" /> },
-    { href: "/tests", label: "Tests", icon: <Newspaper className="h-4 w-4" /> },
+    { href: "/tests", label: "Practice Tests (beta)", icon: <Newspaper className="h-4 w-4" /> },
     { href: "/history", label: "History", icon: <History className="h-4 w-4" /> },
     { href: "/blog", label: "Blog", icon: <Newspaper className="h-4 w-4" /> },
     { href: "/about", label: "About Us", icon: <AboutIcon className="h-4 w-4" /> },
