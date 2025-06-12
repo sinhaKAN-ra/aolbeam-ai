@@ -147,6 +147,29 @@ const StudyResourcesPage = () => {
     }
   };
 
+  const handleDeleteResource = async (id: string) => {
+    if (!user || user !== 'sinhakaran01235@gmail.com') {
+      setMessage('Only admin can delete resources.');
+      return;
+    }
+    if (!confirm('Are you sure you want to delete this resource?')) {
+      return;
+    }
+    try {
+      const { error } = await supabase.from('resources').delete().eq('id', id);
+      if (error) {
+        setMessage('Error deleting resource: ' + error.message);
+      } else {
+        setMessage('Resource deleted successfully!');
+        const { data } = await supabase.from('resources').select('*');
+        setResources(data as SupabaseResource[] || []);
+      }
+    } catch (error) {
+      console.error('Error deleting resource:', error);
+      setMessage('An unexpected error occurred during deletion.');
+    }
+  };
+
   const getVideoEmbedUrl = (url: string, provider?: string): { embedUrl: string; isSupported: boolean; detectedProvider: string } => {
     // YouTube detection and conversion
     const youtubeMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/);
@@ -291,8 +314,19 @@ const StudyResourcesPage = () => {
                     {resource.type === 'video' ? (
                       // Video Card Design
                       <div className="h-full">
-                        <div className="p-4 pb-2">
+                        <div className="p-4 pb-2 relative"> {/* Added relative for positioning */} 
                           <h3 className="font-semibold text-lg mb-2 line-clamp-2">{resource.title}</h3>
+                          {user === 'sinhakaran01235@gmail.com' && (
+                            <button
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteResource(resource.id.toString()); }}
+                              className="absolute top-2 right-2 p-1 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
+                              aria-label="Delete resource"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
                           <div className="flex items-center gap-2 mb-3">
                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                               📹 Video
@@ -393,7 +427,18 @@ const StudyResourcesPage = () => {
                          
                           
                           {/* Content Section */}
-                          <div className="p-4 flex-1 flex flex-col">
+                          <div className="p-4 flex-1 flex flex-col relative"> {/* Added relative for positioning */} 
+                            {user === 'sinhakaran01235@gmail.com' && (
+                              <button
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteResource(resource.id.toString()); }}
+                                className="absolute top-2 right-2 p-1 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors z-10" // Added z-10 to ensure it's above image
+                                aria-label="Delete resource"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
                             <div className="flex items-start gap-3 flex-1">
                               <div className="flex-shrink-0 mt-1">
                                 {linkPreview?.favicon ? (
