@@ -16,6 +16,7 @@ import {
   Sigma as NumericalIcon, 
   GitFork as DiagramIcon, 
   Shuffle, 
+  Code as CodeIcon,
   Clock,
   RefreshCw 
 } from 'lucide-react';
@@ -35,6 +36,10 @@ const problemTypeIcons: Record<ProblemType, React.ElementType> = {
   numerical: NumericalIcon,
   diagram_based: DiagramIcon,
   random: Shuffle,
+  code: CodeIcon,
+  mcq: ListChecks,
+  essay: MessageSquareText,
+  multiple_choice: ListChecks
 };
 
 const formatTimeTaken = (seconds: number): string => {

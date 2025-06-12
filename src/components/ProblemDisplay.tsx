@@ -8,22 +8,23 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
+import type { TestProblem } from '@/types';
 import { Send, Loader2, ThumbsUp, MessageCircleQuestion, PlayCircle, TimerIcon, PauseCircle } from 'lucide-react';
 import type { GeneratePracticeProblemOutput } from '@/ai/flows/generate-practice-problem';
-import type { ProblemType } from '@/types';
 import MathRenderer from './MathRenderer';
 import { useToast } from '@/hooks/use-toast';
+import { ProblemType } from '@/types';
 
 export type FeedbackRating = "" | "good" | "unclear" | "incorrect_ans" | "irrelevant";
 
 interface ProblemDisplayProps {
-  problem: GeneratePracticeProblemOutput;
-  problemType: ProblemType; // This prop helps in initial high-level distinction if needed elsewhere, but MCQs are primary driver
+  problem: Partial<TestProblem>;
+  problemType: ProblemType;
   onSubmitAnswer: (answer: string, timeTakenSeconds?: number) => void;
   onFeedbackSubmit: (rating: FeedbackRating, comment: string) => void;
   isLoading: boolean;
   currentTopic: string;
-  evaluationSubmitted?: boolean; // New prop to track if evaluation has been submitted
+  evaluationSubmitted: boolean;
 }
 
 const formatDisplayTime = (totalSeconds: number): string => {
@@ -37,7 +38,7 @@ export interface ProblemDisplayRefs {
   answerInputRef: React.RefObject<HTMLDivElement>;
 }
 
-export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps>(({ problem, problemType, onSubmitAnswer, onFeedbackSubmit, isLoading, currentTopic, evaluationSubmitted = false }: ProblemDisplayProps, ref) => {
+export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps>(({ problem, problemType, onSubmitAnswer, onFeedbackSubmit, isLoading, currentTopic }: ProblemDisplayProps, ref) => {
   const timerRef = useRef<HTMLDivElement>(null);
   const answerInputRef = useRef<HTMLDivElement>(null);
   
@@ -51,6 +52,7 @@ export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps
   const [feedbackRating, setFeedbackRating] = useState<FeedbackRating>("");
   const [feedbackComment, setFeedbackComment] = useState<string>('');
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<boolean>(false);
+  const [isCurrentProblemSubmitted, setIsCurrentProblemSubmitted] = useState<boolean>(false); // New state to manage input disable
   const { toast } = useToast();
 
   const [isTimerActive, setIsTimerActive] = useState<boolean>(false);
@@ -64,6 +66,7 @@ export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps
     setFeedbackRating("");
     setFeedbackComment('');
     setFeedbackSubmitted(false);
+    setIsCurrentProblemSubmitted(false); // Reset for new problem
     
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -98,20 +101,19 @@ export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    setIsTimerActive(false);
-
     const finalTimeTaken = elapsedTimeInSeconds;
-    const isMcqProblem = problem.multipleChoiceOptions && problem.multipleChoiceOptions.length > 0;
+    const isMcqProblem = problem.multiple_choice_options && problem.multiple_choice_options.length > 0;
 
     if (isMcqProblem && selectedOption) {
       onSubmitAnswer(selectedOption, finalTimeTaken);
     } else if (!isMcqProblem && userAnswer?.trim()) {
       onSubmitAnswer(userAnswer, finalTimeTaken);
     }
+    setIsCurrentProblemSubmitted(true); // Mark current problem as submitted
+    // Do not stop the timer here. The timer should only stop if the user explicitly pauses it
+    // or when a new problem is loaded (handled by useEffect cleanup).
+    // The time for this problem is captured by elapsedTimeInSeconds at the point of submission.
+    // The timer itself is handled by the parent component (TestAttemptPage) and ProblemDisplay's internal timer controls.
   };
 
   const handleInternalFeedbackSubmit = (e: React.FormEvent) => {
@@ -132,7 +134,7 @@ export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps
     });
   };
   
-  const isMcqStyleProblem = problem.multipleChoiceOptions && problem.multipleChoiceOptions.length > 0;
+  const isMcqStyleProblem = problem.multiple_choice_options && problem.multiple_choice_options.length > 0;
   const canSubmitAnswer = isMcqStyleProblem ? selectedOption !== '' : (userAnswer?.trim() ?? '') !== '';
   const isTimerNeededToStart = !isTimerActive && elapsedTimeInSeconds === 0;
 
@@ -144,7 +146,7 @@ export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps
       </CardHeader>
       <CardContent>
         <div className="mb-4 text-base prose max-w-none dark:prose-invert">
-          <MathRenderer content={problem.problemStatement} />
+          <MathRenderer content={problem.problem_statement} />
         </div>
 
         <div className="mb-4 flex flex-col sm:flex-row items-center justify-between gap-3 p-3 border rounded-lg bg-muted/50 overflow-hidden">
@@ -173,20 +175,20 @@ export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps
                 value={selectedOption}
                 onValueChange={setSelectedOption}
                 className="space-y-2"
-                disabled={isTimerNeededToStart || evaluationSubmitted}
+                disabled={isCurrentProblemSubmitted}
               >
-                {problem.multipleChoiceOptions?.map((option, index) => (
+                {problem.multiple_choice_options?.map((option: string, index: number) => (
                   <div key={index} className={`flex items-center space-x-2 p-3 border rounded-md transition-colors 
-                                            ${(isTimerNeededToStart || evaluationSubmitted) ? 'cursor-not-allowed opacity-70' 
+                                            ${isCurrentProblemSubmitted ? 'cursor-not-allowed opacity-70' 
                                               : 'hover:border-primary data-[state=checked]:border-primary data-[state=checked]:bg-primary/10'}`}>
                     <RadioGroupItem 
                       value={option} 
                       id={`option-${index}`} 
-                      disabled={isTimerNeededToStart || evaluationSubmitted}
+                      disabled={isCurrentProblemSubmitted}
                     />
                     <Label 
                       htmlFor={`option-${index}`} 
-                      className={`cursor-pointer text-base flex-1 prose prose-sm max-w-none dark:prose-invert ${(isTimerNeededToStart || evaluationSubmitted) ? 'cursor-not-allowed' : ''}`}
+                      className={`cursor-pointer text-base flex-1 prose prose-sm max-w-none dark:prose-invert ${isCurrentProblemSubmitted ? 'cursor-not-allowed' : ''}`}
                     >
                         <MathRenderer content={option}/>
                     </Label>
@@ -205,13 +207,13 @@ export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps
                 rows={6}
                 required
                 className="text-base"
-                disabled={isTimerNeededToStart || evaluationSubmitted} 
+                disabled={isCurrentProblemSubmitted} 
               />
             </div>
           )}
           <Button 
             type="submit" 
-            disabled={isLoading || !canSubmitAnswer || isTimerNeededToStart || evaluationSubmitted} 
+            disabled={isLoading || !canSubmitAnswer || isCurrentProblemSubmitted} 
             className="w-full text-base py-3"
           >
             {isLoading ? <Loader2 className="animate-spin" /> : <><Send className="mr-2 h-4 w-4" /> Submit Answer</>}
