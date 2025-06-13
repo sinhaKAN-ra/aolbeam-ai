@@ -62,13 +62,7 @@ const ChatTeacherPage: React.FC = () => {
   return (
     <div className="flex flex-col h-auto bg-background text-foreground">
       <div className="container mx-auto p-4 max-w-6xl flex-grow">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-primary">Explore Topics (Alpha)</h1>
-          <Button onClick={startNewChat} variant="outline" className="text-sm text-muted-foreground hover:text-foreground">
-            New Chat
-          </Button>
-        </div>
-        <div className="bg-card rounded-lg shadow-lg p-6 h-auto flex flex-col">
+        <div className="bg-card rounded-lg h-auto flex flex-col">
           <ChatInterface
             messages={messages}
             isLoading={isLoading}

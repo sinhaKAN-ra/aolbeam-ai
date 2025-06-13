@@ -12,11 +12,11 @@ const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
 
 export async function POST(req: Request) {
   try {
-    const { type, payload } = await req.json();
+    const { action, params } = await req.json();
 
-    switch (type) {
+    switch (action as string) {
       case 'generateLearningContext': {
-        const { topic } = payload;
+        const { topic } = params;
         const prompt = `Provide a concise learning context about ${topic} for a student. Include key concepts and why they're important.`;
         try {
           const result = await model.generateContent({
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
         }
       }
       case 'generateTopicSuggestions': {
-        const { topic, count = 3 } = payload;
+        const { topic, count = 3 } = params;
         const prompt = `
         Generate exactly ${count} related learning topics about ${topic}.
         
@@ -110,14 +110,14 @@ export async function POST(req: Request) {
           return NextResponse.json({ suggestions: fallbackSuggestions });
         }
       }
-      case 'generatePracticeProblem': {
-        const { topic } = payload;
-        const prompt = `Create a practice problem about ${topic} with a question, multiple choice options, correct answer, and explanation. Format as valid JSON with no markdown or code blocks.`;
+      case 'generatePracticeProblems': {
+        const { topic, count = 3 } = params;
+        const prompt = `Generate a list of ${count} concise practice problems about ${topic}. Return only a JSON array of problem statements, no explanations or answers needed. Format example: ["Problem 1", "Problem 2"]`;
         
         try {
           const result = await model.generateContent({
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.2 }
+            generationConfig: { temperature: 0.7, maxOutputTokens: 500 }
           });
           const response = await result.response;
           const raw = response.text();
@@ -130,25 +130,39 @@ export async function POST(req: Request) {
           if (fenceMatch && fenceMatch[1]) {
             jsonString = fenceMatch[1].trim();
           } else {
-            // Try to find JSON object with regex
-            const objMatch = raw.match(/\{[\s\S]*\}/);
-            if (objMatch) {
-              jsonString = objMatch[0];
+            // Try to find JSON array with regex
+            const arrayMatch = raw.match(/\[[\s\S]*\]/);
+            if (arrayMatch) {
+              jsonString = arrayMatch[0];
             } else {
-              // Just clean up markdown
+              // Just clean up markdown and try to parse as JSON array
               jsonString = raw.replace(/```/g, '').trim();
+              // If it's not a JSON array, split by newlines and quote each line
+              if (!jsonString.startsWith('[')) {
+                const problems = jsonString.split('\n')
+                  .map(line => line.trim())
+                  .filter(line => line.length > 0 && !line.startsWith('1.') && !line.startsWith('-') && !line.startsWith('*'));
+                jsonString = JSON.stringify(problems);
+              }
             }
           }
           
-          const problem = JSON.parse(jsonString);
-          return NextResponse.json({ problem });
+          // Parse the JSON and ensure it's in the correct format
+          let problems = JSON.parse(jsonString);
+          // Ensure we have an array of strings
+          if (!Array.isArray(problems)) {
+            problems = Object.values(problems).flat();
+          }
+          problems = problems.map((p: any) => typeof p === 'string' ? p : JSON.stringify(p));
+          
+          return NextResponse.json({ practice_problems: problems });
         } catch (parseError) {
           console.error('Failed to parse practice problem JSON:', parseError);
           return NextResponse.json({ error: 'Failed to parse AI response for practice problem' }, { status: 500 });
         }
       }
       case 'generateLearningPath': {
-        const { topic, userId } = payload;
+        const { topic, userId } = params;
         const prompt = `
         Generate a detailed learning path for learning about ${topic} suitable for a student.
         

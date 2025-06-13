@@ -55,7 +55,7 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
       topics: currentGoal.topics || [],
       difficulty: currentGoal.difficulty as any,
       estimatedHours: currentGoal.estimatedHours || 10,
-      priority: 'medium'
+      // priority: 'medium'
     };
 
     setGoals([...goals, newGoal]);

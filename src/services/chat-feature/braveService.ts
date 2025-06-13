@@ -1,59 +1,30 @@
-import { SearchResult } from '../types';
+import { SearchResult } from '../../types/chat-feature';
 
 export class BraveSearchService {
-  private readonly baseUrl = 'https://api.search.brave.com/res/v1/web/search';
-  private readonly apiKey: string | undefined;
-
-  constructor() {
-    this.apiKey = import.meta.env.VITE_BRAVE_API_KEY;
-  }
-
   async searchTopic(query: string): Promise<SearchResult[]> {
-    // For demo purposes, return mock search results
-    // In production, this would call the actual Brave Search API
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+    try {
+      const response = await fetch(`/api/brave?q=${encodeURIComponent(query)}`);
 
-    const mockResults: SearchResult[] = [
-      {
-        title: `${query} - Complete Guide and Tutorial`,
-        url: `https://example.com/${query.toLowerCase().replace(/\s+/g, '-')}`,
-        description: `Comprehensive guide covering all aspects of ${query}, including fundamentals, applications, and best practices.`,
-        favicon: 'https://via.placeholder.com/16x16'
-      },
-      {
-        title: `Latest Research in ${query}`,
-        url: `https://research.example.com/${query.toLowerCase()}`,
-        description: `Recent developments and breakthrough research in the field of ${query} from leading academic institutions.`,
-        favicon: 'https://via.placeholder.com/16x16'
-      },
-      {
-        title: `${query} for Beginners - Step by Step`,
-        url: `https://learn.example.com/${query.toLowerCase()}-beginners`,
-        description: `Perfect starting point for newcomers to ${query}, with easy-to-follow explanations and practical examples.`,
-        favicon: 'https://via.placeholder.com/16x16'
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Failed to fetch from local Brave API proxy:', errorText);
+        throw new Error(`Failed to fetch search results: ${response.statusText}`);
       }
-    ];
 
-    return mockResults;
-  }
+      const data = await response.json();
+      const webResults: any[] = data.web?.results ?? [];
 
-  private async makeRequest(query: string): Promise<any> {
-    if (!this.apiKey) {
-      throw new Error('Brave API key not configured');
+      return webResults.slice(0, 5).map((r) => ({
+        title: r.title,
+        url: r.url,
+        description: r.description,
+        favicon: r.favicon || 'https://www.brave.com/static-assets/images/brave-icon.png' // Default favicon
+      }));
+
+    } catch (error) {
+      console.error('BraveSearchService searchTopic error:', error);
+      return [];
     }
-
-    const response = await fetch(`${this.baseUrl}?q=${encodeURIComponent(query)}`, {
-      headers: {
-        'X-Subscription-Token': this.apiKey,
-        'Accept': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Brave API request failed: ${response.statusText}`);
-    }
-
-    return response.json();
   }
 }
 

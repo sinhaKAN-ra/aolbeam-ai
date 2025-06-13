@@ -1,6 +1,6 @@
 // Message types
 export type MessageSender = 'user' | 'ai';
-export type MessageType = 'text' | 'learning_context' | 'practice_problem' | 'error' | 'career_advice';
+export type MessageType = 'text' | 'learning_context' | 'practice_problem' | 'practice_problems_list' | 'error' | 'career_advice';
 
 export interface Message {
   id: string;
@@ -11,6 +11,7 @@ export interface Message {
   isTyping?: boolean;
   context?: string;
   problem?: PracticeProblem;
+  problems?: string[]; // For practice_problems_list type
   careerAdvice?: CareerAdvice;
 }
 

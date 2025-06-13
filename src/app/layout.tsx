@@ -46,7 +46,7 @@ export default function RootLayout({
           <AuthProvider>
             <SidebarProvider>
               <div className="flex flex-col flex-1 relative">
-                <Header />
+                {/* <Header /> */}
                 <div className="flex flex-1 pt-16">
                   <Sidebar>
                     <SidebarContent />

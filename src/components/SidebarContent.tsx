@@ -29,17 +29,35 @@ import {
   Settings,
   Loader2,
   History,
-  Navigation2,
-  Navigation,
-  NotepadTextDashed
+  MessageSquare,
+  NotepadTextDashed,
+  BookOpen,
+  Zap,
+  TrendingUp,
+  Clock,
+  User,
+  CreditCard,
+  HelpCircle,
+  Star,
+  Crown,
+  Plus,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  Eye,
+  Gift,
+  AlertCircle
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import Image from 'next/image';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSidebar } from '@/components/ui/sidebar';
+import Image from 'next/image';
 
 const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
 
-// Google Icon Component (moved here as it's used in login/signup)
+// Google Icon Component
 const GoogleIcon = ({ className = "" }: { className?: string }) => (
   <svg
     className={className}
@@ -56,11 +74,20 @@ const GoogleIcon = ({ className = "" }: { className?: string }) => (
   </svg>
 );
 
+interface NavSection {
+  title?: string;
+  items: NavItem[];
+}
+
 interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
+  badge?: string;
+  badgeVariant?: "default" | "secondary" | "destructive" | "outline";
   requiresAuth?: boolean;
+  isPro?: boolean;
+  description?: string;
 }
 
 interface UserMenuItem {
@@ -69,9 +96,16 @@ interface UserMenuItem {
   href?: string;
   onClick?: (e: React.MouseEvent) => void;
   divider?: boolean;
+  badge?: string;
+  description?: string;
 }
 
-export default function SidebarContent() {
+interface SidebarContentProps {
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
+
+export default function SidebarContent({ isCollapsed = false, onToggleCollapse }: SidebarContentProps) {
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
@@ -79,9 +113,11 @@ export default function SidebarContent() {
   const [userInitials, setUserInitials] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const { setOpenMobile } = useSidebar(); // To close sidebar on mobile after navigation
+  const { setOpenMobile } = useSidebar();
 
   const isAdmin = user?.email === ADMIN_EMAIL;
+  const isPro = false; // Replace with actual pro status check
+  const trialDaysLeft = 7; // Replace with actual trial calculation
 
   // Handle sign out
   const handleSignOut = useCallback(async (e: React.MouseEvent) => {
@@ -126,36 +162,208 @@ export default function SidebarContent() {
     }
   }, [signInWithGoogle, toast, setOpenMobile]);
 
-  // Navigation items
-  const navItems = useMemo<NavItem[]>(() => [
-    { href: "/", label: "Home", icon: <Home className="h-4 w-4" /> },
-    { href: "/#generate", label: "Practice Problem", icon: <Brain className="h-4 w-4" /> },
-    { href: "/chat", label: "Learn (Beta)", icon: <Navigation className='h-4 w-4'/>},
-    { href: "/history", label: "History", icon: <History className="h-4 w-4" /> },
-    // { href: "/blog", label: "Blog", icon: <Newspaper className="h-4 w-4" /> },
-    { href: "/about", label: "About Us", icon: <AboutIcon className="h-4 w-4" /> },
-    { href: "/contact-us", label: "Contact", icon: <ContactIcon className="h-4 w-4" /> },
-    { href: "/terms-of-service", label: "Terms", icon: <FileText className="h-4 w-4" /> },
-    { href: "/privacy-policy", label: "Privacy", icon: <ShieldCheck className="h-4 w-4" /> },
-    { href: "/pricing", label: "Pricing", icon: <DollarSign className="h-4 w-4" /> },
+  // Navigation sections with grouped items
+  const navSections = useMemo<NavSection[]>(() => [
+    {
+      items: [
+        { 
+          href: "/", 
+          label: "Home", 
+          icon: <Home className="h-4 w-4" />,
+          description: "Dashboard and overview"
+        },
+        { 
+          href: "/chat", 
+          label: "AI Assistant", 
+          icon: <MessageSquare className="h-4 w-4" />, 
+          badge: "Beta",
+          description: "Chat with AI tutor"
+        },
+        { 
+          href: "/search", 
+          label: "AI Search", 
+          icon: <Search className="h-4 w-4" />, 
+          badge: "New",
+          description: "Intelligent search engine"
+        },
+      ]
+    },
+    {
+      title: "Practice & Learn",
+      items: [
+        { 
+          href: "/#generate", 
+          label: "Generate Problems", 
+          icon: <Brain className="h-4 w-4" />,
+          description: "Create custom practice problems"
+        },
+        { 
+          href: "/tests", 
+          label: "Practice Tests", 
+          icon: <NotepadTextDashed className="h-4 w-4" />,
+          description: "Full-length practice exams"
+        },
+        { 
+          href: "/study-resources", 
+          label: "Study Resources", 
+          icon: <BookOpen className="h-4 w-4" />,
+          description: "Curated study materials"
+        },
+        { 
+          href: "/flashcards", 
+          label: "Flashcards", 
+          icon: <Zap className="h-4 w-4" />, 
+          isPro: true,
+          description: "Spaced repetition flashcards"
+        },
+      ]
+    },
+    {
+      title: "Your Progress",
+      items: [
+        { 
+          href: "/history", 
+          label: "History", 
+          icon: <History className="h-4 w-4" />,
+          description: "Your learning history"
+        },
+        { 
+          href: "/analytics", 
+          label: "Analytics", 
+          icon: <TrendingUp className="h-4 w-4" />, 
+          isPro: true,
+          description: "Detailed performance insights"
+        },
+        { 
+          href: "/streak", 
+          label: "Study Streak", 
+          icon: <Clock className="h-4 w-4" />,
+          description: "Track your consistency"
+        },
+      ]
+    },
+    {
+      title: "Resources",
+      items: [
+        { 
+          href: "/help", 
+          label: "Help Center", 
+          icon: <HelpCircle className="h-4 w-4" />,
+          description: "Get help and support"
+        },
+        { 
+          href: "/about", 
+          label: "About", 
+          icon: <AboutIcon className="h-4 w-4" />,
+          description: "Learn about AOL Beam"
+        },
+        { 
+          href: "/contact-us", 
+          label: "Contact", 
+          icon: <ContactIcon className="h-4 w-4" />,
+          description: "Get in touch with us"
+        },
+      ]
+    }
   ], []);
 
-  // User menu items
+  // Public menu items (shown before login)
+  const publicMenuItems = useMemo<UserMenuItem[]>(() => [
+    { 
+      label: "Pricing Plans", 
+      icon: <DollarSign className="h-4 w-4" />, 
+      href: "/pricing",
+      description: "View our affordable plans"
+    },
+    { 
+      label: "Free Trial", 
+      icon: <Gift className="h-4 w-4" />, 
+      href: "/trial",
+      badge: "7 Days Free",
+      description: "Start your free trial"
+    },
+    { divider: true, label: "", icon: null },
+    { 
+      label: "Features", 
+      icon: <Star className="h-4 w-4" />, 
+      href: "/features",
+      description: "See what AOL Beam offers"
+    },
+    { 
+      label: "Student Discounts", 
+      icon: <Crown className="h-4 w-4" />, 
+      href: "/student-discount",
+      badge: "50% Off",
+      description: "Special pricing for students"
+    },
+    { divider: true, label: "", icon: null },
+    { 
+      label: "Terms of Service", 
+      icon: <FileText className="h-4 w-4" />, 
+      href: "/terms-of-service",
+      description: "Read our terms"
+    },
+    { 
+      label: "Privacy Policy", 
+      icon: <ShieldCheck className="h-4 w-4" />, 
+      href: "/privacy-policy",
+      description: "How we protect your data"
+    },
+  ], []);
+
+  // User menu items (shown after login)
   const userMenuItems = useMemo<UserMenuItem[]>(() => {
     const items: UserMenuItem[] = [
-      { label: "Profile", icon: <ProfileIcon className="h-4 w-4" />, href: "/profile" },
-      { label: "Settings", icon: <Settings className="h-4 w-4" />, href: "/profile/settings" },
-      { label: "Subscriptions", icon: <DollarSign className="h-4 w-4" />, href: "/profile/subscriptions" },
+      { 
+        label: "Profile", 
+        icon: <ProfileIcon className="h-4 w-4" />, 
+        href: "/profile",
+        description: "Manage your profile"
+      },
+      { 
+        label: "Settings", 
+        icon: <Settings className="h-4 w-4" />, 
+        href: "/profile/settings",
+        description: "Account preferences"
+      },
       { divider: true, label: "", icon: null },
-      { label: "Sign out", icon: <LogOut className="h-4 w-4" />, onClick: handleSignOut },
+      { 
+        label: "Billing & Usage", 
+        icon: <CreditCard className="h-4 w-4" />, 
+        href: "/billing",
+        badge: isPro ? "Pro" : "Free",
+        description: "Manage subscription"
+      },
+      { 
+        label: "Upgrade Plan", 
+        icon: <Crown className="h-4 w-4" />, 
+        href: "/pricing",
+        badge: isPro ? undefined : "Upgrade",
+        description: isPro ? "Manage your Pro plan" : "Unlock premium features"
+      },
+      { divider: true, label: "", icon: null },
+      { 
+        label: "Sign out", 
+        icon: <LogOut className="h-4 w-4" />, 
+        onClick: handleSignOut,
+        description: "Sign out of your account"
+      },
     ];
 
     if (isAdmin) {
-      items.unshift({ label: "Admin", icon: <ShieldCheck className="h-4 w-4" />, href: "/admin/blog" });
+      items.unshift(
+        { 
+          label: "Admin Panel", 
+          icon: <ShieldCheck className="h-4 w-4" />, 
+          href: "/admin",
+          description: "Admin dashboard"
+        },
+        { divider: true, label: "", icon: null }
+      );
     }
 
     return items;
-  }, [isAdmin, handleSignOut]);
+  }, [isAdmin, handleSignOut, isPro]);
 
   useEffect(() => {
     if (user) {
@@ -171,70 +379,286 @@ export default function SidebarContent() {
     }
   }, [user]);
 
+  const renderNavItem = (item: NavItem) => {
+    const isActive = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
+    
+    const content = (
+      <Button
+        key={item.href}
+        variant={isActive ? "secondary" : "ghost"}
+        asChild
+        className={`w-full ${isCollapsed ? 'justify-center px-2' : 'justify-start'} group relative ${
+          isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+        }`}
+        onClick={() => setOpenMobile(false)}
+      >
+        <Link href={item.href} className="flex items-center gap-3">
+          <div className="flex-shrink-0">
+            {item.icon}
+          </div>
+          {!isCollapsed && (
+            <>
+              <span className="flex-1 text-left truncate">{item.label}</span>
+              <div className="flex items-center gap-1">
+                {item.isPro && !isPro && (
+                  <Crown className="h-3 w-3 text-amber-500" />
+                )}
+                {item.badge && (
+                  <Badge 
+                    variant={item.badgeVariant || "secondary"} 
+                    className="text-xs px-1.5 py-0.5 h-5"
+                  >
+                    {item.badge}
+                  </Badge>
+                )}
+              </div>
+            </>
+          )}
+        </Link>
+      </Button>
+    );
+
+    if (isCollapsed) {
+      return (
+        <TooltipProvider key={item.href}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {content}
+            </TooltipTrigger>
+            <TooltipContent side="right" className="max-w-xs">
+              <div className="space-y-1">
+                <p className="font-medium">{item.label}</p>
+                {item.description && (
+                  <p className="text-xs text-muted-foreground">{item.description}</p>
+                )}
+                {item.badge && (
+                  <Badge variant={item.badgeVariant || "secondary"} className="text-xs">
+                    {item.badge}
+                  </Badge>
+                )}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+
+    return content;
+  };
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Top section: Theme Toggle */}
-      <div className="flex items-center justify-end p-4 border-b">
-        <ThemeToggle />
+    <div className={`flex flex-col h-full bg-background transition-all duration-300 ${
+      isCollapsed ? 'w-16' : 'w-64'
+    }`}>
+      {/* Header */}
+      <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60`}>
+        {!isCollapsed && (
+           <Link href="/" className="flex items-center gap-2">
+           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+             <Image
+               src="/assets/logo.png"
+               alt="AOLBEAM Logo"
+               width={32}
+               height={32}
+               className="h-8 w-8"
+             />
+           </div>
+           <span className="text-2xl font-bold text-primary">AOLBEAM</span>
+         </Link>
+        )}
+        
+        <div className="flex items-center gap-2">
+          {!isCollapsed && <ThemeToggle />}
+          {onToggleCollapse && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggleCollapse}
+              className="h-8 w-8 p-0"
+            >
+              {isCollapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+        </div>
       </div>
 
+      {/* Trial/Upgrade Banner for logged-in users */}
+      {user && !isPro && !isCollapsed && (
+        <div className="m-4 p-3 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                Free Trial: {trialDaysLeft} days left
+              </p>
+              <Button
+                variant="link"
+                className="h-auto p-0 text-xs text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100"
+                asChild
+              >
+                <Link href="/pricing">Upgrade to Pro →</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Chat Button - Only show when logged in */}
+      {user && (
+        <div className={`p-4 ${isCollapsed ? '' : 'border-b'}`}>
+          {isCollapsed ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="default" 
+                    size="sm"
+                    className="w-full h-10 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+                    asChild
+                  >
+                    <Link href="/chat">
+                      <Plus className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>New Chat</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <Button 
+              variant="default" 
+              className="w-full justify-start gap-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+              asChild
+            >
+              <Link href="/chat">
+                <Plus className="h-4 w-4" />
+                New Chat
+              </Link>
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Main Navigation */}
-      <nav className="flex-grow p-4 space-y-2">
-        {navItems.map((item) => (
-          <Button
-            key={item.href}
-            variant={pathname === item.href ? "secondary" : "ghost"}
-            asChild
-            className="w-full justify-start"
-            onClick={() => setOpenMobile(false)}
-          >
-            <Link href={item.href}>
-              {item.icon}
-              <span className="ml-2">{item.label}</span>
-            </Link>
-          </Button>
+      <nav className="flex-1 overflow-y-auto p-4 space-y-6">
+        {navSections.map((section, sectionIndex) => (
+          <div key={sectionIndex} className="space-y-1">
+            {section.title && !isCollapsed && (
+              <h3 className="px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                {section.title}
+              </h3>
+            )}
+            <div className="space-y-1">
+              {section.items.map(renderNavItem)}
+            </div>
+          </div>
         ))}
       </nav>
 
       {/* User Section / Login */}
-      <div className="p-4 border-t">
+      <div className="p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         {user ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-full justify-start flex items-center gap-2">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback>{userInitials}</AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col items-start overflow-hidden">
-                  <span className="font-medium truncate w-full">{user?.user_metadata?.full_name || userEmail}</span>
-                  <span className="text-xs text-muted-foreground truncate w-full">{userEmail}</span>
-                </div>
-                <UserCircle className="ml-auto h-5 w-5" />
-              </Button>
+              {isCollapsed ? (
+                <Button variant="ghost" size="sm" className="w-full h-10">
+                  <Avatar className="h-6 w-6 ring-2 ring-background">
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs font-medium">
+                      {userInitials}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              ) : (
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start gap-3 h-auto p-3 hover:bg-accent/50"
+                >
+                  <Avatar className="h-8 w-8 ring-2 ring-background">
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm font-medium">
+                      {userInitials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col items-start flex-1 min-w-0">
+                    <div className="flex items-center gap-2 w-full">
+                      <span className="font-medium text-sm truncate">
+                        {user?.user_metadata?.full_name || userEmail.split('@')[0]}
+                      </span>
+                      {isPro && <Crown className="h-3 w-3 text-amber-500 flex-shrink-0" />}
+                    </div>
+                    <span className="text-xs text-muted-foreground truncate w-full">
+                      {isPro ? 'Pro Plan' : `Free Trial - ${trialDaysLeft}d left`}
+                    </span>
+                  </div>
+                  <UserCircle className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                </Button>
+              )}
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56" align="end" forceMount>
-              {userMenuItems.map((item) => (
+            <DropdownMenuContent className="w-72" align="end" forceMount>
+              <div className="px-3 py-2 border-b">
+                <p className="text-sm font-medium">{user?.user_metadata?.full_name || userEmail.split('@')[0]}</p>
+                <p className="text-xs text-muted-foreground">{userEmail}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge variant={isPro ? "default" : "secondary"} className="text-xs">
+                    {isPro ? 'Pro Plan' : 'Free Trial'}
+                  </Badge>
+                  {!isPro && (
+                    <span className="text-xs text-muted-foreground">
+                      {trialDaysLeft} days left
+                    </span>
+                  )}
+                </div>
+              </div>
+              {userMenuItems.map((item, index) => (
                 item.divider ? (
-                  <DropdownMenuSeparator key={`sep-${item.label}`} />
+                  <DropdownMenuSeparator key={`sep-${index}`} />
                 ) : (
                   <DropdownMenuItem
                     key={item.label}
                     asChild={!!item.href}
                     onClick={item.onClick}
-                    className="cursor-pointer"
+                    className="cursor-pointer flex-col items-start p-3"
                     disabled={isSigningOut && item.label === 'Sign out'}
                   >
                     {item.href ? (
-                      <Link href={item.href} className="w-full flex items-center">
-                        {item.icon}
-                        <span>{item.label}</span>
+                      <Link href={item.href} className="w-full">
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-2">
+                            {item.icon}
+                            <span>{item.label}</span>
+                          </div>
+                          {item.badge && (
+                            <Badge variant="outline" className="text-xs">
+                              {item.badge}
+                            </Badge>
+                          )}
+                        </div>
+                        {item.description && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {item.description}
+                          </p>
+                        )}
                       </Link>
                     ) : (
-                      <div className="flex w-full items-center">
-                        {item.icon}
-                        <span>{item.label}</span>
-                        {isSigningOut && item.label === 'Sign out' && (
-                          <Loader2 className="ml-2 h-3 w-3 animate-spin" />
+                      <div className="w-full">
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-2">
+                            {item.icon}
+                            <span>{item.label}</span>
+                          </div>
+                          {isSigningOut && item.label === 'Sign out' && (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          )}
+                        </div>
+                        {item.description && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {item.description}
+                          </p>
                         )}
                       </div>
                     )}
@@ -244,14 +668,78 @@ export default function SidebarContent() {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <Button
-            variant="default"
-            onClick={handleSignIn}
-            className="w-full flex items-center justify-center"
-          >
-            <GoogleIcon className="mr-2 h-5 w-5" />
-            Login / Sign Up
-          </Button>
+          <div className="space-y-3">
+            <Button
+              variant="default"
+              onClick={handleSignIn}
+              className={`w-full ${isCollapsed ? 'px-2' : 'justify-center gap-2'} bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700`}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <GoogleIcon className="h-4 w-4" />
+                  {!isCollapsed && "Sign in with Google"}
+                </>
+              )}
+            </Button>
+            
+            {/* Pre-signup information */}
+            {!isCollapsed && (
+              <>
+                <div className="text-xs text-center space-y-1">
+                  <p className="text-muted-foreground">
+                    Start your <span className="font-medium text-green-600">7-day free trial</span>
+                  </p>
+                  <p className="text-muted-foreground">
+                    No credit card required
+                  </p>
+                </div>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="w-full">
+                      <Eye className="h-3 w-3 mr-1" />
+                      Learn More
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-72" align="end">
+                    {publicMenuItems.map((item, index) => (
+                      item.divider ? (
+                        <DropdownMenuSeparator key={`sep-${index}`} />
+                      ) : (
+                        <DropdownMenuItem
+                          key={item.label}
+                          asChild
+                          className="cursor-pointer flex-col items-start p-3"
+                        >
+                          <Link href={item.href || '#'} className="w-full">
+                            <div className="flex items-center justify-between w-full">
+                              <div className="flex items-center gap-2">
+                                {item.icon}
+                                <span>{item.label}</span>
+                              </div>
+                              {item.badge && (
+                                <Badge variant="outline" className="text-xs">
+                                  {item.badge}
+                                </Badge>
+                              )}
+                            </div>
+                            {item.description && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {item.description}
+                              </p>
+                            )}
+                          </Link>
+                        </DropdownMenuItem>
+                      )
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
+          </div>
         )}
       </div>
     </div>

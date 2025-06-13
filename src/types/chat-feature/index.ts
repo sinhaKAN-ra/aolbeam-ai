@@ -2,7 +2,7 @@ import React from 'react';
 
 // Message types
 export type MessageSender = 'user' | 'ai';
-export type MessageType = 'text' | 'learning_context' | 'practice_problem' | 'error' | 'career_advice';
+export type MessageType = 'text' | 'learning_context' | 'practice_problem' | 'practice_problems_list' | 'error' | 'career_advice';
 
 export interface MessageResource {
   id: string;
@@ -54,6 +54,7 @@ export interface Message {
     answer?: string;
     explanation?: string;
   };
+  problems?: string[]; // For practice_problems_list type
   advice?: string;
   role?: 'user' | 'assistant';
   icon?: React.ReactNode;
@@ -69,17 +70,8 @@ export interface BranchingPath {
   tags: TopicTag[];
 }
 
-export interface EnhancedMessageContent {
-  mainContent: string;
-  detailedContent?: string;
-  suggestions?: TopicSuggestion[];
-  resources?: MessageResource[];
-  branchingPaths?: BranchingPath[];
-}
-
-export interface EnhancedMessage extends Message {
-  enhancedContent: EnhancedMessageContent;
-}
+export type { EnhancedMessage, EnhancedMessageContent } from './enhanced-message';
+export * from './chat-history';
 
 export interface LearningStepResource {
   id: string;

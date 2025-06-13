@@ -1,67 +1,68 @@
 import { NextResponse } from 'next/server';
 
-const BRAVE_API_KEY = process.env.BRAVE_API_KEY;
+// Define CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
 
-if (!BRAVE_API_KEY) {
-  console.warn('BRAVE_API_KEY is not set in environment variables. Using mock data.');
+// Handle OPTIONS requests for CORS preflight
+export async function OPTIONS(request: Request) {
+  return new Response(null, {
+    status: 204, // No Content
+    headers: corsHeaders,
+  });
 }
 
-export async function POST(req: Request) {
+// Handle GET requests
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const query = searchParams.get('q');
+
+  if (!query) {
+    return NextResponse.json(
+      { error: 'Query parameter is required' },
+      { status: 400, headers: corsHeaders }
+    );
+  }
+
+  const apiKey = process.env.BRAVE_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: 'Server configuration error: BRAVE_API_KEY is not set' },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+
   try {
-    const { query } = await req.json();
-    
-    if (!query) {
-      return NextResponse.json(
-        { error: 'Query parameter is required' },
-        { status: 400 }
-      );
-    }
-
-    if (!BRAVE_API_KEY) {
-      // Return mock data if API key is not set
-      return NextResponse.json({
-        results: [
-          {
-            title: `Mock result for "${query}"`,
-            url: `https://example.com/search?q=${encodeURIComponent(query)}`,
-            description: `This is a mock search result for "${query}". Set BRAVE_API_KEY in your environment variables to use the real Brave Search API.`
-          }
-        ]
-      });
-    }
-
     const response = await fetch(
-      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}`,
+      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`,
       {
         headers: {
+          'X-Subscription-Token': apiKey,
           'Accept': 'application/json',
-          'Accept-Encoding': 'gzip',
-          'X-Subscription-Token': BRAVE_API_KEY
-        }
+        },
       }
     );
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error('Brave Search API error:', error);
-      throw new Error(`Brave Search API error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('Brave API error:', errorText);
+      return NextResponse.json(
+        { error: 'Failed to fetch from Brave API', details: errorText },
+        { status: response.status, headers: corsHeaders }
+      );
     }
 
     const data = await response.json();
-    
-    // Transform the response to match our frontend's expected format
-    const results = data.web?.results?.map((result: any) => ({
-      title: result.title,
-      url: result.url,
-      description: result.description
-    })) || [];
+    return NextResponse.json(data, { status: 200, headers: corsHeaders });
 
-    return NextResponse.json({ results });
   } catch (error) {
-    console.error('Error in Brave Search API route:', error);
+    console.error('Brave API request failed:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch search results' },
-      { status: 500 }
+      { error: 'Failed to process request' },
+      { status: 500, headers: corsHeaders }
     );
   }
 }

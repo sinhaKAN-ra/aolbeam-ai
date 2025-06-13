@@ -4,7 +4,7 @@ export interface ResourceLink {
   id: string;
   title: string;
   url: string;
-  type: 'video' | 'article' | 'documentation' | 'tutorial';
+  type: 'video' | 'article' | 'documentation' | 'tutorial' | 'document' | 'web_page' | 'brave_search';
   icon?: string;
   duration?: string;
   difficulty?: 'beginner' | 'intermediate' | 'advanced';
@@ -17,6 +17,7 @@ export interface BranchingPath {
   tags: TopicTag[];
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   estimatedTime: string;
+  onSelect?: (path: BranchingPath) => void;
 }
 
 export interface EnhancedMessageContent {
@@ -30,8 +31,10 @@ export interface EnhancedMessageContent {
     code: string;
     explanation?: string;
   }>;
+  practiceProblem?: { question: string; };
 }
 
 export interface EnhancedMessage extends Message {
   enhancedContent?: EnhancedMessageContent;
+  onSuggestionClick?: (suggestion: TopicSuggestion) => void;
 }

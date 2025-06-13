@@ -1,197 +1,194 @@
-"use client"
-
-import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink, PlayCircle, BookOpen, GitBranch, Tag, Route } from 'lucide-react';
-import { EnhancedMessage, BranchingPath, TopicSuggestion } from '../../types/chat-feature';
-import type { MessageResource } from '../../types/chat-feature';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import Link from 'next/link';
+import { Message } from '@/types/chat-feature/index'; // Adjust path as needed
+import { BranchingPath, EnhancedMessage, ResourceLink } from '@/types/chat-feature/enhanced-message'; // Adjust path as needed
+import { TopicSuggestion } from '@/types/chat-feature/index'; // Import TopicSuggestion
+import { BookOpen, Video, FileText, Globe, GitBranch, Link2 } from 'lucide-react'; // Added GitBranch
+import { fetchBraveResources } from '@/lib/braveResources'; // Adjust path as needed
 
 interface EnhancedMessageBubbleProps {
   message: EnhancedMessage;
-  onBranchSelect?: (path: BranchingPath) => void;
-  onTagSelect?: (tag: TopicSuggestion) => void;
+  onBranchSelect: (path: BranchingPath) => void;
+  onTagSelect: (suggestion: TopicSuggestion) => void;
 }
 
-const EnhancedMessageBubble: React.FC<EnhancedMessageBubbleProps> = ({
-  message,
-  onBranchSelect,
-  onTagSelect,
-}) => {
+const EnhancedMessageBubble: React.FC<EnhancedMessageBubbleProps> = ({ message, onBranchSelect, onTagSelect }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedResourceType, setSelectedResourceType] = useState<string | null>(null);
+  const [externalResources, setExternalResources] = useState<ResourceLink[]>([]);
 
-  const renderResourceIcon = (type: MessageResource['type']) => {
+  const main = message.enhancedContent?.mainContent || '';
+  const detailed = message.enhancedContent?.detailedContent || '';
+  let displayDetailedContent = detailed;
+
+  // Basic check for duplication
+  if (detailed.length > 0 && main.length > 0) {
+    const mainNormalized = main.toLowerCase().replace(/\s+/g, ' ').trim();
+    const detailedNormalized = detailed.toLowerCase().replace(/\s+/g, ' ').trim();
+    
+    // Check if one contains the other or they are very similar (e.g. using a simple length check or a more complex similarity score)
+    if (detailedNormalized === mainNormalized || mainNormalized.includes(detailedNormalized) || detailedNormalized.includes(mainNormalized)) {
+      // If detailed content is not significantly more informative (e.g., less than 50 chars longer)
+      if (detailed.length < main.length + 50) { 
+        displayDetailedContent = ""; // Or a placeholder like "Detailed explanation is similar to the main content."
+      }
+    }
+  }
+
+  // Always fetch external resources
+  // useEffect(() => {
+  //   const queryTerm = message.tags?.[0]?.name || message.text.split(" ").slice(0, 5).join(" ");
+  //   fetchBraveResources(queryTerm).then(setExternalResources);
+  // }, [message]);
+
+  const renderResourceIcon = (type: ResourceLink['type']) => {
     switch (type) {
-      case 'video':
-        return <PlayCircle className="w-4 h-4" />;
       case 'article':
-      case 'documentation':
-      case 'tutorial':
+        return <BookOpen className="w-4 h-4 text-blue-500" />;
+      case 'video':
+        return <Video className="w-4 h-4 text-red-500" />;
+      case 'document':
+        return <FileText className="w-4 h-4 text-green-500" />;
+      case 'web_page':
+      case 'brave_search': // Brave search results are general web pages
+        return <Globe className="w-4 h-4 text-purple-500" />;
       default:
-        return <BookOpen className="w-4 h-4" />;
+        return <Link2 className="w-4 h-4 text-gray-500" />;
     }
   };
 
-  const resourceTypes = message.enhancedContent?.resources?.reduce<Set<string>>((types, resource) => {
-    types.add(resource.type);
-    return types;
-  }, new Set());
+  const allResources = [
+    // ...externalResources,
+    ...(message.enhancedContent?.resources || []),
+  ];
+
+  const resourceTypes: Set<string> = allResources.length > 0
+    ? new Set(allResources.map(r => r.type))
+    : new Set<string>();
+
+  const filteredResources = selectedResourceType
+    ? allResources.filter(r => r.type === selectedResourceType)
+    : allResources;
+
+    console.log("filteredResources", filteredResources, resourceTypes);
 
   return (
-    <div className="w-full">
-      {/* Main Message Content */}
-      <div className="bg-white rounded-2xl rounded-tl-sm shadow-sm overflow-hidden">
-        <div className="p-6 prose prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2 prose-p:my-2 prose-strong:font-semibold prose-strong:text-gray-800 prose-ul:my-2 prose-li:my-1 max-w-none">
-          <ReactMarkdown>{message.text}</ReactMarkdown>
+    <div className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
+      <div className={`max-w-full p-4 rounded-lg shadow-md ${message.sender === 'user' ? 'bg-primary text-white' : 'bg-white text-gray-800'}`}>
+        {/* Main Content */}
+        <div className={`prose prose-sm max-w-none ${message.sender === 'user' ? 'prose-invert' : ''}`}>
+          <ReactMarkdown>
+            {message.enhancedContent?.mainContent || message.text}
+          </ReactMarkdown>
         </div>
 
         {/* Expandable Content */}
-        {message.enhancedContent?.detailedContent && (
+        {/* {detailed && ( // Use 'detailed' here to check if original detailed content exists
           <div className="px-6 pb-4">
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="flex items-center gap-1 text-orange-600 hover:text-orange-700 transition-colors text-sm font-medium"
+              className={`flex items-center text-sm font-medium ${message.sender === 'user' ? 'text-blue-200 hover:text-blue-100' : 'text-blue-600 hover:text-blue-700'}`}
             >
-              {isExpanded ? (
-                <>
-                  <ChevronUp className="w-4 h-4" />
-                  <span>Show Less</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="w-4 h-4" />
-                  <span>Learn More</span>
-                </>
-              )}
+              {isExpanded ? 'Show Less' : 'Learn More'}
             </button>
 
-            {isExpanded && (
+            {isExpanded && displayDetailedContent && ( // Use 'displayDetailedContent' for rendering
               <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
                 <div className="prose prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2 prose-p:my-2 prose-strong:font-semibold prose-strong:text-gray-800 prose-ul:my-2 prose-li:my-1 max-w-none text-gray-700">
-                  <ReactMarkdown>{message.enhancedContent.detailedContent}</ReactMarkdown>
+                  <ReactMarkdown>{displayDetailedContent}</ReactMarkdown>
                 </div>
               </div>
             )}
           </div>
-        )}
-
-        {/* Resources Section */}
-        {message.enhancedContent?.resources && message.enhancedContent.resources.length > 0 && (
-          <div className="mt-4 border-t border-gray-100 pt-4">
-            <h4 className="text-sm font-semibold text-gray-700 mb-2">Additional Resources</h4>
-            
-            {/* Resource Type Filter */}
-            {resourceTypes && resourceTypes.size > 1 && (
-              <div className="flex gap-2 mb-3">
-                {Array.from(resourceTypes).map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => setSelectedResourceType(selectedResourceType === type ? null : type)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                      selectedResourceType === type
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Resource Links */}
-            <div className="space-y-2">
-              {message.enhancedContent.resources
-                .filter(resource => !selectedResourceType || resource.type === selectedResourceType)
-                .map((resource) => (
-                  <a
-                    key={resource.id}
-                    href={resource.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors group"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="text-primary">
-                        {renderResourceIcon(resource.type)}
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-700 group-hover:text-primary">
-                          {resource.title}
-                        </div>
-                        {resource.duration && (
-                          <div className="text-xs text-gray-500">
-                            {resource.duration}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-primary" />
-                  </a>
-                ))}
-            </div>
-          </div>
-        )}
+        )} */}
 
         {/* Branching Paths */}
         {message.enhancedContent?.branchingPaths && message.enhancedContent.branchingPaths.length > 0 && (
-          <div className="border-t border-gray-100 pt-2">
-            <h4 className="px-6 pt-4 pb-2 text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <Route className="w-4 h-4 text-orange-500" />
-              Continue Your Learning Journey
-            </h4>
-            <div className="grid grid-cols-1 gap-3 px-6 pb-6">
-              {message.enhancedContent.branchingPaths.map((path) => (
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">Branching Paths</h4>
+            <div className="flex flex-wrap gap-2">
+              {message.enhancedContent.branchingPaths.map((path, index) => (
                 <button
-                  key={path.id}
-                  onClick={() => onBranchSelect?.(path)}
-                  className="flex items-start gap-3 p-3 rounded-lg border border-gray-100 hover:border-orange-200 hover:bg-orange-50 transition-all text-left"
+                  key={index}
+                  onClick={() => onBranchSelect(path)}
+                  className="px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700 hover:bg-purple-200"
                 >
-                  <div className="flex-shrink-0 p-2 rounded-lg bg-orange-100 text-orange-600">
-                    <Route className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1">
-                    <h5 className="font-medium text-gray-800">{path.title}</h5>
-                    <p className="text-sm text-gray-600 mt-1">{path.description}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                        {path.difficulty}
-                      </span>
-                      <span className="text-xs text-gray-500">{path.estimatedTime}</span>
-                    </div>
-                  </div>
+                  {path.title}
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {/* Explore Related Topics Section */}
+        {/* Suggestions */}
         {message.enhancedContent?.suggestions && message.enhancedContent.suggestions.length > 0 && (
-          <div className="border-t border-gray-100 pt-2">
-            <h4 className="px-6 pt-4 pb-2 text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <Tag className="w-4 h-4 text-orange-500" />
-              Explore Related Topics
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 px-6 pb-6">
-              {message.enhancedContent.suggestions.map((tag: TopicSuggestion) => (
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">Suggestions</h4>
+            <div className="flex flex-wrap gap-2">
+              {message.enhancedContent.suggestions.map((suggestion: TopicSuggestion, index) => (
                 <button
-                  key={tag.id}
-                  onClick={() => onTagSelect?.(tag)}
-                  className="flex items-center gap-2 p-2 rounded-lg hover:bg-orange-50 border border-transparent hover:border-orange-100 transition-all text-left"
+                  key={index}
+                  onClick={() => onTagSelect(suggestion)}
+                  className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200"
                 >
-                  <div className="p-2 rounded-lg bg-orange-100 text-orange-600">
-                    {tag.icon || <Tag className="w-4 h-4" />}
-                  </div>
-                  <div>
-                    <div className="font-medium text-gray-800">{tag.title}</div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{tag.difficulty}</span>
-                      <span className="text-xs text-gray-500">{tag.time || tag.estimatedTime}</span>
-                    </div>
-                  </div>
+                  {suggestion.title}
                 </button>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Additional Resources */}
+        {allResources && allResources.length > 0 && (
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">Additional Resources</h4>
+            
+           
+
+            {/* Resource List */}
+            <ul className="space-y-2">
+              {filteredResources.map((resource: ResourceLink, index: number) => (
+                <li key={resource.id || index} className="flex items-start gap-2">
+                  {renderResourceIcon(resource.type)}
+                  <a
+                    href={resource.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    {resource.title}
+                    {resource.difficulty}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Practice Problem CTA */}
+        {message.enhancedContent?.practiceProblem && 
+         message.enhancedContent.practiceProblem.question && 
+         message.enhancedContent.practiceProblem.question.toLowerCase() !== 'undefined' && (
+          <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+            <h4 className="text-sm font-semibold text-orange-700 mb-2">Practice Problem</h4>
+            <p className="text-sm text-gray-700 mb-3">
+              {message.enhancedContent.practiceProblem.question}
+            </p>
+            {/* Link to the /practice page - this part is for navigation, not display of the question itself */}
+            <div className="mt-3">
+              <Link
+                href={`/#generate?topic=${encodeURIComponent(
+                  message.tags?.[0]?.name ||
+                  message.enhancedContent?.suggestions?.[0]?.title ||
+                  message.text.split(' ').slice(0, 3).join(' ') ||
+                  'general'
+                )}&problem=${encodeURIComponent(message.enhancedContent.practiceProblem.question)}`} // Optionally pass the problem too
+                className="inline-flex items-center gap-2 text-sm font-medium text-orange-600 hover:text-orange-700"
+              >
+                <GitBranch className="w-4 h-4" />
+                Try this practice problem
+              </Link>
             </div>
           </div>
         )}
