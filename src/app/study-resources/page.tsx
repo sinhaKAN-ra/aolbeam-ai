@@ -42,6 +42,7 @@ const StudyResourcesPage = () => {
   const [message, setMessage] = useState('');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
   const supabase = createSupabaseBrowserClient();
   
 
@@ -319,12 +320,136 @@ const StudyResourcesPage = () => {
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Study Resources</h1>
-          <p className="text-gray-600">Add, manage, and discover your personal study materials.</p>
+        <div className="mb-8 flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Study Resources</h1>
+            <p className="text-gray-600">Add, manage, and discover your personal study materials.</p>
+          </div>
+          {currentUser && (
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              {showAddForm ? 'Hide Form' : 'Add Resource'}
+            </button>
+          )}
         </div>
 
-        
+        {currentUser && showAddForm && (
+        <div className="mb-8 bg-white border border-gray-200 rounded-xl shadow-lg p-8">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+              <span className="text-blue-600 font-semibold">+</span>
+            </div>
+            <h2 className="text-2xl font-semibold text-gray-900">Add New Resource</h2>
+          </div>
+          
+          <form onSubmit={handleAddResource} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Resource Title *
+                </label>
+                <input 
+                  type="text" 
+                  value={newResource.title} 
+                  onChange={(e) => setNewResource({...newResource, title: e.target.value})} 
+                  placeholder="Enter a descriptive title for the resource" 
+                  className="border border-gray-300 rounded-lg p-3 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" 
+                  required 
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Resource Type</label>
+                <select 
+                  value={newResource.type} 
+                  onChange={(e) => setNewResource({...newResource, type: e.target.value as 'link' | 'video'})} 
+                  className="border border-gray-300 rounded-lg p-3 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                >
+                  <option value="link">🔗 Link</option>
+                  <option value="video">📹 Video</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
+                <select 
+                  value={newResource.category} 
+                  onChange={(e) => setNewResource({...newResource, category: e.target.value as 'Study Resources' | 'Tools' | 'Exam Motivation'})} 
+                  className="border border-gray-300 rounded-lg p-3 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                >
+                  <option value="Study Resources">📚 Study Resources</option>
+                  <option value="Tools">🛠️ Tools</option>
+                  <option value="Exam Motivation">💪 Exam Motivation</option>
+                </select>
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  URL *
+                </label>
+                <input 
+                  type="url" 
+                  value={newResource.url} 
+                  onChange={(e) => setNewResource({...newResource, url: e.target.value})} 
+                  placeholder="https://example.com" 
+                  className="border border-gray-300 rounded-lg p-3 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" 
+                  required 
+                />
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Provider (for videos)
+                </label>
+                <select 
+                  value={newResource.provider} 
+                  onChange={(e) => setNewResource({...newResource, provider: e.target.value as 'youtube' | 'instagram' | undefined})} 
+                  className="border border-gray-300 rounded-lg p-3 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                >
+                  <option value="">Auto-detect or select provider</option>
+                  <option value="youtube">📺 YouTube</option>
+                  <option value="vimeo">📹 Vimeo</option>
+                  <option value="dailymotion">🎬 Dailymotion</option>
+                  <option value="twitch">🎮 Twitch</option>
+                  <option value="wistia">🎥 Wistia</option>
+                  <option value="instagram">📸 Instagram</option>
+                  <option value="generic">🌐 Generic/Other</option>
+                </select>
+                <p className="text-sm text-gray-500 mt-1">
+                  Leave empty for auto-detection, or select for better compatibility
+                </p>
+              </div>
+            </div>
+            
+            <button 
+              type="submit" 
+              className="w-full md:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold px-8 py-3 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-lg hover:shadow-xl"
+            >
+              Add Resource
+            </button>
+          </form>
+          
+          {message && (
+            <div className={`mt-6 p-4 rounded-lg border ${
+              message.includes('Error') || message.includes('Only admin') 
+                ? 'bg-red-50 text-red-800 border-red-200' 
+                : 'bg-green-50 text-green-800 border-green-200'
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">
+                  {message.includes('Error') || message.includes('Only admin') ? '❌' : '✅'}
+                </span>
+                {message}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
         {/* Public Community Resources Section */} 
         <div className="mb-8">
@@ -571,118 +696,7 @@ const StudyResourcesPage = () => {
         </div>
       ))}
 
-      {currentUser && (
-        <div className="mt-12 bg-white border border-gray-200 rounded-xl shadow-lg p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-              <span className="text-blue-600 font-semibold">+</span>
-            </div>
-            <h2 className="text-2xl font-semibold text-gray-900">Add New Resource</h2>
-          </div>
-          
-          <form onSubmit={handleAddResource} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Resource Title *
-                </label>
-                <input 
-                  type="text" 
-                  value={newResource.title} 
-                  onChange={(e) => setNewResource({...newResource, title: e.target.value})} 
-                  placeholder="Enter a descriptive title for the resource" 
-                  className="border border-gray-300 rounded-lg p-3 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" 
-                  required 
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Resource Type</label>
-                <select 
-                  value={newResource.type} 
-                  onChange={(e) => setNewResource({...newResource, type: e.target.value as 'link' | 'video'})} 
-                  className="border border-gray-300 rounded-lg p-3 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                >
-                  <option value="link">🔗 Link</option>
-                  <option value="video">📹 Video</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
-                <select 
-                  value={newResource.category} 
-                  onChange={(e) => setNewResource({...newResource, category: e.target.value as 'Study Resources' | 'Tools' | 'Exam Motivation'})} 
-                  className="border border-gray-300 rounded-lg p-3 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                >
-                  <option value="Study Resources">📚 Study Resources</option>
-                  <option value="Tools">🛠️ Tools</option>
-                  <option value="Exam Motivation">💪 Exam Motivation</option>
-                </select>
-              </div>
-              
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  URL *
-                </label>
-                <input 
-                  type="url" 
-                  value={newResource.url} 
-                  onChange={(e) => setNewResource({...newResource, url: e.target.value})} 
-                  placeholder="https://example.com" 
-                  className="border border-gray-300 rounded-lg p-3 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" 
-                  required 
-                />
-              </div>
-              
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Provider (for videos)
-                </label>
-                <select 
-                  value={newResource.provider} 
-                  onChange={(e) => setNewResource({...newResource, provider: e.target.value as 'youtube' | 'instagram' | undefined})} 
-                  className="border border-gray-300 rounded-lg p-3 w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                >
-                  <option value="">Auto-detect or select provider</option>
-                  <option value="youtube">📺 YouTube</option>
-                  <option value="vimeo">📹 Vimeo</option>
-                  <option value="dailymotion">🎬 Dailymotion</option>
-                  <option value="twitch">🎮 Twitch</option>
-                  <option value="wistia">🎥 Wistia</option>
-                  <option value="instagram">📸 Instagram</option>
-                  <option value="generic">🌐 Generic/Other</option>
-                </select>
-                <p className="text-sm text-gray-500 mt-1">
-                  Leave empty for auto-detection, or select for better compatibility
-                </p>
-              </div>
-            </div>
-            
-            <button 
-              type="submit" 
-              className="w-full md:w-auto bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold px-8 py-3 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-lg hover:shadow-xl"
-            >
-              Add Resource
-            </button>
-          </form>
-          
-          {message && (
-            <div className={`mt-6 p-4 rounded-lg border ${
-              message.includes('Error') || message.includes('Only admin') 
-                ? 'bg-red-50 text-red-800 border-red-200' 
-                : 'bg-green-50 text-green-800 border-green-200'
-            }`}>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">
-                  {message.includes('Error') || message.includes('Only admin') ? '❌' : '✅'}
-                </span>
-                {message}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+     
       </div>
     </div>
   );

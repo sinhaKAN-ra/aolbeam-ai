@@ -97,68 +97,103 @@ export default function TestAttemptsClient() {
             </Link>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Test Series</TableHead>
-                <TableHead>Attempted By</TableHead>
-                <TableHead>Started</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Score</TableHead>
-                <TableHead>Time Spent</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <>
+            {/* Responsive Table for md+ screens, Cards for mobile */}
+            <div className="hidden md:block overflow-x-auto">
+              <Table className="min-w-full">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Test Series</TableHead>
+                    <TableHead>Attempted By</TableHead>
+                    <TableHead>Started</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Score</TableHead>
+                    <TableHead>Time Spent</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {attempts.map((attempt) => (
+                    <TableRow key={attempt.id}>
+                      <TableCell className="font-medium">
+                        {attempt.test_series?.title || 'Unknown Test'}
+                      </TableCell>
+                      <TableCell>
+                        {attempt.user_profiles?.full_name || 'Unknown User'}
+                      </TableCell>
+                      <TableCell>{formatDate(attempt.created_at)}</TableCell>
+                      <TableCell><StatusChip attempt={attempt} /></TableCell>
+                      <TableCell>
+                        {attempt.score !== null ? (
+                          <div className="flex items-center">
+                            <Award className="h-4 w-4 mr-1 text-yellow-500" />
+                            {attempt.score}%
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">Not scored</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {attempt.total_time_seconds ? (
+                          <div className="flex items-center">
+                            <Clock className="h-4 w-4 mr-1" />
+                            {Math.floor(attempt.total_time_seconds / 60)}m {attempt.total_time_seconds % 60}s
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">N/A</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {attempt.completed_at ? (
+                          <Link href={`/tests/results/${attempt.id}`} aria-label="View Results">
+                            <Button variant="outline" size="sm">
+                              <Eye className="h-4 w-4 mr-1" /> View Results
+                            </Button>
+                          </Link>
+                        ) : (
+                          <></>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {/* Mobile Card Layout */}
+            <div className="md:hidden space-y-4">
               {attempts.map((attempt) => (
-                <TableRow key={attempt.id}>
-                  <TableCell className="font-medium">
-                    {attempt.test_series?.title || 'Unknown Test'}
-                  </TableCell>
-                  <TableCell>
-                    {attempt.user_profiles?.full_name || 'Unknown User'}
-                  </TableCell>
-                  <TableCell>{formatDate(attempt.created_at)}</TableCell>
-                  <TableCell><StatusChip attempt={attempt} /></TableCell>
-                  <TableCell>
-                    {attempt.score !== null ? (
-                      <div className="flex items-center">
-                        <Award className="h-4 w-4 mr-1 text-yellow-500" />
-                        {attempt.score}%
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">Not scored</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {attempt.total_time_seconds ? (
-                      <div className="flex items-center">
-                        <Clock className="h-4 w-4 mr-1" />
-                        {Math.floor(attempt.total_time_seconds / 60)}m {attempt.total_time_seconds % 60}s
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">N/A</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
+                <div key={attempt.id} className="bg-white border rounded-lg shadow-sm p-4 flex flex-col gap-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="font-semibold text-base text-gray-900 truncate">
+                      {attempt.test_series?.title || 'Unknown Test'}
+                    </div>
+                    <StatusChip attempt={attempt} />
+                  </div>
+                  <div className="text-xs text-gray-500 mb-1">Started: {formatDate(attempt.created_at)}</div>
+                  <div className="flex flex-wrap gap-2 text-sm mb-1">
+                    <span className="inline-flex items-center gap-1">
+                      <Award className="h-4 w-4 text-yellow-500" />
+                      {attempt.score !== null ? `${attempt.score}%` : 'Not scored'}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="h-4 w-4" />
+                      {attempt.total_time_seconds ? `${Math.floor(attempt.total_time_seconds / 60)}m ${attempt.total_time_seconds % 60}s` : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-500 mb-2">By: {attempt.user_profiles?.full_name || 'Unknown User'}</div>
+                  <div className="flex gap-2">
                     {attempt.completed_at ? (
-                      <Link href={`/tests/results/${attempt.id}`}>
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-4 w-4 mr-1" /> View Results
+                      <Link href={`/tests/results/${attempt.id}`} aria-label="View Results">
+                        <Button variant="outline" size="sm" className="flex-1">
+                          <Eye className="h-4 w-4 mr-1" /> Results
                         </Button>
                       </Link>
-                    ) : (
-                      // <Button variant="outline" size="sm" 
-                      //   onClick={() => router.push(`/tests/take/${attempt.id}`)}>
-                      //   Continue Test
-                      // </Button>
-                      <></>
-                    )}
-                  </TableCell>
-                </TableRow>
+                    ) : null}
+                  </div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
