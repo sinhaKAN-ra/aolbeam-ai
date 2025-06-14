@@ -44,6 +44,7 @@ export interface Message {
   type: MessageType;
   timestamp: string;
   isTyping?: boolean;
+  isStreaming?: boolean;
   tags?: TopicTag[];
   resources?: MessageResource[];
   suggestions?: TopicSuggestion[];

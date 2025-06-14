@@ -8,9 +8,7 @@ import { Analytics } from "@vercel/analytics/next";
 import Header from '@/components/Header';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { Sidebar, SidebarProvider } from '@/components/ui/sidebar';
-import SidebarContent from '@/components/SidebarContent';
-import { cn } from '@/lib/utils';
-import MainContentWrapper from '@/components/MainContentWrapper';
+import SidebarContentWrapper from '@/components/SidebarContentWrapper'; // Import the new client component
 import MainLayoutContainer from '@/components/MainLayoutContainer';
 
 const inter = Inter({
@@ -48,14 +46,17 @@ export default function RootLayout({
               <div className="flex flex-col flex-1 relative">
                 {/* <Header /> */}
                 <div className="flex flex-1 pt-16">
-                  <Sidebar>
-                    <SidebarContent />
+                  <Sidebar collapsible='icon'>
+                    <div className="relative h-full">
+                      <SidebarContentWrapper />
+                    </div>
                   </Sidebar>
                   <MainLayoutContainer>{children}</MainLayoutContainer>
                 </div>
               </div>
             </SidebarProvider>
           </AuthProvider>
+
           <Toaster />
           <Analytics />
         </ThemeProvider>
