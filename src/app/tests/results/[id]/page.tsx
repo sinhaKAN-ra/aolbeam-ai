@@ -12,8 +12,8 @@ interface TestResultsPageProps {
 const ViewTestResultsPage: React.FC<TestResultsPageProps> = ({ params }) => {
   return (
     <div className="max-w-screen-lg mx-auto">
-      <div className="py-16">
-        <div className="border border-gray-200 rounded-lg p-6">
+      <div className="py-4">
+        <div className="border border-gray-200 rounded-lg p-2">
           <TestResultsPage attemptId={params.id} />
         </div>
       </div>
