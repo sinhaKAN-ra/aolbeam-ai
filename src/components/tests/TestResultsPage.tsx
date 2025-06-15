@@ -205,69 +205,62 @@ const TestResultsPage: React.FC<TestResultsPageProps> = ({ attemptId }) => {
   }
   
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto px-2 sm:px-4 py-6">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Test Results</h1>
-        <h2 className="text-xl font-semibold text-blue-600 mb-1">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Test Results</h1>
+        <h2 className="text-lg sm:text-xl font-semibold text-blue-600 mb-1">
           {attempt.test_series.title}
         </h2>
         {attempt.test_series.description && (
-          <p className="text-gray-600">{attempt.test_series.description}</p>
+          <p className="text-gray-600 text-sm sm:text-base">{attempt.test_series.description}</p>
         )}
       </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      {/* Responsive grid: stacks on mobile, side-by-side on desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
         {/* Performance Summary */}
         <div className="lg:col-span-2">
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6">Performance Summary</h3>
-            
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-6">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Performance Summary</h3>
+            <div className="grid grid-cols-2 xs:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-6">
               <div className="text-center">
-                <p className="text-sm text-gray-500 mb-1">Score</p>
-                <p className="text-3xl font-bold text-blue-600">
+                <p className="text-xs sm:text-sm text-gray-500 mb-1">Score</p>
+                <p className="text-2xl sm:text-3xl font-bold text-blue-600">
                   {stats.score.toFixed(1)}%
                 </p>
               </div>
-              
               <div className="text-center">
-                <p className="text-sm text-gray-500 mb-1">Correct</p>
-                <p className="text-3xl font-bold text-green-600">
+                <p className="text-xs sm:text-sm text-gray-500 mb-1">Correct</p>
+                <p className="text-2xl sm:text-3xl font-bold text-green-600">
                   {stats.correctProblems}/{stats.totalProblems}
                 </p>
               </div>
-              
               <div className="text-center">
-                <p className="text-sm text-gray-500 mb-1">Attempted</p>
-                <p className="text-3xl font-bold text-gray-900">
+                <p className="text-xs sm:text-sm text-gray-500 mb-1">Attempted</p>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900">
                   {stats.attemptedProblems}/{stats.totalProblems}
                 </p>
               </div>
-              
               <div className="text-center">
-                <p className="text-sm text-gray-500 mb-1">Time Taken</p>
-                <div className="flex items-center justify-center text-lg font-semibold text-gray-900">
+                <p className="text-xs sm:text-sm text-gray-500 mb-1">Time Taken</p>
+                <div className="flex items-center justify-center text-base sm:text-lg font-semibold text-gray-900">
                   <Clock className="h-4 w-4 mr-1" />
                   {formatTime(attempt.total_time_seconds)}
                 </div>
               </div>
             </div>
-            
-            <hr className="border-gray-200 my-6" />
-            
+            <hr className="border-gray-200 my-4 sm:my-6" />
             <div>
-              <h4 className="text-sm font-medium text-gray-900 mb-2">Time Breakdown</h4>
-              <p className="text-sm text-gray-600">
+              <h4 className="text-xs sm:text-sm font-medium text-gray-900 mb-1 sm:mb-2">Time Breakdown</h4>
+              <p className="text-xs sm:text-sm text-gray-600">
                 Average time per question: {formatTime(stats.averageTimePerProblem)}
               </p>
             </div>
-            
             {stats.pendingGradingProblems > 0 && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 mt-4">
                 <div className="flex items-center">
                   <HelpCircle className="h-5 w-5 text-blue-400" />
-                  <p className="ml-3 text-sm text-blue-700">
+                  <p className="ml-3 text-xs sm:text-sm text-blue-700">
                     {stats.pendingGradingProblems} questions require manual grading or review.
                   </p>
                 </div>
@@ -275,77 +268,68 @@ const TestResultsPage: React.FC<TestResultsPageProps> = ({ attemptId }) => {
             )}
           </div>
         </div>
-        
         {/* Test Details */}
         <div className="lg:col-span-1">
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6">Test Details</h3>
-            
-            <div className="space-y-4">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Test Details</h3>
+            <div className="space-y-3 sm:space-y-4">
               <div>
-                <p className="text-sm text-gray-500">Date Taken</p>
-                <p className="font-medium text-gray-900">
+                <p className="text-xs sm:text-sm text-gray-500">Date Taken</p>
+                <p className="font-medium text-gray-900 text-sm sm:text-base">
                   {new Date(attempt.started_at).toLocaleDateString()}
                 </p>
               </div>
-              
               <div>
-                <p className="text-sm text-gray-500">Start Time</p>
-                <p className="font-medium text-gray-900">
+                <p className="text-xs sm:text-sm text-gray-500">Start Time</p>
+                <p className="font-medium text-gray-900 text-sm sm:text-base">
                   {new Date(attempt.started_at).toLocaleTimeString()}
                 </p>
               </div>
-              
               <div>
-                <p className="text-sm text-gray-500">Completion Time</p>
-                <p className="font-medium text-gray-900">
+                <p className="text-xs sm:text-sm text-gray-500">Completion Time</p>
+                <p className="font-medium text-gray-900 text-sm sm:text-base">
                   {attempt.completed_at 
                     ? new Date(attempt.completed_at).toLocaleTimeString() 
                     : 'Not completed'}
                 </p>
               </div>
-              
               <div>
-                <p className="text-sm text-gray-500">Total Duration</p>
-                <p className="font-medium text-gray-900">
+                <p className="text-xs sm:text-sm text-gray-500">Total Duration</p>
+                <p className="font-medium text-gray-900 text-sm sm:text-base">
                   {formatTime(attempt.total_time_seconds)}
                 </p>
               </div>
             </div>
-            
             <button
               onClick={() => router.push(`/tests/take/${attempt.test_series_id}`)}
-              className="w-full mt-6 px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              className="w-full mt-5 px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
             >
               Retake Test
             </button>
           </div>
         </div>
       </div>
-      
       {/* Question Analysis */}
       <div className="mb-8">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Question Analysis</h3>
-        
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Question Analysis</h3>
         <div className="space-y-4">
           {problems.map((problem, index) => {
             const response = getResponseForProblem(problem.id);
             const isExpanded = expandedQuestions[problem.id];
-            
             return (
               <div key={problem.id} className="bg-white border border-gray-200 rounded-lg">
                 <div
-                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
+                  className="flex items-center justify-between p-3 sm:p-4 cursor-pointer hover:bg-gray-50"
                   onClick={() => toggleQuestion(problem.id)}
                 >
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-medium text-gray-900 truncate">
+                    <h4 className="text-xs sm:text-sm font-medium text-gray-900 truncate">
                       Question {index + 1}: {problem.problem_statement.length > 50 
                         ? `${problem.problem_statement.substring(0, 50)}...` 
                         : problem.problem_statement}
                     </h4>
                   </div>
-                  <div className="flex items-center space-x-3 ml-4">
+                  <div className="flex items-center space-x-2 sm:space-x-3 ml-2 sm:ml-4">
                     {getStatusChip(response)}
                     {response && response.time_taken_seconds && (
                       <div className="flex items-center text-xs text-gray-500">
@@ -360,23 +344,21 @@ const TestResultsPage: React.FC<TestResultsPageProps> = ({ attemptId }) => {
                     )}
                   </div>
                 </div>
-                
                 {isExpanded && (
                   <>
                     <hr className="border-gray-200" />
-                    <div className="p-4">
-                      <p className="text-sm text-gray-700 mb-4">
+                    <div className="p-3 sm:p-4">
+                      <p className="text-xs sm:text-sm text-gray-700 mb-3 sm:mb-4">
                         {problem.problem_statement}
                       </p>
-                      
                       {problem.problem_type === 'mcq' && problem.multiple_choice_options && (
-                        <div className="mb-4">
-                          <h5 className="text-sm font-medium text-gray-900 mb-2">Options:</h5>
+                        <div className="mb-3 sm:mb-4">
+                          <h5 className="text-xs sm:text-sm font-medium text-gray-900 mb-1 sm:mb-2">Options:</h5>
                           <div className="space-y-1">
                             {problem.multiple_choice_options.map((option, i) => (
                               <div
                                 key={i}
-                                className={`p-2 rounded text-sm ${
+                                className={`p-2 rounded text-xs sm:text-sm ${
                                   option === problem.correct_answer
                                     ? 'bg-green-100 border border-green-200'
                                     : response?.user_response === option && option !== problem.correct_answer
@@ -393,31 +375,27 @@ const TestResultsPage: React.FC<TestResultsPageProps> = ({ attemptId }) => {
                           </div>
                         </div>
                       )}
-                      
-                      <div className="mb-4">
-                        <h5 className="text-sm font-medium text-gray-900">Your Answer:</h5>
-                        <p className="text-sm text-gray-700 mt-1">
+                      <div className="mb-3 sm:mb-4">
+                        <h5 className="text-xs sm:text-sm font-medium text-gray-900">Your Answer:</h5>
+                        <p className="text-xs sm:text-sm text-gray-700 mt-1">
                           {response ? response.user_response : 'Not answered'}
                         </p>
                       </div>
-                      
                       {problem.correct_answer && (
-                        <div className="mb-4">
-                          <h5 className="text-sm font-medium text-gray-900">Correct Answer:</h5>
-                          <p className="text-sm text-gray-700 mt-1">{problem.correct_answer}</p>
+                        <div className="mb-3 sm:mb-4">
+                          <h5 className="text-xs sm:text-sm font-medium text-gray-900">Correct Answer:</h5>
+                          <p className="text-xs sm:text-sm text-gray-700 mt-1">{problem.correct_answer}</p>
                         </div>
                       )}
-                      
                       {problem.explanation && (
-                        <div className="mb-4">
-                          <h5 className="text-sm font-medium text-gray-900">Explanation:</h5>
-                          <p className="text-sm text-gray-700 mt-1">{problem.explanation}</p>
+                        <div className="mb-3 sm:mb-4">
+                          <h5 className="text-xs sm:text-sm font-medium text-gray-900">Explanation:</h5>
+                          <p className="text-xs sm:text-sm text-gray-700 mt-1">{problem.explanation}</p>
                         </div>
                       )}
-                      
                       {problem.topic && (
                         <div className="flex items-center">
-                          <span className="text-sm font-medium text-gray-900 mr-2">Topic:</span>
+                          <span className="text-xs sm:text-sm font-medium text-gray-900 mr-2">Topic:</span>
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                             {problem.topic}
                           </span>
@@ -431,19 +409,17 @@ const TestResultsPage: React.FC<TestResultsPageProps> = ({ attemptId }) => {
           })}
         </div>
       </div>
-      
-      {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row justify-between space-y-3 sm:space-y-0 sm:space-x-4">
+      {/* Action Buttons: stack on mobile, row on desktop */}
+      <div className="flex flex-col sm:flex-row justify-between space-y-3 sm:space-y-0 sm:space-x-4 mt-4">
         <button
           onClick={() => router.push('/tests')}
-          className="px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+          className="w-full sm:w-auto px-6 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
         >
           Back to Test List
         </button>
-        
         <button
           onClick={() => router.push(`/tests/take/${attempt.test_series_id}`)}
-          className="px-6 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+          className="w-full sm:w-auto px-6 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
         >
           Take Test Again
         </button>
