@@ -1,4 +1,5 @@
 import React from 'react';
+import { Json } from '../supabase';
 
 // Message types
 export type MessageSender = 'user' | 'ai';
@@ -10,17 +11,20 @@ export interface MessageResource {
   url: string;
   type: 'video' | 'article' | 'documentation' | 'tutorial';
   duration?: string;
-  icon?: React.ReactNode;
 }
 
+// --- PATCHED FOR useChat.ts compatibility ---
 export interface TopicTag {
   id: string;
   name: string;
   category: string;
   color: string;
   relatedTopics: string[];
+  colorClass?: string; // PATCH: for tag color in UI
 }
+// --- END PATCH ---
 
+// --- PATCHED FOR useChat.ts compatibility ---
 export interface TopicSuggestion {
   id: string;
   title: string;
@@ -29,12 +33,14 @@ export interface TopicSuggestion {
   estimatedTime: string;
   category?: string;
   time?: string;
-  icon?: React.ReactNode;
   color?: string;
+  [key: string]: Json | undefined;
   tags?: string[];
   branches?: string[];
   externalLink?: string;
+  keywords?: string[]; // PATCH: for tag extraction in useChat.ts
 }
+// --- END PATCH ---
 
 export interface Message {
   id: string;
@@ -58,7 +64,6 @@ export interface Message {
   problems?: string[]; // For practice_problems_list type
   advice?: string;
   role?: 'user' | 'assistant';
-  icon?: React.ReactNode;
   color?: string;
 }
 
@@ -92,24 +97,27 @@ export interface LearningStep {
   branches?: string[];
 }
 
+// --- PATCHED FOR useChat.ts compatibility ---
 export interface LearningPath {
   id: string;
   title: string;
   description: string;
-  mainTopic: string;
-  currentStep: number;
-  totalSteps: number;
+  main_topic: string;
+  current_step: number;
+  total_steps: number;
   steps: LearningStep[];
-  estimatedHours: number;
+  estimated_hours: number;
   difficulty?: 'beginner' | 'intermediate' | 'advanced';
   tags?: string[];
-  completedTopics: string[];
-  suggestedTopics: TopicSuggestion[];
-  isCustomPath?: boolean;
+  completed_topics: string[];
+  suggested_topics: TopicSuggestion[];
+  is_custom_path?: boolean;
   goals?: string[];
   timeline?: string;
-  createdAt?: Date;
+  created_at?: string | Date; // PATCH: allow string timestamp
+  updated_at?: string | Date; // PATCH: required by useChat.ts
 }
+// --- END PATCH ---
 
 export interface CustomLearningGoal {
   id: string;

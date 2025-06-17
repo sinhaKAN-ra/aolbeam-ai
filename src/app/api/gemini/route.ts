@@ -155,7 +155,7 @@ export async function POST(req: Request) {
           }
           problems = problems.map((p: any) => typeof p === 'string' ? p : JSON.stringify(p));
           
-          return NextResponse.json({ practice_problems: problems });
+          return NextResponse.json({ practiceProblem: problems });
         } catch (parseError) {
           console.error('Failed to parse practice problem JSON:', parseError);
           return NextResponse.json({ error: 'Failed to parse AI response for practice problem' }, { status: 500 });
@@ -164,7 +164,7 @@ export async function POST(req: Request) {
       case 'generateLearningPath': {
         const { topic, userId } = params;
         const prompt = `
-        Generate a detailed learning path for learning about ${topic} suitable for a student.
+        Generate a 4 detailed learning path for learning about ${topic} suitable for a student.
         
         Create the response as a valid JSON object with these properties:
         - title: A descriptive title for the learning path

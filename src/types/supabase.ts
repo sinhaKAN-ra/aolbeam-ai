@@ -51,6 +51,70 @@ export type Database = {
         }
         Relationships: []
       }
+      learning_paths: {
+        Row: {
+          id: string
+          user_id: string | null
+          main_topic: string
+          current_step: number
+          total_steps: number
+          completed_topics: string[] | null
+          suggested_topics: Json | null
+          is_custom_path: boolean
+          goals: string[] | null
+          timeline: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          main_topic: string
+          current_step?: number
+          total_steps?: number
+          completed_topics?: string[] | null
+          suggested_topics?: Json | null
+          is_custom_path?: boolean
+          goals?: string[] | null
+          timeline?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          main_topic?: string
+          current_step?: number
+          total_steps?: number
+          completed_topics?: string[] | null
+          suggested_topics?: Json | null
+          is_custom_path?: boolean
+          goals?: string[] | null
+          timeline?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      search_history: {
+        Row: {
+          id: string
+          user_id: string
+          search_term: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          search_term: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          search_term?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+
       payment_orders: {
         Row: {
           amount: number

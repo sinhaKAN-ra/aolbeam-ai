@@ -22,7 +22,7 @@ export interface BranchingPath {
 
 export interface EnhancedMessageContent {
   mainContent: string;
-  detailedContent?: string;
+  detailedContent?: string | null;
   resources?: ResourceLink[];
   branchingPaths?: BranchingPath[];
   suggestions?: TopicSuggestion[];
@@ -31,10 +31,12 @@ export interface EnhancedMessageContent {
     code: string;
     explanation?: string;
   }>;
-  practiceProblem?: { question: string; };
+  practiceProblems?: { question: string; }[];
 }
 
 export interface EnhancedMessage extends Message {
   enhancedContent?: EnhancedMessageContent;
   onSuggestionClick?: (suggestion: TopicSuggestion) => void;
 }
+
+export type { TopicSuggestion, TopicTag };

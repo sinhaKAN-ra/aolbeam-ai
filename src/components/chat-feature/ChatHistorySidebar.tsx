@@ -1,25 +1,12 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { ChatSession, ChatMessage } from '@/types/chat-feature';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, parseISO } from 'date-fns';
 import { Edit, Trash2, Plus, Check, X, MoreVertical } from 'lucide-react';
 
-// Mock types for demo
-interface ChatMessage {
-  id: string;
-  content: string;
-  role: 'user' | 'assistant';
-  timestamp: string;
-}
 
-interface ChatSession {
-  id: string;
-  title: string;
-  messages: ChatMessage[];
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface ChatHistorySidebarProps {
   sessions: ChatSession[];
@@ -43,43 +30,21 @@ export function ChatHistorySidebar({
   isLoading = false,
   className = '',
 }: Partial<ChatHistorySidebarProps>) {
-  // Mock data for demo
-  const [sessions, setSessions] = useState<ChatSession[]>([
-    {
-      id: '1',
-      title: 'React Component Design Discussion',
-      messages: [
-        { id: '1', content: 'How do I create a responsive sidebar?', role: 'user', timestamp: new Date().toISOString() }
-      ],
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: '2',
-      title: 'TypeScript Best Practices',
-      messages: [
-        { id: '2', content: 'What are some TypeScript best practices for React?', role: 'user', timestamp: new Date().toISOString() }
-      ],
-      createdAt: new Date(Date.now() - 172800000).toISOString(),
-      updatedAt: new Date(Date.now() - 3600000).toISOString()
-    },
-    {
-      id: '3',
-      title: 'API Integration Help',
-      messages: [
-        { id: '3', content: 'I need help integrating a REST API with my React app', role: 'user', timestamp: new Date().toISOString() }
-      ],
-      createdAt: new Date(Date.now() - 259200000).toISOString(),
-      updatedAt: new Date(Date.now() - 7200000).toISOString()
-    }
-  ]);
-
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>('1');
+  
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(propCurrentSessionId || null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [sessions, setSessions] = useState<ChatSession[]>(propSessions || []);
+
+  // Keep currentSessionId in sync with propCurrentSessionId
+  useEffect(() => {
+    if (propCurrentSessionId !== undefined) {
+      setCurrentSessionId(propCurrentSessionId);
+    }
+  }, [propCurrentSessionId]);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -112,33 +77,39 @@ export function ChatHistorySidebar({
     setNewTitle('');
   };
 
-  const handleCreateNewSession = async () => {
-    setIsCreating(true);
-    try {
-      // Mock create new session
-      const newSession: ChatSession = {
-        id: Date.now().toString(),
-        title: `New Chat ${sessions.length + 1}`,
-        messages: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      setSessions(prev => [newSession, ...prev]);
-      setCurrentSessionId(newSession.id);
-    } finally {
-      setIsCreating(false);
-    }
-  };
 
-  const handleDeleteSession = async (sessionId: string) => {
-    if (confirm('Are you sure you want to delete this chat?')) {
+useEffect(() => {
+  if (propSessions) {
+    setSessions(propSessions);
+  }
+}, [propSessions]);
+
+// Update handleCreateNewSession to use the prop function
+const handleCreateNewSession = async () => {
+  setIsCreating(true);
+  try {
+    const newSessionId = await propOnCreateNewSession?.();
+    if (newSessionId) {
+      setCurrentSessionId(newSessionId);
+    }
+  } finally {
+    setIsCreating(false);
+  }
+};
+
+// Update handleDeleteSession to use the prop function
+const handleDeleteSession = async (sessionId: string) => {
+  if (confirm('Are you sure you want to delete this chat?')) {
+    const success = await propOnDeleteSession?.(sessionId);
+    if (success) {
       setSessions(prev => prev.filter(s => s.id !== sessionId));
       if (currentSessionId === sessionId) {
         setCurrentSessionId(sessions.length > 1 ? sessions.find(s => s.id !== sessionId)?.id || null : null);
       }
     }
-    setActiveMenuId(null);
-  };
+  }
+  setActiveMenuId(null);
+};
 
   const formatDate = (dateString: string) => {
     try {
@@ -192,11 +163,11 @@ export function ChatHistorySidebar({
               <div key={session.id} className="relative">
                 <div
                   className={`group relative rounded-lg p-3 m-1 cursor-pointer transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-800 ${
-                    currentSessionId === session.id
+                    propCurrentSessionId === session.id
                       ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
                       : 'hover:shadow-sm'
                   }`}
-                  onClick={() => setCurrentSessionId(session.id)}
+                  onClick={() => propOnSelectSession?.(session.id)}
                 >
                   {editingSessionId === session.id ? (
                     <div className="space-y-2">

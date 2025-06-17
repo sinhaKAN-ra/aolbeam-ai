@@ -1,14 +1,30 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import ChatInterface from '../../components/chat-feature/ChatInterface';
-import useChat from '../../hooks/chat-feature/useChat';
+import ChatInterface from '../../../components/chat-feature/ChatInterface';
+import useChat from '../../../hooks/chat-feature/useChat';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
-import { createSupabaseBrowserClient } from '../../lib/supabase';
+import { createSupabaseBrowserClient } from '../../../lib/supabase';
 import { TopicTag } from '@/types/chat-feature';
+import { useParams } from 'next/navigation';
 
-const ChatTeacherPage: React.FC = () => {
+interface ChatPageProps {
+  searchParams?: { [key: string]: string | string[] | undefined };
+}
+
+const ChatTeacherPage: React.FC<ChatPageProps> = () => {
+  const params = useParams();
+  const sessionId = params && typeof params === 'object' && 'sessionId' in params ? params.sessionId as string : undefined;
+  if (!sessionId) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-background text-foreground">
+        <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
+        <p className="text-lg">Invalid or missing session ID.</p>
+      </div>
+    );
+  }
+
   const [userId, setUserId] = useState<string | null>(null);
   const supabase = createSupabaseBrowserClient();
 
@@ -24,7 +40,7 @@ const ChatTeacherPage: React.FC = () => {
     getSession();
   }, [supabase]);
 
-  const { messages, isLoading, error, sendMessage, learningPath, searchHistory, topicSuggestions, topicTags, selectedTags, startNewChat } = useChat(userId);
+  const { messages, isLoading, error, sendMessage, learningPath, searchHistory, topicSuggestions, topicTags, selectedTags, startNewChat, isNewSession } = useChat(userId, sessionId); // Pass sessionId to useChat
 
   const handleTopicTagClick = (tag: TopicTag) => {
     // Logic for handling topic tag click
@@ -64,6 +80,7 @@ const ChatTeacherPage: React.FC = () => {
       <div className="container mx-auto p-4 max-w-6xl flex-grow">
         <div className="bg-card rounded-lg h-auto flex flex-col">
           <ChatInterface
+            isNewSession={isNewSession}
             messages={messages}
             isLoading={isLoading}
             error={error}

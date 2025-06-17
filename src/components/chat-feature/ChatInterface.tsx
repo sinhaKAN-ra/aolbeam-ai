@@ -10,7 +10,25 @@ import LearningSidebar from './LearningSidebar';
 import { Send, Loader2, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Route, BookOpen, Brain, Sparkles, Zap, RefreshCw, GraduationCap, XCircle, Plus, HelpCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
+const iconMap: { [key: string]: React.ElementType } = {
+  BookOpen,
+  Brain,
+  Sparkles,
+  Zap,
+  Route,
+  RefreshCw,
+  GraduationCap,
+  XCircle,
+  Plus,
+  HelpCircle,
+};
+
 interface ChatInterfaceProps {
+  /**
+   * True if this is a brand new chat session (created by New Chat, no messages sent yet).
+   * False if loaded from history or after first message is sent.
+   */
+  isNewSession: boolean;
   onSendMessage: (message: string) => void;
   messages: (Message | EnhancedMessage)[];
   isLoading: boolean;
@@ -60,9 +78,7 @@ const TopicSuggestionCard = ({ suggestion, onClick, isSelected = false }: TopicS
 );
 
 export const ChatInterface = ({
-  onSendMessage,
-  messages,
-  isLoading,
+  onSendMessage, messages, isLoading, isNewSession,
   learningPath,
   searchHistory,
   error,
@@ -89,7 +105,11 @@ export const ChatInterface = ({
   };
 
   useEffect(() => {
-    scrollToBottom();
+    // Delay to ensure DOM has rendered
+    const timeout = setTimeout(() => {
+      scrollToBottom();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [messages]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -108,7 +128,7 @@ export const ChatInterface = ({
   };
 
   const handleBranchSelect = (path: BranchingPath) => {
-    console.log('Branch selected:', path);
+    // console.log('Branch selected:', path);
     // When a branch is selected, send a message to explore that branch
     onSendMessage(`I want to explore: ${path.title}`);
   };
@@ -159,7 +179,7 @@ export const ChatInterface = ({
   // };
 
   const handleSuggestionClick = (suggestion: TopicSuggestion) => {
-    console.log('Suggestion clicked:', suggestion);
+    // console.log('Suggestion clicked:', suggestion);
     // When a suggestion is clicked, send a message to explore that topic
     onSendMessage(`Tell me about ${suggestion.title}`);
 
@@ -219,7 +239,7 @@ export const ChatInterface = ({
       id: 'web-dev',
       title: 'Web Development',
       description: 'Build interactive websites and applications.',
-      icon: <BookOpen className="w-5 h-5" />,
+      icon: 'BookOpen',
       color: 'bg-blue-100 text-blue-800',
       difficulty: 'beginner',
       estimatedTime: '2-4 weeks',
@@ -228,7 +248,7 @@ export const ChatInterface = ({
       id: 'data-science',
       title: 'Data Science',
       description: 'Analyze data, build models, and gain insights.',
-      icon: <Brain className="w-5 h-5" />,
+      icon: 'Brain',
       color: 'bg-green-100 text-green-800',
       difficulty: 'intermediate',
       estimatedTime: '3-6 weeks',
@@ -237,7 +257,7 @@ export const ChatInterface = ({
       id: 'ai',
       title: 'Artificial Intelligence',
       description: 'Explore machine learning, deep learning, and AI concepts.',
-      icon: <Sparkles className="w-5 h-5" />,
+      icon: 'Sparkles',
       color: 'bg-purple-100 text-purple-800',
       difficulty: 'advanced',
       estimatedTime: '4-8 weeks',
@@ -246,7 +266,7 @@ export const ChatInterface = ({
       id: 'cloud-computing',
       title: 'Cloud Computing',
       description: 'Learn about cloud platforms like AWS, Azure, and GCP.',
-      icon: <Zap className="w-5 h-5" />,
+      icon: 'Zap',
       color: 'bg-yellow-100 text-yellow-800',
       difficulty: 'beginner',
       estimatedTime: '2-4 weeks',
@@ -255,7 +275,7 @@ export const ChatInterface = ({
       id: 'machine-learning',
       title: 'Machine Learning',
       description: 'Explore algorithms that allow computers to learn from data.',
-      icon: <Brain className="w-6 h-6 text-primary" />,
+      icon: 'Brain',
       color: 'bg-primary/10',
       difficulty: 'intermediate',
       estimatedTime: '4-6 Weeks',
@@ -264,7 +284,7 @@ export const ChatInterface = ({
       id: 'quantum-physics',
       title: 'Quantum Physics',
       description: 'Delve into the strange and fascinating world of subatomic particles.',
-      icon: <Zap className="w-6 h-6 text-secondary" />,
+      icon: 'Zap',
       color: 'bg-secondary/10',
       difficulty: 'advanced',
       estimatedTime: '6-8 Weeks',
@@ -273,7 +293,7 @@ export const ChatInterface = ({
       id: 'data-structures-algorithms',
       title: 'Data Structures & Algorithms',
       description: 'Master essential concepts for efficient problem-solving.',
-      icon: <Sparkles className="w-6 h-6 text-yellow-600" />,
+      icon: 'Sparkles',
       color: 'bg-yellow-100',
       difficulty: 'intermediate',
       estimatedTime: '5-7 Weeks',
@@ -289,14 +309,14 @@ export const ChatInterface = ({
       .slice(0, 5)
     : sampleSuggestions;
 
-
-
+  console.log('isNewSession', isNewSession);
   return (
     <div className="flex h-screen bg-background">
       <div className="flex-1 flex flex-col relative bg-gray-50">
         <div className={`flex-1 overflow-y-auto p-4 md:p-6 transition-all duration-300 ${isSidebarCollapsed ? 'pr-4 md:pr-6' : 'pr-4 md:pr-[calc(5rem+1.5rem)]'}`}>
           {/* Welcome screen for new chat */}
-          {messages.length === 0 && (
+          {/* Welcome/Mission screen for brand new chat only (no messages, first session, or some isNewSession prop) */}
+          {messages.length === 0 && !isNewSession && (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-8 py-12">
               <div className="w-20 h-20 rounded-full bg-orange-100 flex items-center justify-center">
                 <Route className="w-10 h-10 text-orange-500" />
@@ -306,51 +326,6 @@ export const ChatInterface = ({
                 <p className="text-lg text-gray-600">
                   Your intelligent learning companion
                 </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-4xl mt-6">
-                <div className="p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-all border border-gray-100">
-                  <h2 className="text-xl font-semibold text-gray-800 mb-4">Continue Your Learning Journey</h2>
-                  {sampleSuggestions.slice(0, 4).map(suggestion => (
-                    <button
-                      key={suggestion.id}
-                      onClick={() => {
-                        onSendMessage(`Tell me about ${suggestion.title}`);
-                      }}
-                      className="flex items-center w-full p-3 hover:bg-orange-50 rounded-lg mb-3 group transition-all text-left border border-transparent hover:border-orange-200"
-                    >
-                      <div className="mr-3 p-2 rounded-lg bg-orange-100 text-orange-500 group-hover:bg-orange-200">
-                        {suggestion.icon || <BookOpen className="w-5 h-5" />}
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-gray-800">{suggestion.title}</h3>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{suggestion.difficulty}</span>
-                          <span className="text-xs text-gray-500">{suggestion.time || suggestion.estimatedTime}</span>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-                <div className="p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-all border border-gray-100">
-                  <h2 className="text-xl font-semibold text-gray-800 mb-4">Explore Popular Topics</h2>
-                  {sampleSuggestions.slice(0, 4).map(suggestion => (
-                    <button
-                      key={suggestion.id + "-explore"}
-                      onClick={() => {
-                        onSendMessage(`Tell me about ${suggestion.title}`);
-                      }}
-                      className="flex items-center w-full p-3 hover:bg-orange-50 rounded-lg mb-3 group transition-all text-left border border-transparent hover:border-orange-200"
-                    >
-                      <div className="mr-3 p-2 rounded-lg bg-orange-100 text-orange-500 group-hover:bg-orange-200">
-                        {suggestion.icon || <BookOpen className="w-5 h-5" />}
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-gray-800">{suggestion.title}</h3>
-                        <p className="text-xs text-gray-500 line-clamp-1">{suggestion.description}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
           )}
@@ -369,15 +344,9 @@ export const ChatInterface = ({
                 </div>
               ) : (
                 <div className="flex w-full">
-                  <div className="mr-3 mt-1 flex-shrink-0">
-                    <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
-                      <Route className="w-4 h-4 text-orange-500" />
-                    </div>
-                    <span className="text-xs text-gray-400">{message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
 
-                  </div>
                   <div className="flex-1">
-                    <div className="text-xs text-gray-500 mb-1 ml-1">AI Assistant</div>
+                    <div className="flex items-center text-xs text-gray-500 mb-1 ml-1"><div className="mr-3 flex-shrink-0"><div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center"><Route className="w-4 h-4 text-orange-500" /></div></div><span className="text-gray-400">{message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span></div>
                     {('enhancedContent' in message && message.type !== 'practice_problems_list') ? (
                       <EnhancedMessageBubble
                         message={message}
@@ -445,27 +414,21 @@ export const ChatInterface = ({
 
       {/* Right Sidebar for Learning Path and Suggestions */}
       {/* {(learningPath || topicSuggestions.length > 0 || topicTags.length > 0) && (
-                  <LearningSidebar
-                    learningPath={learningPath || undefined}
-                    latestSuggestions={topicSuggestions}
-                    topicSuggestions={topicSuggestions}
-                    topicTags={topicTags}
-                    searchHistory={searchHistory}
-                    selectedLearningMode={selectedLearningMode}
-                    onLearningModeChange={setSelectedLearningMode}
-                    onTopicTagClick={onTopicTagClick}
-                    onCustomPathCreated={(pathOrId: any) => {
-                      if (typeof pathOrId === 'string') {
-                        onCustomPathCreated(pathOrId);
-                      } else {
-                        onCustomPathCreated(pathOrId.id);
-                      }
-                    }}
-                    selectedTags={selectedTags}
-                  />
-                )} */}
-
-
+        <LearningSidebar
+          learningPath={learningPath || undefined}
+          latestSuggestions={topicSuggestions}
+          topicSuggestions={topicSuggestions}
+          topicTags={topicTags}
+          searchHistory={searchHistory}
+          selectedLearningMode={selectedLearningMode}
+          onLearningModeChange={setSelectedLearningMode}
+          onTopicTagClick={onTopicTagClick}
+          onCustomPathCreated={(pathOrId: any) => {
+            if (typeof pathOrId === 'string') {
+              onCustomPathCreated(pathOrId);
+            } else {
+              onCustomPathCreated(pathOrId.id);
+      )} */}
     </div>
   );
 }

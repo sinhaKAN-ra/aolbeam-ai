@@ -21,7 +21,8 @@ interface AddMessageOptions {
   metadata?: Record<string, any>;
 }
 
-const useChat = (userId: string | null) => {
+const useChat = (userId: string | null, initialSessionId?: string | null) => {
+  const [isNewSession, setIsNewSession] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
@@ -44,17 +45,18 @@ const useChat = (userId: string | null) => {
     deleteSession,
     updateSessionTitle,
     refreshChatHistory
-  } = useChatHistory(userId);
+  } = useChatHistory(userId, initialSessionId);
 
-  // Initialize chat and load data
+  // Load search history once on mount
   useEffect(() => {
-    // Load search history from localStorage
     const savedHistory = localStorage.getItem('searchHistory');
     if (savedHistory) {
       setSearchHistory(JSON.parse(savedHistory));
     }
+  }, []);
 
-    // Load messages from current session if it exists
+  // Reload messages every time the current session changes
+  useEffect(() => {
     if (currentSession?.messages) {
       const formattedMessages = currentSession.messages.map(msg => ({
         id: msg.id,
@@ -65,20 +67,30 @@ const useChat = (userId: string | null) => {
         timestamp: msg.createdAt,
         ...(msg.metadata || {})
       }));
-
       setMessages(formattedMessages);
-
-      // If this is a new session, we might want to set a default learning path
       if (formattedMessages.length === 0) {
         setLearningPath(null);
+        setIsNewSession(true);
+      } else {
+        setIsNewSession(false);
       }
-    } else if (sessions.length === 0) {
-      // No sessions exist, create a new one
+    } else if (sessions.length === 0 && !isInitialized) {
+      // No sessions exist, create a new one (only on first load)
       createNewSession('New Chat');
+      setIsNewSession(true);
+    } else {
+      setMessages([]);
+      setIsNewSession(false);
     }
-
     setIsInitialized(true);
   }, [currentSession?.id, sessions.length]);
+
+  // If an initialSessionId is provided and different, set it as the current session
+  useEffect(() => {
+    if (initialSessionId && sessions.some(s => s.id === initialSessionId) && currentSessionId !== initialSessionId) {
+      setCurrentSessionId(initialSessionId);
+    }
+  }, [initialSessionId, sessions, currentSessionId, setCurrentSessionId]);
 
   // Save search history to localStorage when it changes
   useEffect(() => {
@@ -94,7 +106,8 @@ const useChat = (userId: string | null) => {
     });
   }, []);
 
-  const addMessage = useCallback(async (message: Message | EnhancedMessage, options: { saveToHistory?: boolean } = {}) => {
+  const addMessage = useCallback(async (message: Message | EnhancedMessage, options: AddMessageOptions = {}) => {
+    setIsNewSession(false); // Once a message is sent, it's no longer a new session
     if (!message.id) {
       message.id = uuidv4();
     }
@@ -119,156 +132,402 @@ const useChat = (userId: string | null) => {
           resources: []
         };
       }
-
-      // Save to history if needed
-      if (options.saveToHistory !== false && currentSessionId) {
-        try {
-          const messageToSave: Omit<ChatMessage, 'id' | 'createdAt'> = {
-            sessionId: currentSessionId,
-            content: message.text,
-            role: message.sender === 'ai' ? 'assistant' : 'user',
-            metadata: {
-              type: message.type,
-              content: message.content,
-              ...(message as any).metadata,
-              enhancedContent: enhancedMessage.enhancedContent
-            }
-          };
-
-          await saveMessageToHistory(messageToSave);
-        } catch (error) {
-          console.error('Failed to save message to history:', error);
-        }
-      }
-
-      setMessages(prev => [...prev, enhancedMessage]);
-      return enhancedMessage;
     }
 
     // Save to history if needed
     if (options.saveToHistory !== false && currentSessionId) {
+      console.log('Saving message to history:', { message, currentSessionId });
       try {
-        const messageToSave: Omit<ChatMessage, 'id' | 'createdAt'> = {
-          sessionId: currentSessionId,
-          content: message.text,
+        await saveMessageToHistory({
           role: message.sender === 'ai' ? 'assistant' : 'user',
+          content: message.text,
           metadata: {
             type: message.type,
             content: message.content,
-            ...(message as any).metadata
+            enhancedContent: (message as any).enhancedContent
           }
-        };
-
-        await saveMessageToHistory(messageToSave);
+        });
+        console.log('Message saved successfully');
       } catch (error) {
-        console.error('Failed to save message to history:', error);
+        console.error('Error saving message:', error);
+        throw error;
+      }
+    } else {
+      // Regular message
+      if (options.saveToHistory && currentSessionId) {
+        await saveMessageToHistory({
+          // id: message.id,
+          role: message.sender === 'ai' ? 'assistant' : 'user',
+          content: message.text,
+          // createdAt: message.timestamp,
+          metadata: {
+            type: message.type,
+            content: message.content,
+            ...options.metadata
+          }
+        });
       }
     }
 
     setMessages(prev => [...prev, newMessage]);
-    return newMessage;
+    return message.id;
   }, [currentSessionId, saveMessageToHistory]);
 
-  // Helper function to call the Gemini API
-  const callGeminiAPI = async (action: string, params: any) => { // Changed 'type' to 'action' and 'payload' to 'params'
+  /**
+   * Helper function to call the Gemini API
+   */
+  const callGeminiAPI = useCallback(async (action: string, params: any) => {
     try {
-      const response = await fetch('/api/gemini', {
+      const response = await fetch(`/api/gemini`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action, params }), // Changed 'type' to 'action' and 'payload' to 'params'
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, params }),
       });
 
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
+        throw new Error(`API call failed with status: ${response.status}`);
       }
 
       return await response.json();
     } catch (error) {
-      console.error(`Error in ${action}:`, error); // Changed 'type' to 'action'
+      console.error(`Error calling Gemini API (${action}):`, error);
       throw error;
     }
-  };
+  }, []);
 
-  // Helper function to call the Brave Search API
-  const callBraveSearch = async (query: string) => {
+  /**
+   * Helper function to generate random colors for tags
+   */
+  const getRandomColor = useCallback(() => {
+    const colors = ['bg-blue-100', 'bg-green-100', 'bg-yellow-100', 'bg-purple-100', 'bg-pink-100', 'bg-indigo-100'];
+    const randomIndex = Math.floor(Math.random() * colors.length);
+    return colors[randomIndex];
+  }, []);
+
+  /**
+   * Helper function to call the Brave Search API
+   */
+  const callBraveSearch = useCallback(async (query: string) => {
     try {
-      const response = await fetch('/api/brave', {
+      const response = await fetch('/api/brave-search', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query }),
       });
 
       if (!response.ok) {
-        throw new Error(`Brave Search API request failed: ${response.status}`);
+        throw new Error(`Brave search failed with status: ${response.status}`);
       }
 
       const data = await response.json();
-      return data.results || [];
+      return data.results;
     } catch (error) {
-      console.error('Error in Brave Search:', error);
+      console.error('Error calling Brave Search API:', error);
       throw error;
     }
-  };
+  }, []);
 
-  // Helper function to save/update a learning path
-  const saveLearningPath = async (pathData: Partial<LearningPath>) => {
+  /**
+   * Helper function to save/update a learning path
+   */
+  const saveLearningPath = useCallback(async (pathData: Partial<LearningPath>) => {
     try {
-      const method = pathData.id ? 'PUT' : 'POST';
-      const url = pathData.id
-        ? '/api/learning-paths'
-        : '/api/learning-paths';
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(pathData.id ? { id: pathData.id, updates: pathData } : pathData),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to save learning path: ${response.status}`);
+      if (!pathData.id) {
+        pathData.id = uuidv4();
       }
 
-      return await response.json();
+      const timestamp = new Date().toISOString();
+      if (!pathData.created_at) {
+        pathData.created_at = timestamp;
+      }
+
+      (pathData as any).updated_at = timestamp;
+
+      // In a real app, you'd persist this to a database
+      console.log('Saving learning path:', pathData);
+      setLearningPath(pathData as LearningPath);
+      return pathData.id;
     } catch (error) {
       console.error('Error saving learning path:', error);
       throw error;
     }
-  };
-  const extractTagsFromSuggestions = (suggestions: TopicSuggestion[]): TopicTag[] => {
-    if (!suggestions || !Array.isArray(suggestions)) return [];
+  }, []);
 
-    const tagMap = new Map<string, TopicTag>();
-
+  /**
+   * Extract topic tags from suggestions
+   */
+  const extractTagsFromSuggestions = useCallback((suggestions: TopicSuggestion[]): TopicTag[] => {
+    const tags: TopicTag[] = [];
     suggestions.forEach(suggestion => {
-      if (suggestion.tags && Array.isArray(suggestion.tags)) {
-        suggestion.tags.forEach(tag => {
-          const normalizedTag = tag.toLowerCase().trim();
-          if (!tagMap.has(normalizedTag)) {
-            tagMap.set(normalizedTag, {
-              id: uuidv4(),
-              name: tag,
-              category: 'general', // Default category
-              relatedTopics: [],   // Default empty array
-              color: getRandomColor()
-            });
+      const suggestedTags = suggestion.keywords || [];
+      suggestedTags.forEach(tag => {
+        if (!tags.find(t => t.name.toLowerCase() === tag.toLowerCase())) {
+          tags.push({
+            id: uuidv4(),
+            name: tag,
+            category: '',
+            color: '',
+            relatedTopics: [],
+            colorClass: getRandomColor(),
+          });
+        }
+      });
+    });
+    return tags;
+  }, [getRandomColor]);
+
+  /**
+   * Helper function for deep merge of objects
+   */
+  const deepMerge = useCallback((target: any, source: any) => {
+    if (typeof target !== 'object' || target === null) {
+      return source;
+    }
+    
+    if (typeof source !== 'object' || source === null) {
+      return source;
+    }
+
+    const output = { ...target };
+    
+    Object.keys(source).forEach(key => {
+      if (Array.isArray(source[key])) {
+        // For arrays, replace the array completely
+        output[key] = [...source[key]];
+      } else if (typeof source[key] === 'object' && source[key] !== null) {
+        // For objects, recursively deep merge
+        output[key] = deepMerge(output[key] || {}, source[key]);
+      } else {
+        // For primitives, just replace
+        output[key] = source[key];
+      }
+    });
+    
+    return output;
+  }, []);
+
+  /**
+   * Updates an existing AI message with new content or enhanced content
+   */
+  const updateAiMessage = useCallback(
+    (id: string, patch: Partial<EnhancedMessage>) => {
+      // console.log('Updating message with id:', id);
+      // console.log('Update patch:', JSON.stringify(patch));
+      
+      setMessages(prev => {
+        return prev.map(m => {
+          if (m.id !== id) return m;
+          
+          // Get the current message state for logging
+          // console.log('Current message before update:', JSON.stringify(m));
+
+          // Get the current enhanced content or initialize an empty object
+          const currentEC = (m as EnhancedMessage).enhancedContent ?? {};
+          
+          // Create a properly deep merged version of the enhanced content
+          const newEC = patch.enhancedContent ? 
+            deepMerge(currentEC, patch.enhancedContent) : currentEC;
+
+          // console.log('New enhanced content after merge:', JSON.stringify(newEC));
+          
+          // Create the updated message with all properties preserved
+          const updatedMessage = { 
+            ...m, 
+            // Update text if provided in the patch
+            ...(patch.text ? { text: patch.text } : {}),
+            // Always update the enhanced content with the deep-merged version
+            enhancedContent: newEC,
+            // Update isStreaming if provided
+            ...(patch.isStreaming !== undefined ? { isStreaming: patch.isStreaming } : {})
+          } as Message;
+          
+          // console.log('Updated message:', JSON.stringify(updatedMessage));
+          return updatedMessage;
+        });
+      });
+    },
+    [deepMerge],
+  );
+
+  /**
+   * Sends a user message and generates an AI response
+   * The AI response is generated using parallel API calls for better performance
+   */
+  const sendMessage = useCallback(async (content: string) => {
+    if (!content.trim()) return;
+
+    // Add user message to the chat
+    const userMsg: Message = {
+      id: uuidv4(),
+      text: content,
+      content,
+      sender: 'user',
+      type: 'text',
+      timestamp: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, userMsg]);
+
+    // Update search history
+    const updatedHistory = [
+      content,
+      ...searchHistory.filter(q => q !== content),
+    ].slice(0, 10);
+    setSearchHistory(updatedHistory);
+    localStorage.setItem('searchHistory', JSON.stringify(updatedHistory));
+
+    // Set loading state
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Create an empty AI message shell
+      const aiId = uuidv4();
+      const aiShell: EnhancedMessage = {
+        id: aiId,
+        text: '…', 
+        sender: 'ai',
+        type: 'learning_context',
+        timestamp: new Date().toISOString(),
+        isStreaming: true,
+        enhancedContent: { mainContent: '' },
+      };
+      setMessages(prev => [...prev, aiShell]);
+
+      // Make all API calls in parallel
+      // console.log('Starting parallel API calls for:', content);
+      let currentEnhancedContent: EnhancedMessageContent = {
+        mainContent: '',
+      };
+
+      // 1. Generate Learning Context
+      const contextResult = await callGeminiAPI('generateLearningContext', { prompt: content, topic: content });
+      // console.log('contextResult (raw):', contextResult);
+      currentEnhancedContent = {
+        ...currentEnhancedContent,
+        mainContent: contextResult?.text || '',
+        detailedContent: null,
+      };
+      // console.log('mainContent assigned:', currentEnhancedContent.mainContent);
+      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
+
+      // 2. Generate Topic Suggestions
+      const suggestionsResult = await callGeminiAPI('generateTopicSuggestions', { topic: content, count: 4 });
+      // console.log('suggestionsResult:', suggestionsResult);
+      currentEnhancedContent = {
+        ...currentEnhancedContent,
+        suggestions: suggestionsResult?.suggestions || [],
+      };
+      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
+
+      // 3. Generate Learning Path
+      const learningPathResult = await callGeminiAPI('generateLearningPath', { topic: content, userId: 'guest' });
+      // console.log('learningPathResult (raw):', learningPathResult);
+      const branchingPaths = learningPathResult?.steps?.map((step: any) => ({
+        id: String(step.id),
+        title: step.title,
+        description: step.description,
+        difficulty: step.difficulty,
+        estimatedTime: step.estimatedTime,
+        tags: []
+      })) || [];
+      currentEnhancedContent = {
+        ...currentEnhancedContent,
+        branchingPaths: branchingPaths,
+      };
+      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
+      // console.log('learningPathResult (processed):', learningPathResult);
+      // console.log('Generated branchingPaths:', currentEnhancedContent.branchingPaths);
+
+      // 4. Fetch Brave Resources
+      const resourcesResult = await fetchBraveResources(content, { useCache: true });
+      const resources = resourcesResult?.map((r: any, i: number) => ({
+        id: `res-${i}`,
+        title: r.title,
+        url: r.url,
+        type: (r.type as any) || 'web_page',
+      })) || [];
+      currentEnhancedContent = {
+        ...currentEnhancedContent,
+        resources: resources,
+      };
+      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
+
+      // 5. Generate Practice Problems
+      const problemsResult = await callGeminiAPI('generatePracticeProblems', {
+        prompt: content,
+        count: 5,
+      });
+      currentEnhancedContent = {
+        ...currentEnhancedContent,
+        practiceProblems: problemsResult?.practiceProblem?.map((problem: string) => ({ question: problem })) || [],
+      };
+      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
+
+      // Final update and save
+      const finalEnhancedContent = {
+        ...currentEnhancedContent,
+        mainContent: currentEnhancedContent.mainContent || 'No content generated.', // Ensure mainContent is not empty
+      };
+      
+      // Update the AI message with all content at once
+      // console.log('Updating AI message with complete enhanced content');
+      updateAiMessage(aiId, {
+        text: finalEnhancedContent.mainContent,
+        enhancedContent: finalEnhancedContent,
+        isStreaming: false
+      });
+      
+      // Save the AI message to history
+      if (currentSessionId) {
+        await saveMessageToHistory({
+          // id: aiId,
+          role: 'assistant',
+          content: finalEnhancedContent.mainContent,
+          // createdAt: new Date().toISOString(),
+
+          metadata: {
+            type: 'learning_context',
+            enhancedContent: finalEnhancedContent
           }
         });
       }
-    });
+      
+      // console.log('AI response generation complete');
+      return aiId;
+    } catch (e) {
+      console.error('Error generating AI response:', e);
+      setError('Failed to get AI response.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [
+    searchHistory,
+    setSearchHistory,
+    callGeminiAPI,
+    fetchBraveResources,
+    extractTagsFromSuggestions,
+    setTopicSuggestions,
+    setTopicTags,
+    updateAiMessage,
+    currentSessionId,
+    saveMessageToHistory
+  ]);
 
-    return Array.from(tagMap.values());
-  };
+  const handleTopicTagClick = useCallback((tag: TopicTag) => {
+    const newSelectedTags = selectedTags.includes(tag.id)
+      ? selectedTags.filter(id => id !== tag.id)
+      : [...selectedTags, tag.id];
 
+    setSelectedTags(newSelectedTags);
 
-
+    // If this is a new selection, send a message about it
+    if (!selectedTags.includes(tag.id)) {
+      sendMessage(`Tell me more about ${tag.name} in the context of what we're discussing.`);
+    }
+  }, [selectedTags, sendMessage]);
   
 
+  // Helper functions for chat management
   const handleCustomPathCreated = useCallback((pathId: string) => {
     // In a real app, you might want to fetch the updated path or update local state
     console.log('Custom path created:', pathId);
@@ -286,275 +545,21 @@ const useChat = (userId: string | null) => {
     setTypingMessageId(null);
   }, []);
 
-  const getRandomColor = useCallback((): string => {
-    const colors = [
-      '#FF5733', '#33FF57', '#3357FF', '#F333FF', '#33FFF3', '#FF33C1', '#C1FF33', '#33C1FF', '#FFC133', '#C133FF'
-    ];
-    return colors[Math.floor(Math.random() * colors.length)];
-  }, []);
-
-  const sendMessage = useCallback(async (content: string): Promise<Message | undefined> => {
-    if (!content.trim()) return;
-
-    const messageData: Message = {
-      id: uuidv4(),
-      text: content,
-      content: content,
-      sender: 'user',
-      type: 'text',
-      timestamp: new Date().toISOString()
-    };
-
-    try {
-      // Add user message to the chat
-      setMessages(prev => [...prev, messageData]);
-
-      // Save to history if needed
-      if (userId) {
-        try {
-          // Update local search history
-          const updatedHistory = [content, ...searchHistory.filter(item => item !== content)].slice(0, 10);
-          setSearchHistory(updatedHistory);
-          localStorage.setItem('searchHistory', JSON.stringify(updatedHistory));
-        } catch (historyError) {
-          console.error('Failed to update search history:', historyError);
-        }
-      }
-
-      // Set loading state
-      setIsLoading(true);
-      setError(null);
-
-      // Add typing indicator
-      const typingMessageId = uuidv4();
-      setTypingMessageId(typingMessageId);
-
-      setMessages(prev => [
-        ...prev,
-        {
-          id: typingMessageId,
-          text: '...',
-          content: '...',
-          sender: 'ai',
-          type: 'text',
-          timestamp: new Date().toISOString(),
-          isTyping: true
-        }
-      ]);
-
-      // Step 1: Generate initial response using Gemini API
-      const contextResponse = await callGeminiAPI('generateLearningContext', { topic: content });
-
-      const { text: context } = await contextResponse;
-
-      // console.log('Context received:', context);
-
-      // Remove typing indicator
-      setTypingMessageId(null);
-      setMessages(prev => prev.filter(msg => msg.id !== typingMessageId));
-
-      // Step 2: Generate topic suggestions
-      const response = await callGeminiAPI('generateTopicSuggestions', { topic: content, count: 4 });
-
-
-      const { suggestions } = await response;
-
-      // console.log('Topic suggestions received:', suggestions);
-
-     
-      console.log('Suggestions received:', suggestions);
-      setTopicSuggestions(suggestions);
-
-      // Build enhanced content
-      const enhancedContent: EnhancedMessageContent = {
-        mainContent: context,
-        detailedContent: context,
-        suggestions: suggestions,
-        branchingPaths: [
-          {
-            id: 'branch-1',
-            title: `${content} Fundamentals`,
-            description: `Master the core concepts of ${content} with hands-on exercises and practical examples.`,
-            difficulty: 'beginner',
-            estimatedTime: '2-3 weeks',
-            tags: []
-          },
-          {
-            id: 'branch-2',
-            title: `Advanced ${content} Techniques`,
-            description: `Dive deeper into advanced ${content} concepts and professional applications.`,
-            difficulty: 'intermediate',
-            estimatedTime: '3-4 weeks',
-            tags: []
-          },
-          {
-            id: 'branch-3',
-            title: `${content} Projects and Applications`,
-            description: `Apply your knowledge through real-world projects and build your portfolio.`,
-            difficulty: 'advanced',
-            estimatedTime: '4-6 weeks',
-            tags: []
-          }
-        ],
-        resources: await (async () => {
-          try {
-            const braveResources = await fetchBraveResources(content, { useCache: true });
-            return braveResources.map((resource, index) => ({
-              id: `resource-${index + 1}`,
-              title: resource.title,
-              url: resource.url,
-              type: (resource.type as any) || 'web_page',
-              duration: undefined,
-            }));
-          } catch (error) {
-            console.error('Failed to fetch Brave resources:', error);
-            return [];
-          }
-        })(),
-      };
-
-      // Add AI's response with enhanced content
-      const enhancedAiMessage = (await addMessage({
-        text: context,
-        sender: 'ai',
-        type: 'learning_context',
-        context: context,
-        enhancedContent: enhancedContent,
-        id: '',
-        timestamp: ''
-      })) as EnhancedMessage;
-
-      // Step 3: Generate learning path
-      // const pathData = await callGeminiAPI('generateLearningPath', {
-      //   topic: content,
-      //   userId
-      // });
-      // console.log('Path data:', pathData);
-
-        // Save the learning path - ensure all required fields are included
-        // const savedPath = await saveLearningPath({
-        //   ...pathData,
-        //   topic: content, // Add the original topic
-        //   description: `Learning path for ${content}`, // Add a default description
-        //   userId,
-        //   createdAt: new Date().toISOString(),
-        //   updatedAt: new Date().toISOString(),
-        //   isPublic: false, // Default to private
-        //   progress: 0,
-        // });
-
-      // if (pathData) {
-      //   setLearningPath({
-      //     ...pathData,
-      //     id: `path-${Date.now()}`,
-      //     progress: 0,
-      //     isCustom: false,
-      //     createdAt: new Date().toISOString()
-      //   });
-      // }
-
-      // Step 4: Extract topics for tags
-      const tags = extractTagsFromSuggestions(suggestions);
-      setTopicTags(tags);
-
-      // Step 5: (Optional) Generate a practice problem
-      const shouldGeneratePracticeProblems = context && context.length > 0;
-
-      if (shouldGeneratePracticeProblems) {
-        try {
-          const response = await callGeminiAPI('generatePracticeProblems', {
-            topic: content,
-            count: 3
-          });
-
-          if (!response || !response.practice_problems) {
-            console.error('No practice problems in response:', response);
-            // return;
-          }
-
-          const { practice_problems } = response;
-
-          const problemsArray = Array.isArray(practice_problems)
-            ? practice_problems
-            : [];
-
-          console.log('Processed problems array:', problemsArray);
-
-          if (problemsArray.length === 0) {
-            console.warn('Empty practice problems array in response');
-          }
-
-          const newMessage = {
-            text: 'Here are some practice problems to test your understanding:',
-            content: 'Here are some practice problems to test your understanding:',
-            sender: 'ai' as const,
-            type: 'practice_problems_list' as const,
-            problems: problemsArray,
-            metadata: {
-              type: 'practice_problems_list',
-              problems: problemsArray
-            },
-            id: '',
-            timestamp: ''
-          };
-
-          console.log('New message being created:', newMessage);
-          await addMessage(newMessage, { saveToHistory: true });
-        } catch (error) {
-          console.error('Error generating practice problem:', error);
-        }
-      }
-
-      return enhancedAiMessage;
-    } catch (err) {
-      console.error('Error sending message:', err);
-      setError('Failed to get response. Please try again.');
-
-      setTypingMessageId(null);
-      setMessages(prev => prev.filter(msg => msg.id !== typingMessageId));
-
-      await addMessage({
-        text: 'Sorry, I encountered an error. Please try again.',
-        content: 'Sorry, I encountered an error. Please try again.',
-        sender: 'ai' as const,
-        type: 'error' as const,
-        id: '',
-        timestamp: ''
-      }, { saveToHistory: false });
-      return undefined;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [addMessage, fetchBraveResources, setMessages, setTypingMessageId, setIsLoading, setError, setTopicSuggestions, setLearningPath, extractTagsFromSuggestions, setTopicTags, userId, searchHistory, setSearchHistory]);
-
-  const handleTopicTagClick = useCallback((tag: TopicTag) => {
-    const newSelectedTags = selectedTags.includes(tag.id)
-      ? selectedTags.filter(id => id !== tag.id)
-      : [...selectedTags, tag.id];
-
-    setSelectedTags(newSelectedTags);
-
-    // If this is a new selection, send a message about it
-    if (!selectedTags.includes(tag.id)) {
-      sendMessage(`Tell me more about ${tag.name} in the context of what we're discussing.`);
-    }
-  }, [selectedTags, sendMessage]);
-  
-
-return {
-  messages,
-  isLoading,
-  error,
-  sendMessage,
-  learningPath,
-  searchHistory,
-  topicSuggestions,
-  topicTags,
-  selectedTags,
-  handleTopicTagClick,
-  handleCustomPathCreated,
-  startNewChat,
-};
+  return {
+    messages,
+    isLoading,
+    error,
+    sendMessage,
+    learningPath,
+    searchHistory,
+    topicSuggestions,
+    topicTags,
+    selectedTags,
+    handleTopicTagClick,
+    handleCustomPathCreated,
+    startNewChat,
+    isNewSession,
+  };
 };
 
 export default useChat;

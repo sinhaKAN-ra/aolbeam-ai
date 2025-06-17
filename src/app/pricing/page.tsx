@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription as PlanCardDescription } from '@/components/ui/card';
-import { Check, Info, Zap, CreditCard, Loader2, AlertCircle } from 'lucide-react';
+import { Check, Info, Zap, CreditCard, Loader2, AlertCircle, Star, Lock, Users, BarChart3, Share2, TrendingUp } from 'lucide-react';
 import type { SubscriptionPlan } from '@/types'; 
 import { detectUserCountry } from '@/lib/utils/country';
 import { createClient } from '@/utils/supabase/client'; 
@@ -17,6 +17,29 @@ import { createClient } from '@/utils/supabase/client';
 
 export const plans: SubscriptionPlan[] = [
   {
+    id: 'free',
+    name: 'Free Tier',
+    price: '₹0',
+    currency: 'INR',
+    duration: '/ forever',
+    order: 0,
+    features: [
+      '🎯 Problem Generation & Insights:',
+      '   • Guest: 10 interactions',
+      '   • Logged: 20 interactions',
+      '💬 Chat Interactions:',
+      '   • Guest: Must login',
+      '   • Logged: 15 per day',
+      '📝 Test Creation:',
+      '   • Guest: Must login', 
+      '   • Logged: 5 tests',
+      '📊 Basic Analytics',
+      '✨ Community Support'
+    ],
+    type: 'free',
+    highlight: false,
+  },
+  {
     id: 'weekly',
     name: 'Weekly Pass',
     price: '₹249',
@@ -24,12 +47,15 @@ export const plans: SubscriptionPlan[] = [
     duration: '/ week',
     order: 1,
     features: [
-      '✨ 100 AI Interactions per day',
-      '🔮 Smart Suggestions',
-      'Basic AI Model',
-      'Standard Support',
-      'Track Your Progress',
-      'Ad-Free Experience'
+      '🎯 Unlimited Problem Generation & Insights',
+      '💬 50 Chat Interactions per day',
+      '📝 Create 10 Tests',
+      '📊 Advanced Test Analysis',
+      '🔗 Share Tests with Others',
+      '📈 Personal Statistics Dashboard',
+      '⚡ Fast Response Times',
+      '🎨 Ad-Free Experience',
+      '💡 Smart Suggestions'
     ],
     type: 'subscription',
   },
@@ -41,14 +67,18 @@ export const plans: SubscriptionPlan[] = [
     duration: '/ month',
     order: 2,
     features: [
-      '✨ 500 AI Interactions per day',
-      '🔮 Smart Suggestions',
-      '⚡ Genius Mode',
-      'Premium AI Model',
-      'Priority Support',
-      'Advanced Analytics'
+      '🎯 Unlimited Problem Generation & Insights',
+      '💬 100 Chat Interactions per day',
+      '📝 Create 20 Tests',
+      '🔮 Genius Mode AI',
+      '📊 Advanced Test Analysis',
+      '🔗 Share Tests with Others',
+      '📈 Detailed Performance Analytics',
+      '⚡ Priority Support',
+      '🎯 Personalized Study Plans',
+      '📚 Premium Content Library'
     ],
-    highlight: false, 
+    highlight: true, 
     type: 'subscription',
   },
   {
@@ -59,36 +89,33 @@ export const plans: SubscriptionPlan[] = [
     duration: '/ 3 months',
     order: 3,
     features: [
-      '✨ 1,500 AI Interactions per day',
-      '🔮 Smart Suggestions',
-      '⚡ Genius Mode',
-      'Premium AI Model',
-      'Priority Support',
-      'Advanced Analytics',
-      'Early Access to New Features'
+      '🎯 Unlimited Problem Generation & Insights',
+      '💬 200 Chat Interactions per day',
+      '📝 Create 30 Tests',
+      '🔮 Genius Mode AI',
+      '📊 Advanced Test Analysis & AI Insights',
+      '🔗 Share Tests & Create Study Groups',
+      '📈 Comprehensive Performance Analytics',
+      '👥 Collaborative Study Features',
+      '🏆 Progress Tracking & Achievements',
+      '🚀 Early Access to New Features',
+      '💎 Premium Support & Coaching'
     ],
     type: 'subscription',
   },
-  // Example of a one-time plan, ensure it also has currency
-  // {
-  //   id: 'one_time_small',
-  //   name: 'Token Pack Small',
-  //   price: '₹99',
-  //   currency: 'INR',
-  //   order: 10, // Order can be used to group or sort one-time plans if needed
-  //   features: [
-  //     '✨ 50 AI Interactions (valid for 30 days)',
-  //     'Basic AI Model'
-  //   ],
-  //   type: 'one_time',
-  //   description: 'A small pack of interactions for light users.'
-  // }
 ];
 
 const INSTITUTE_CONTACT_EMAIL = "aolbeam@outlook.com";
 
 const getPlanDetails = (planId: string): SubscriptionPlan | undefined => {
   return plans.find(p => p.id === planId);
+};
+
+const FeatureIcon = ({ feature }: { feature: string }) => {
+  if (feature.includes('Must login')) {
+    return <Lock className="w-4 h-4 text-orange-500 mt-1 shrink-0" />;
+  }
+  return <Check className="w-4 h-4 text-green-500 mt-1 shrink-0" />;
 };
 
 export default function PricingPage() {
@@ -135,7 +162,21 @@ export default function PricingPage() {
 
   const determinePlanAction = (targetPlanId: string): { text: string; enabled: boolean; isCurrent: boolean } => {
     const targetPlan = getPlanDetails(targetPlanId);
-    if (!targetPlan) return { text: "Plan Unavailable", enabled: false, isCurrent: false }; // Should not happen
+    if (!targetPlan) return { text: "Plan Unavailable", enabled: false, isCurrent: false };
+
+    // Special handling for free tier
+    if (targetPlan.id === 'free') {
+      if (!isLoggedIn) {
+        return { text: "Get Started Free", enabled: true, isCurrent: false };
+      }
+      
+      // Check if user is on free tier (no subscription or expired subscription)
+      if (!userSubscription?.subscription_plan_id || !userSubscription.is_subscribed) {
+        return { text: "Current Plan", enabled: false, isCurrent: true };
+      }
+      
+      return { text: "Downgrade to Free", enabled: true, isCurrent: false };
+    }
 
     // Case 1: User is not logged in, or has no subscription history
     if (!isLoggedIn || !userSubscription?.subscription_plan_id) {
@@ -150,7 +191,6 @@ export default function PricingPage() {
     }
 
     // If the user is not marked as 'is_subscribed' (e.g. plan expired/canceled), they can choose any plan.
-    // This check might need refinement based on actual subscription statuses from the 'subscriptions' table if 'is_subscribed' isn't sufficient.
     if (!userSubscription.is_subscribed) {
         return { text: `Choose ${targetPlan.name}`, enabled: true, isCurrent: false };
     }
@@ -190,6 +230,20 @@ export default function PricingPage() {
     return { text: `View ${targetPlan.name}`, enabled: false, isCurrent: false };
   };
 
+  const handlePlanAction = (planId: string) => {
+    if (planId === 'free') {
+      if (!isLoggedIn) {
+        router.push('/auth/signup');
+      } else {
+        // Handle downgrade to free if needed
+        // This might require additional logic based on your backend
+        console.log('Switching to free plan');
+      }
+    } else {
+      router.push(`/checkout?plan=${planId}`);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -216,29 +270,65 @@ export default function PricingPage() {
             </h2>
           </div>
           <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto">
-            Select the perfect plan to unlock unlimited learning and achieve your exam goals.
+            Start free and upgrade as you grow. Select the perfect plan to unlock unlimited learning and achieve your exam goals.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-12">
           {plans.map((plan) => (
-            <Card key={plan.id} className={`flex flex-col ${plan.highlight ? 'border-primary shadow-xl ring-2 ring-primary' : 'shadow-lg'}`}>
+            <Card key={plan.id} className={`flex flex-col relative ${
+              plan.highlight 
+                ? 'border-primary shadow-xl ring-2 ring-primary scale-105' 
+                : plan.id === 'free' 
+                  ? 'border-green-200 shadow-lg bg-gradient-to-b from-green-50 to-white' 
+                  : 'shadow-lg hover:shadow-xl transition-shadow'
+            }`}>
+              {plan.highlight && (
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                  <div className="bg-primary text-primary-foreground text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
+                    <Star className="w-3 h-3" />
+                    Most Popular
+                  </div>
+                </div>
+              )}
+              {plan.id === 'free' && (
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                  <div className="bg-green-500 text-white text-xs font-semibold px-3 py-1 rounded-full">
+                    Get Started
+                  </div>
+                </div>
+              )}
+              
               <CardHeader className="pb-4">
-                <CardTitle className="text-2xl">{plan.name}</CardTitle>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  {plan.id === 'free' && <Zap className="w-5 h-5 text-green-500" />}
+                  {plan.name}
+                </CardTitle>
                 <PlanCardDescription className="text-3xl font-bold text-primary">
-                  {plan.price} {plan.duration && <span className="text-lg font-normal text-muted-foreground">{plan.duration}</span>}
+                  {plan.price} 
+                  {plan.duration && <span className="text-lg font-normal text-muted-foreground">{plan.duration}</span>}
                 </PlanCardDescription>
               </CardHeader>
+              
               <CardContent className="flex-grow space-y-3">
                 <ul className="space-y-2">
                   {plan.features.map((feature, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm">
-                      <Check className="w-4 h-4 text-green-500 mt-1 shrink-0" />
-                      <span>{feature}</span>
+                    <li key={index} className={`flex items-start gap-2 text-sm ${
+                      feature.startsWith('   •') ? 'ml-4 text-muted-foreground' : ''
+                    }`}>
+                      {!feature.startsWith('   •') && !feature.endsWith(':') && (
+                        <FeatureIcon feature={feature} />
+                      )}
+                      <span className={`${
+                        feature.endsWith(':') ? 'font-semibold text-foreground' : ''
+                      } ${feature.includes('Must login') ? 'text-orange-600' : ''}`}>
+                        {feature}
+                      </span>
                     </li>
                   ))}
                 </ul>
               </CardContent>
+              
               <div className="p-6 pt-4 mt-auto">
                 {(() => {
                   const action = determinePlanAction(plan.id);
@@ -246,19 +336,93 @@ export default function PricingPage() {
                     <Button
                       onClick={() => {
                         if (action.enabled) {
-                          router.push(`/checkout?plan=${plan.id}`);
+                          handlePlanAction(plan.id);
                         }
                       }}
-                      className={`w-full text-lg py-3 ${plan.highlight ? '' : 'bg-accent text-accent-foreground hover:bg-accent/90'} ${!action.enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`w-full text-sm py-3 ${
+                        plan.highlight 
+                          ? '' 
+                          : plan.id === 'free'
+                            ? 'bg-green-500 hover:bg-green-600 text-white'
+                            : 'bg-accent text-accent-foreground hover:bg-accent/90'
+                      } ${!action.enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                       disabled={!action.enabled || action.isCurrent}
                     >
-                      <CreditCard className="mr-2 h-5 w-5" /> {action.text}
+                      {plan.id === 'free' ? (
+                        <Zap className="mr-2 h-4 w-4" />
+                      ) : (
+                        <CreditCard className="mr-2 h-4 w-4" />
+                      )}
+                      {action.text}
                     </Button>
                   );
                 })()}
               </div>
             </Card>
           ))}
+        </div>
+
+        {/* Feature Comparison Section */}
+        <div className="mt-16">
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <BarChart3 className="text-primary"/> Feature Comparison
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 w-full sm:w-1/5">Feature</th>
+                      <th className="text-center py-2 w-full sm:w-1/5">Free</th>
+                      <th className="text-center py-2 w-full sm:w-1/5">Weekly</th>
+                      <th className="text-center py-2 w-full sm:w-1/5">Monthly</th>
+                      <th className="text-center py-2 w-full sm:w-1/5">Quarterly</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b">
+                      <td className="py-2 w-full sm:w-1/5">Problem Generation (Guest/Logged)</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">10/20</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">Unlimited</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">Unlimited</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">Unlimited</td>
+                    </tr>
+                    <tr className="border-b">
+                      <td className="py-2 w-full sm:w-1/5">Chat Interactions/day</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">0/15</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">50</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">100</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">200</td>
+                    </tr>
+                    <tr className="border-b">
+                      <td className="py-2 w-full sm:w-1/5">Test Creation</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">0/5</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">10</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">20</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">30</td>
+                    </tr>
+                    <tr className="border-b">
+                      <td className="py-2 w-full sm:w-1/5">Advanced Analytics</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">Basic</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">✓</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">✓</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">✓</td>
+                    </tr>
+                    <tr className="border-b">
+                      <td className="py-2 w-full sm:w-1/5">Share Tests & Study Groups</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">-</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">✓</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">✓</td>
+                      <td className="text-center py-2 w-full sm:w-1/5">✓</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="mt-16">
@@ -272,9 +436,20 @@ export default function PricingPage() {
               <p className="text-muted-foreground mb-4">
                 AOLBEAM offers tailored solutions including custom test series, bulk student packages, and dedicated support for educational institutions. Enhance your students' preparation with our AI-powered platform.
               </p>
-              <Button variant="outline" asChild>
-                <Link href="/contact-us">Contact Institute Sales</Link>
-              </Button>
+              <div className="flex flex-wrap gap-3">
+                <Button variant="outline" asChild>
+                  <Link href="/contact-us">
+                    <Users className="mr-2 h-4 w-4" />
+                    Contact Institute Sales
+                  </Link>
+                </Button>
+                <Button variant="ghost" asChild>
+                  <Link href="/demo">
+                    <Share2 className="mr-2 h-4 w-4" />
+                    Schedule Demo
+                  </Link>
+                </Button>
+              </div>
               <p className="text-xs text-muted-foreground mt-3">
                 (You can also reach us directly at{' '}
                 <a
@@ -294,7 +469,7 @@ export default function PricingPage() {
           We are working on implementing secure payment options. For now, please contact us for any payment processing issue encounters.
         </p>
         <p className="text-xs text-muted-foreground mt-1">
-          Our automated payment system will be rebust soon!
+          Our automated payment system will be robust soon!
         </p>
       </div>
     </>

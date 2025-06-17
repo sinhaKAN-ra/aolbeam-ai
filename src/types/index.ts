@@ -36,7 +36,7 @@ export interface SubscriptionPlan {
   order: number; // Essential for upgrade/downgrade logic
   features: string[];
   highlight?: boolean;
-  type: 'subscription' | 'one_time'; // Distinguishes plan categories
+  type: 'subscription' | 'one_time' | 'free'; // Distinguishes plan categories
   description?: string; // A general description of the plan
 }
 

@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { LearningPath, CustomLearningGoal, UserProfile } from '../types';
+import { LearningPath, CustomLearningGoal, UserProfile } from '../../types/chat-feature';
 
 export class LearningPathService {
   async saveLearningPath(learningPath: LearningPath, userId?: string): Promise<void> {
@@ -17,15 +17,20 @@ export class LearningPathService {
         .insert([{
           id: learningPath.id,
           user_id: userId,
-          main_topic: learningPath.mainTopic,
-          current_step: learningPath.currentStep,
-          total_steps: learningPath.totalSteps,
-          completed_topics: learningPath.completedTopics,
-          suggested_topics: learningPath.suggestedTopics,
-          is_custom_path: learningPath.isCustomPath || false,
+          title: learningPath.title,
+          description: learningPath.description,
+          main_topic: learningPath.main_topic,
+          current_step: learningPath.current_step,
+          total_steps: learningPath.total_steps,
+          steps: learningPath.steps,
+          estimated_hours: learningPath.estimated_hours,
+          completed_topics: learningPath.completed_topics,
+          suggested_topics: learningPath.suggested_topics,
+          is_custom_path: learningPath.is_custom_path || false,
           goals: learningPath.goals || [],
           timeline: learningPath.timeline,
-          created_at: new Date().toISOString()
+          created_at: (learningPath.created_at instanceof Date ? learningPath.created_at.toISOString() : learningPath.created_at) || new Date().toISOString(),
+          updated_at: (learningPath.updated_at instanceof Date ? learningPath.updated_at.toISOString() : learningPath.updated_at) || new Date().toISOString()
         }]);
 
       if (error) throw error;
@@ -113,15 +118,20 @@ export class LearningPathService {
     
     const customPath: LearningPath = {
       id: Date.now().toString(),
-      mainTopic,
-      currentStep: 1,
-      totalSteps: goals.length,
-      completedTopics: [],
-      suggestedTopics: this.generateSuggestionsFromGoals(goals),
-      isCustomPath: true,
+      title: mainTopic, 
+      description: `A custom learning path focused on ${mainTopic}`,
+      main_topic: mainTopic,
+      current_step: 1,
+      total_steps: goals.length,
+      steps: [], 
+      estimated_hours: totalEstimatedHours,
+      completed_topics: [],
+      suggested_topics: this.generateSuggestionsFromGoals(goals),
+      is_custom_path: true,
       goals: goals.map(g => g.title),
       timeline: `${Math.ceil(totalEstimatedHours / 10)} weeks`,
-      createdAt: new Date()
+      created_at: new Date(),
+      updated_at: new Date()
     };
 
     await this.saveLearningPath(customPath, userId);
@@ -151,15 +161,20 @@ export class LearningPathService {
   private mapFromDatabase(data: any): LearningPath {
     return {
       id: data.id,
-      mainTopic: data.main_topic,
-      currentStep: data.current_step,
-      totalSteps: data.total_steps,
-      completedTopics: data.completed_topics || [],
-      suggestedTopics: data.suggested_topics || [],
-      isCustomPath: data.is_custom_path || false,
+      title: data.title,
+      description: data.description,
+      main_topic: data.main_topic,
+      current_step: data.current_step,
+      total_steps: data.total_steps,
+      steps: data.steps || [],
+      estimated_hours: data.estimated_hours,
+      completed_topics: data.completed_topics || [],
+      suggested_topics: data.suggested_topics || [],
+      is_custom_path: data.is_custom_path || false,
       goals: data.goals || [],
       timeline: data.timeline,
-      createdAt: new Date(data.created_at)
+      created_at: data.created_at,
+      updated_at: data.updated_at
     };
   }
 }

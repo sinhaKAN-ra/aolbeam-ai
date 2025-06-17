@@ -186,13 +186,26 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
           icon: <Home className="h-4 w-4" />,
           description: "Dashboard and overview"
         },
-        { 
-          href: "/chat", 
-          label: "A Learn (alpha)", 
-          icon: <MessageSquare className="h-4 w-4" />, 
+        {
+          href: "/chat",
+          label: "New Chat with A",
+          icon: <MessageSquare className="h-4 w-4" />,
+          description: "Start a new AI chat session",
           badge: "Beta",
-          description: "Chat with AI tutor"
+          onClick: async () => {
+            const newSessionId = await chatHistory.createNewSession('New Chat');
+            if (newSessionId) {
+              router.push(`/chat/${newSessionId}`);
+            }
+          },
         },
+        // {
+        //   href: "#", 
+        //   label: "AI Chat", 
+        //   icon: <MessageSquare className="h-4 w-4" />, 
+        //   badge: "Beta",
+        //   description: "Chat with AI tutor"
+        // },
         {
           label: "Chat History",
           icon: <History className="h-4 w-4" />,
@@ -536,7 +549,7 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
         )} */}
 
         {/* New Chat Button - Fixed */}
-        {user && (
+        {/* {user && (
           <div className={`flex-shrink-0 p-4 ${isCollapsed ? '' : 'border-b'}`}>
             {isCollapsed ? (
               <TooltipProvider>
@@ -571,7 +584,7 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
               </Button>
             )}
           </div>
-        )}
+        )} */}
 
         {/* Main Navigation - Scrollable */}
         <div className="flex-1 min-h-0">
