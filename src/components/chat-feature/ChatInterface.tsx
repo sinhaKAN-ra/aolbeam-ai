@@ -7,7 +7,7 @@ import EnhancedMessageBubble from './EnhancedMessageBubble';
 import LearningPathTracker from './LearningPathTracker';
 import CustomLearningPathModal from './CustomLearningPathModal';
 import LearningSidebar from './LearningSidebar';
-import { Send, Loader2, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Route, BookOpen, Brain, Sparkles, Zap, RefreshCw, GraduationCap, XCircle, Plus, HelpCircle } from 'lucide-react';
+import { Send, Loader2, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Route, BookOpen, Brain, Sparkles, Zap, RefreshCw, GraduationCap, XCircle, Plus, HelpCircle, Lightbulb, ArrowRight, Target } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const iconMap: { [key: string]: React.ElementType } = {
@@ -301,6 +301,58 @@ export const ChatInterface = ({
 
   ];
 
+
+const sampleTopics = [
+  {
+    title: 'Machine Learning',
+    description: 'Explore AI algorithms, neural networks, and data science fundamentals',
+    difficulty: 'Intermediate',
+    time: '4-6 weeks',
+    color: 'bg-gradient-to-r from-blue-100 to-blue-200',
+    icon: <Brain className="w-5 h-5 text-blue-600" />
+  },
+  {
+    title: 'Quantum Physics',
+    description: 'Dive into quantum mechanics, superposition, and quantum computing',
+    difficulty: 'Advanced',
+    time: '6-8 weeks',
+    color: 'bg-gradient-to-r from-purple-100 to-purple-200',
+    icon: <Zap className="w-5 h-5 text-purple-600" />
+  },
+  {
+    title: 'Web Development',
+    description: 'Master modern web technologies, frameworks, and best practices',
+    difficulty: 'Beginner',
+    time: '3-4 weeks',
+    color: 'bg-gradient-to-r from-green-100 to-green-200',
+    icon: <BookOpen className="w-5 h-5 text-green-600" />
+  },
+  {
+    title: 'Data Science',
+    description: 'Learn data analysis, visualization, and statistical modeling',
+    difficulty: 'Intermediate',
+    time: '5-7 weeks',
+    color: 'bg-gradient-to-r from-orange-100 to-orange-200',
+    icon: <Target className="w-5 h-5 text-orange-600" />
+  },
+  {
+    title: 'Blockchain Technology',
+    description: 'Understand cryptocurrencies, smart contracts, and decentralized systems',
+    difficulty: 'Advanced',
+    time: '4-5 weeks',
+    color: 'bg-gradient-to-r from-yellow-100 to-yellow-200',
+    icon: <Sparkles className="w-5 h-5 text-yellow-600" />
+  },
+  {
+    title: 'Digital Marketing',
+    description: 'Master SEO, social media, content marketing, and analytics',
+    difficulty: 'Beginner',
+    time: '2-3 weeks',
+    color: 'bg-gradient-to-r from-pink-100 to-pink-200',
+    icon: <ArrowRight className="w-5 h-5 text-pink-600" />
+  }
+];
+
   // Get latest suggestions from messages or use sample suggestions for new chat
   const latestSuggestions = messages.length > 0
     ? messages
@@ -316,19 +368,65 @@ export const ChatInterface = ({
         <div className={`flex-1 overflow-y-auto p-4 md:p-6 transition-all duration-300 ${isSidebarCollapsed ? 'pr-4 md:pr-6' : 'pr-4 md:pr-[calc(5rem+1.5rem)]'}`}>
           {/* Welcome screen for new chat */}
           {/* Welcome/Mission screen for brand new chat only (no messages, first session, or some isNewSession prop) */}
-          {messages.length === 0 && !isNewSession && (
+          { !isNewSession && (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-8 py-12">
               <div className="w-20 h-20 rounded-full bg-orange-100 flex items-center justify-center">
                 <Route className="w-10 h-10 text-orange-500" />
               </div>
               <div className="space-y-4 max-w-md">
-                <h1 className="text-3xl font-bold text-gray-800">AI Learning Assistant</h1>
+                <h1 className="text-3xl font-bold text-gray-800">Start Learning With A</h1>
                 <p className="text-lg text-gray-600">
                   Your intelligent learning companion
                 </p>
               </div>
             </div>
           )}
+          {messages.length === 0 && (
+                        <div className="text-center mt-16">
+                          <div className="relative inline-flex mb-8">
+                            <div className="p-6 bg-gradient-to-r from-primary-100 to-secondary-100 rounded-3xl shadow-lg">
+                              <Lightbulb   className="w-12 h-12 text-primary-600" />
+                            </div>
+                            <div className="absolute -top-2 -right-2 w-6 h-6 bg-accent-400 rounded-full animate-bounce"></div>
+                          </div>
+                          
+                          <h2 className="text-3xl font-bold text-gray-800 mb-3">
+                            What would you like to 
+                            <span className="bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-orange-300"> learn </span>
+                            today?
+                          </h2>
+                          <p className="text-gray-600 mb-10 max-w-lg mx-auto text-lg leading-relaxed">
+                            Ask me about any topic, and I'll create a personalized learning journey with intelligent suggestions and related concepts.
+                          </p>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
+                            {sampleTopics.map((topic, index) => (
+                              <button
+                                key={topic.title}
+                                onClick={() => onSendMessage(`Tell me about ${topic.title}`)}
+                                className="group p-6 bg-white/80 backdrop-blur-sm rounded-2xl border border-orange-200/50 hover:border-primary-300 hover:shadow-xl transition-all duration-300 text-left transform hover:-translate-y-1"
+                              >
+                                <div className="flex items-center gap-3 mb-2">
+                                  <div className={`p-2 rounded-xl ${topic.color}`}>
+                                    {topic.icon}
+                                  </div>
+                                  <span className="font-semibold text-gray-800 group-hover:text-primary-600 transition-colors">
+                                    {topic.title}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600 leading-relaxed">{topic.description}</p>
+                                <div className="flex items-center gap-2 mt-3 text-xs text-gray-500">
+                                  <Zap className="w-3 h-3" />
+                                  <span>{topic.difficulty}</span>
+                                  <span>•</span>
+                                  <span>{topic.time}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+          
 
           {/* Messages */}
           {messages.map((message, index) => (
@@ -399,8 +497,19 @@ export const ChatInterface = ({
               onKeyDown={handleKeyPress}
               placeholder="Type your message..."
               className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+              style={{ height: 'auto', maxHeight: '150px' }}
               rows={1}
+              aria-multiline={true}
+              maxLength={5000}
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = `${target.scrollHeight}px`;
+              }}
             />
+            <div className="text-xs text-gray-500 ml-2">
+              {input.length}/{5000}
+            </div>
             <button
               type="submit"
               disabled={!input.trim() || isLoading}

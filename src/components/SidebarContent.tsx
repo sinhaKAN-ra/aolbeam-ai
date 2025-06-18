@@ -235,13 +235,13 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
           icon: <BookOpen className="h-4 w-4" />,
           description: "Curated study materials"
         },
-        { 
-          href: "/flashcards", 
-          label: "Flashcards", 
-          icon: <Zap className="h-4 w-4" />, 
-          isPro: true,
-          description: "Spaced repetition flashcards"
-        },
+        // { 
+        //   href: "/flashcards", 
+        //   label: "Flashcards", 
+        //   icon: <Zap className="h-4 w-4" />, 
+        //   isPro: true,
+        //   description: "Spaced repetition flashcards"
+        // },
       ]
     },
     {
@@ -249,17 +249,23 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
       items: [
         { 
           href: "/history", 
-          label: "History", 
+          label: "Problem History", 
           icon: <History className="h-4 w-4" />,
           description: "View your learning history",
         },
-        { 
-          href: "/analytics", 
-          label: "Analytics", 
-          icon: <TrendingUp className="h-4 w-4" />, 
-          isPro: true,
-          description: "Detailed performance insights"
+        {
+          label: "Chat History",
+          icon: <History className="h-4 w-4" />,
+          description: "View your chat history",
+          onClick: toggleHistory,
         },
+        // { 
+        //   href: "/analytics", 
+        //   label: "Analytics", 
+        //   icon: <TrendingUp className="h-4 w-4" />, 
+        //   isPro: true,
+        //   description: "Detailed performance insights"
+        // },
         // { 
         //   href: "/streak", 
         //   label: "Study Streak", 
@@ -309,19 +315,19 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
       description: "Start your free trial"
     },
     { divider: true, label: "", icon: null },
-    { 
-      label: "Features", 
-      icon: <Star className="h-4 w-4" />, 
-      href: "/features",
-      description: "See what AOL Beam offers"
-    },
-    { 
-      label: "Student Discounts", 
-      icon: <Crown className="h-4 w-4" />, 
-      href: "/student-discount",
-      badge: "50% Off",
-      description: "Special pricing for students"
-    },
+    // { 
+    //   label: "Features", 
+    //   icon: <Star className="h-4 w-4" />, 
+    //   href: "/features",
+    //   description: "See what AOL Beam offers"
+    // },
+    // { 
+    //   label: "Student Discounts", 
+    //   icon: <Crown className="h-4 w-4" />, 
+    //   href: "/student-discount",
+    //   badge: "50% Off",
+    //   description: "Special pricing for students"
+    // },
     { divider: true, label: "", icon: null },
     { 
       label: "Terms of Service", 

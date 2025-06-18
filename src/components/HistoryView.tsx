@@ -69,7 +69,7 @@ export function HistoryView({ history, onRevisitProblem }: HistoryViewProps) {
   
   return (
     <div className="history-view">
-      <Card className="h-[400px] flex flex-col shadow-sm border border-border/50">
+      <Card className="h-full flex flex-col shadow-sm border border-border/50">
         <CardHeader className="border-b pb-3">
           <CardTitle className="flex items-center gap-2 text-lg font-semibold">
             <HistoryIcon className="h-5 w-5 text-primary" /> 

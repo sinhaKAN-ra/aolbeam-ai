@@ -31,7 +31,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-
+  // console.log('Hello from app!');
   return (
     <html lang="en" suppressHydrationWarning className={`h-full ${inter.variable}`}>
       <body className="antialiased flex flex-col min-h-full font-sans overflow-y-auto">
@@ -44,7 +44,7 @@ export default function RootLayout({
           <AuthProvider>
             <SidebarProvider>
               <div className="flex flex-col flex-1 relative">
-                {/* <Header /> */}
+                <Header />
                 <div className="flex flex-1 pt-16">
                   <Sidebar collapsible='icon'>
                     <div className="relative h-full">

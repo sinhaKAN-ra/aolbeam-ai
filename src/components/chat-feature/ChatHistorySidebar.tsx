@@ -65,11 +65,14 @@ export function ChatHistorySidebar({
   };
 
   const handleSaveTitle = async (sessionId: string) => {
-    // Mock update
-    setSessions(prev => prev.map(s => 
-      s.id === sessionId ? { ...s, title: newTitle.trim() } : s
-    ));
-    setEditingSessionId(null);
+    if (!newTitle.trim()) return;
+    if (typeof propOnUpdateSessionTitle === 'function') {
+      const success = await propOnUpdateSessionTitle(sessionId, newTitle.trim());
+      if (success) {
+        setEditingSessionId(null);
+      }
+      // Optionally, show error feedback if not successful
+    }
   };
 
   const handleCancelEditing = () => {
