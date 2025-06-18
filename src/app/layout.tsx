@@ -1,3 +1,5 @@
+"use client"
+
 import type {Metadata} from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
@@ -10,6 +12,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { Sidebar, SidebarProvider } from '@/components/ui/sidebar';
 import SidebarContentWrapper from '@/components/SidebarContentWrapper'; // Import the new client component
 import MainLayoutContainer from '@/components/MainLayoutContainer';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -18,19 +21,15 @@ const inter = Inter({
   weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],
 });
 
-export const metadata: Metadata = {
-  title: 'Aolbeam AI - Your AI Learning Assistant',
-  description: 'Personalized AI learning assistant for students preparing for competitive exams',
-  icons: {
-    icon: '/assets/logo.png',
-  },
-};
+
 
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+      const isMobile = useIsMobile()
+    
   // console.log('Hello from app!');
   return (
     <html lang="en" suppressHydrationWarning className={`h-full ${inter.variable}`}>
@@ -44,7 +43,7 @@ export default function RootLayout({
           <AuthProvider>
             <SidebarProvider>
               <div className="flex flex-col flex-1 relative">
-                <Header />
+               {isMobile && <Header />} 
                 <div className="flex flex-1 pt-16">
                   <Sidebar collapsible='icon'>
                     <div className="relative h-full">
