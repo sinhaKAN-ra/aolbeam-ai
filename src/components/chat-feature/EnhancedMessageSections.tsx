@@ -23,6 +23,7 @@ import {
   TopicSuggestion,
   TopicTag
 } from '../../types/chat-feature/enhanced-message';
+import { useRouter } from 'next/navigation';
 
 /* -------------------------------------------------------------------------- */
 /*                                Main Content                                */
@@ -211,6 +212,9 @@ interface PracticeProblemSectionProps {
 }
 
 export const PracticeProblemSection: React.FC<PracticeProblemSectionProps> = ({ practiceProblems, topicFallback }) => {
+  
+  const router = useRouter();
+
   if (!practiceProblems || practiceProblems.length === 0) {
     return (
       <div className="text-center py-4 px-3 bg-gray-50 rounded-lg">
@@ -218,6 +222,7 @@ export const PracticeProblemSection: React.FC<PracticeProblemSectionProps> = ({ 
       </div>
     );
   }
+
 
   return (
     <div className="mt-4 space-y-3">
@@ -235,8 +240,9 @@ export const PracticeProblemSection: React.FC<PracticeProblemSectionProps> = ({ 
             <div
               key={index}
               onClick={() => {
-                console.log('Problem selected:', problemText);
+                // console.log('Problem selected:', problemText);
                 // You can add state management here to track selected problem
+                router.push(`/#generate?topic=${problemText}`);
               }}
               className="group flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-yellow-300 hover:shadow-md transition-all duration-200 text-left cursor-pointer"
             >

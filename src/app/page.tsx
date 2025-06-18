@@ -124,6 +124,7 @@ export default function AOLBEAMPage() {
   const problemGeneratorRef = useRef<HTMLDivElement>(null);
   const problemGeneratorComponentRef = useRef<ProblemGeneratorHandles>(null);
   const paywallModalRef = useRef<PaywallModalProps | null>(null);
+  
 
 
   // Initialize client-side state and fetch initial data
@@ -164,8 +165,36 @@ export default function AOLBEAMPage() {
       problemGeneratorComponentRef.current?.focusTopicInput();
     }, 500); // Adjust timeout as needed
   }, []);
-  
 
+  // Handle URL hash to set topic and scroll to generator
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (window.location.hash) {
+        const hash = window.location.hash.substring(1); // Remove the '#'
+        const params = new URLSearchParams(hash.split('?')[1]);
+        const topic = params.get('topic');
+        
+        if (hash.startsWith('generate') && topic) {
+          setCurrentTopic(decodeURIComponent(topic));
+          // Small timeout to ensure component is rendered before scrolling
+          setTimeout(scrollToProblemGenerator, 100);
+        }
+      }
+    };
+
+    // Check on initial load
+    handleHashChange();
+
+    // Add event listener for hash changes
+    window.addEventListener('hashchange', handleHashChange);
+    
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, [scrollToProblemGenerator]);
+
+
+  
   
   const fetchAndSetUserProfile = useCallback(
     async (user: User | null) => {

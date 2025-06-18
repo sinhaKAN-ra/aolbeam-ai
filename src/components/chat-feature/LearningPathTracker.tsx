@@ -109,7 +109,7 @@ const LearningPathTracker: React.FC<LearningPathTrackerProps> = ({
           </span>
           <span className="text-sm text-gray-400">•</span>
           <span className="text-sm font-medium text-gray-600">
-            {learningPath.estimatedHours} {learningPath.estimatedHours === 1 ? 'hour' : 'hours'}
+            {learningPath.estimated_hours} {learningPath.estimated_hours === 1 ? 'hour' : 'hours'}
           </span>
         </div>
       </div>
