@@ -39,6 +39,7 @@ export interface ProblemDisplayRefs {
 }
 
 export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps>(({ problem, problemType, onSubmitAnswer, onFeedbackSubmit, isLoading, currentTopic }: ProblemDisplayProps, ref) => {
+  console.log('ProblemDisplay received problem prop:', problem); // Add this line
   const timerRef = useRef<HTMLDivElement>(null);
   const answerInputRef = useRef<HTMLDivElement>(null);
   
@@ -102,7 +103,7 @@ export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const finalTimeTaken = elapsedTimeInSeconds;
-    const isMcqProblem = problem.multiple_choice_options && problem.multiple_choice_options.length > 0;
+    const isMcqProblem = problem.multipleChoiceOptions && problem.multipleChoiceOptions.length > 0;
 
     if (isMcqProblem && selectedOption) {
       onSubmitAnswer(selectedOption, finalTimeTaken);
@@ -134,10 +135,12 @@ export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps
     });
   };
   
-  const isMcqStyleProblem = problem.multiple_choice_options && problem.multiple_choice_options.length > 0;
+  const isMcqStyleProblem = problem.multipleChoiceOptions && problem.multipleChoiceOptions.length > 0;
   const canSubmitAnswer = isMcqStyleProblem ? selectedOption !== '' : (userAnswer?.trim() ?? '') !== '';
   const isTimerNeededToStart = !isTimerActive && elapsedTimeInSeconds === 0;
-
+// At the top of the ProblemDisplay component, right after the props destructuring:
+console.log('ProblemDisplay received problem:', JSON.stringify(problem, null, 2));
+console.log('Problem type:', problemType);
   return (
     <Card className="shadow-lg">
       <CardHeader>
@@ -146,7 +149,7 @@ export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps
       </CardHeader>
       <CardContent>
         <div className="mb-4 text-base prose max-w-none dark:prose-invert">
-          <MathRenderer content={problem.problem_statement} />
+          <p>{problem.problemStatement}</p>
         </div>
 
         <div className="mb-4 flex flex-col sm:flex-row items-center justify-between gap-3 p-3 border rounded-lg bg-muted/50 overflow-hidden">
@@ -177,23 +180,26 @@ export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps
                 className="space-y-2"
                 disabled={isCurrentProblemSubmitted}
               >
-                {problem.multiple_choice_options?.map((option: string, index: number) => (
-                  <div key={index} className={`flex items-center space-x-2 p-3 border rounded-md transition-colors 
+                {problem.multipleChoiceOptions?.map((option: string, index: number) => {
+                  console.log(`Rendering option ${index}:`, option);
+                  return (
+                    <div key={index} className={`flex items-center space-x-2 p-3 border rounded-md transition-colors 
                                             ${isCurrentProblemSubmitted ? 'cursor-not-allowed opacity-70' 
                                               : 'hover:border-primary data-[state=checked]:border-primary data-[state=checked]:bg-primary/10'}`}>
-                    <RadioGroupItem 
-                      value={option} 
-                      id={`option-${index}`} 
-                      disabled={isCurrentProblemSubmitted}
-                    />
-                    <Label 
-                      htmlFor={`option-${index}`} 
-                      className={`cursor-pointer text-base flex-1 prose prose-sm max-w-none dark:prose-invert ${isCurrentProblemSubmitted ? 'cursor-not-allowed' : ''}`}
-                    >
-                        <MathRenderer content={option}/>
-                    </Label>
-                  </div>
-                ))}
+                      <RadioGroupItem 
+                        value={option} 
+                        id={`option-${index}`} 
+                        disabled={isCurrentProblemSubmitted}
+                      />
+                      <Label 
+                        htmlFor={`option-${index}`} 
+                        className={`cursor-pointer text-base flex-1 prose prose-sm max-w-none dark:prose-invert ${isCurrentProblemSubmitted ? 'cursor-not-allowed' : ''}`}
+                      >
+                        {option}
+                      </Label>
+                    </div>
+                  );
+                })}
               </RadioGroup>
             </div>
           ) : (

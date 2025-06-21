@@ -2,8 +2,8 @@
 import type { GeneratePracticeProblemOutput, GeneratePracticeProblemInput } from '@/ai/flows/generate-practice-problem'; // This will now include correctAnswer
 import type { EvaluateTheoryAnswerOutput } from '@/ai/flows/evaluate-theory-answer';
 
-export type ProblemType = 'theory' | 'practical' | 'conceptual' | 'numerical' | 'diagram_based' | 'random' | 'mcq' | 'essay' | 'code' | 'multiple_choice';
-export type AIGeneratedProblemType = 'theory' | 'practical' | 'conceptual' | 'numerical' | 'diagram_based';
+export type ProblemType = 'theory' | 'practical' | 'practical_mcq' | 'conceptual' | 'numerical' | 'diagram_based';
+export type AIGeneratedProblemType = 'theory' | 'practical' | 'practical_mcq' | 'conceptual' | 'numerical' | 'diagram_based';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 
 export interface InteractionHistoryItem {
@@ -38,6 +38,8 @@ export interface SubscriptionPlan {
   highlight?: boolean;
   type: 'subscription' | 'one_time' | 'free'; // Distinguishes plan categories
   description?: string; // A general description of the plan
+  chat_limit?: number; // Maximum chat interactions for the plan
+  test_creation_limit?: number; // Maximum test creations for the plan
 }
 
 export interface UserProfile {

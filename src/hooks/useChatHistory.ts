@@ -33,9 +33,9 @@ export const useChatHistory = (userId: string | null, initialSessionId?: string 
         console.log('Current currentSessionId:', currentSessionId);
         
         // First, verify the user's session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError || !session) {
-          console.error('No active session found:', sessionError);
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+          console.error('No active session found:', userError);
           throw new Error('Authentication required');
         }
   

@@ -53,13 +53,13 @@ export default function CheckoutPageClient() {
         return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { user } } = await supabase.auth.getUser();
       let currentUserPlanOrder = 0;
-      if (session) {
+      if (user) {
         const { data: profile, error } = await supabase
           .from('user_profiles')
           .select('is_subscribed, subscription_plan_id')
-          .eq('id', session.user.id)
+          .eq('id', user.id)
           .single();
 
         if (error) {
@@ -72,7 +72,7 @@ export default function CheckoutPageClient() {
       const targetPlanOrder: number = getPlanOrder(selectedPlan.id);
 
       // Enforce upgrade-only flow
-      if (session && targetPlanOrder !== undefined && targetPlanOrder <= currentUserPlanOrder) {
+      if (user && targetPlanOrder !== undefined && targetPlanOrder <= currentUserPlanOrder) {
         console.error('Cannot downgrade or select current plan.');
         // Redirect to pricing page or show an error
         // For now, setting plan to null and stopping loading

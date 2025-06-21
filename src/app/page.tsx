@@ -49,7 +49,7 @@ import { InteractionType, InteractionLimitResult } from '@/types/interaction';
 // and passed as props to this component
 
 const FREE_INTERACTION_LIMIT = 10;
-const CONCRETE_AI_PROBLEM_TYPES: AIGeneratedProblemType[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
+const CONCRETE_AI_PROBLEM_TYPES: AIGeneratedProblemType[] = ['theory', 'practical', 'practical_mcq', 'conceptual', 'numerical', 'diagram_based'];
 
 
 export default function AOLBEAMPage() {
@@ -84,6 +84,10 @@ export default function AOLBEAMPage() {
   const [problemInsights, setProblemInsights] = useState<string | null>(null);
 
   const problemDisplayRef = useRef<ProblemDisplayRefs>(null);
+
+  useEffect(() => {
+    console.log('AOLBEAMPage: currentProblem state changed to:', currentProblem);
+  }, [currentProblem]);
   const evaluationResultRef = useRef<HTMLDivElement>(null);
 
   // State for 'Add to Test Series' feature
@@ -166,22 +170,21 @@ export default function AOLBEAMPage() {
     }, 500); // Adjust timeout as needed
   }, []);
 
-  // Handle URL hash to set topic and scroll to generator
-  useEffect(() => {
-    const handleHashChange = () => {
-      if (window.location.hash) {
-        const hash = window.location.hash.substring(1); // Remove the '#'
-        const params = new URLSearchParams(hash.split('?')[1]);
-        const topic = params.get('topic');
-        
-        if (hash.startsWith('generate') && topic) {
-          setCurrentTopic(decodeURIComponent(topic));
-          // Small timeout to ensure component is rendered before scrolling
-          setTimeout(scrollToProblemGenerator, 100);
-        }
+  const handleHashChange = useCallback(() => {
+    if (window.location.hash) {
+      const hash = window.location.hash.substring(1); // Remove the '#'
+      const params = new URLSearchParams(hash.split('?')[1]);
+      const topic = params.get('topic');
+      
+      if (hash.startsWith('generate') && topic) {
+        setCurrentTopic(decodeURIComponent(topic));
+        // Small timeout to ensure component is rendered before scrolling
+        setTimeout(scrollToProblemGenerator, 100);
       }
-    };
+    }
+  }, [setCurrentTopic, scrollToProblemGenerator]);
 
+  useEffect(() => {
     // Check on initial load
     handleHashChange();
 
@@ -191,11 +194,8 @@ export default function AOLBEAMPage() {
     return () => {
       window.removeEventListener('hashchange', handleHashChange);
     };
-  }, [scrollToProblemGenerator]);
+  }, [handleHashChange]);
 
-
-  
-  
   const fetchAndSetUserProfile = useCallback(
     async (user: User | null) => {
       if (!user?.id) {
@@ -353,7 +353,7 @@ export default function AOLBEAMPage() {
     };
   }, []);
 
-  const addToHistory = useCallback(async (itemToAdd: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'> & { actualProblemType: Exclude<ProblemType, 'random'> }) => {
+  const addToHistory = useCallback(async (itemToAdd: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'> & { actualProblemType: Exclude<ProblemType, 'random'>; topic: string }) => {
     const newHistoryItem: InteractionHistoryItem = {
         ...itemToAdd,
         id: Date.now().toString(), 
@@ -469,7 +469,9 @@ export default function AOLBEAMPage() {
     }
   }, [setHistory, supabase, currentUser, toast, history, saveHistoryToLocalStorage]);
 
-const handleGenerateProblem = async (topic: string, type: AIGeneratedProblemType | 'random', difficulty: DifficultyLevel) => {
+const handleGenerateProblem = useCallback(async (topic: string, type: AIGeneratedProblemType, difficulty: DifficultyLevel) => {
+  setIsLoadingProblem(true);
+
   if (currentUser && isLoadingPageProfile) return; // Still loading user profile
 
   const interactionResult = await requireInteraction('problem_generation');
@@ -502,20 +504,13 @@ const handleGenerateProblem = async (topic: string, type: AIGeneratedProblemType
   }
 
   // If the action IS allowed, proceed with problem generation
-  setIsLoadingProblem(true);
   setCurrentTopic(topic);
   setCurrentDifficulty(difficulty);
   setCurrentProblem(null);
   setEvaluationResult(null);
   setProblemInsights(null);
 
-  let actualProblemTypeForAI: AIGeneratedProblemType;
-  const concreteProblemTypes: AIGeneratedProblemType[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
-  if (type === 'random') {
-      actualProblemTypeForAI = concreteProblemTypes[Math.floor(Math.random() * concreteProblemTypes.length)];
-  } else {
-      actualProblemTypeForAI = type;
-  }
+  const actualProblemTypeForAI: AIGeneratedProblemType = type;
   setCurrentProblemType(actualProblemTypeForAI);
 
   let problemGeneratedSuccessfully = false;
@@ -523,6 +518,7 @@ const handleGenerateProblem = async (topic: string, type: AIGeneratedProblemType
     const result = await generatePracticeProblem({ topic, problemType: actualProblemTypeForAI, difficulty });
     const problemDifficulty = result.difficulty || difficulty;
     const problemWithDifficulty = {...result, difficulty: problemDifficulty};
+    console.log('handleGenerateProblem: Setting currentProblem with:', problemWithDifficulty);
     setCurrentProblem(problemWithDifficulty);
     console.log('Page: Attempting to highlight and scroll with direct refs');
     if (problemDisplayRef.current?.timerRef.current) {
@@ -590,7 +586,7 @@ const handleGenerateProblem = async (topic: string, type: AIGeneratedProblemType
     }
   }
   await refreshInteractionStatus();
-};
+}, [currentUser, isLoadingPageProfile]);
 
 const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) => {
   if (!currentProblem || !currentTopic || (currentUser && isLoadingPageProfile)) return;
@@ -823,8 +819,8 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
 
   const handleNewProblemSameTopic = () => {
     if (currentTopic) {
-      const problemTypeToUse = history[0]?.problemType === 'random' ? CONCRETE_AI_PROBLEM_TYPES[Math.floor(Math.random() * CONCRETE_AI_PROBLEM_TYPES.length)] : (history[0]?.problemType || currentProblemType);
-      handleGenerateProblem(currentTopic, problemTypeToUse as AIGeneratedProblemType | 'random', currentDifficulty);
+      const problemTypeToUse = (history[0]?.problemType && CONCRETE_AI_PROBLEM_TYPES.includes(history[0].problemType as AIGeneratedProblemType)) ? (history[0].problemType as AIGeneratedProblemType) : CONCRETE_AI_PROBLEM_TYPES[Math.floor(Math.random() * CONCRETE_AI_PROBLEM_TYPES.length)];
+      handleGenerateProblem(currentTopic, problemTypeToUse, currentDifficulty);
     } else {
       toast({ title: "No Topic", description: "Please generate a problem first to use this option.", variant: "default" });
     }
@@ -887,8 +883,7 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
       const lastItem = history[0];
       if (lastItem) {
         setCurrentTopic(lastItem.topic);
-        const validProblemTypes: ProblemType[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based', 'random'];
-        setCurrentProblemType(validProblemTypes.includes(lastItem.problemType) ? lastItem.problemType : 'theory');
+        setCurrentProblemType(lastItem.actualProblemType || lastItem.problemType);
         setCurrentDifficulty(lastItem.difficulty || 'medium');
         setCurrentProblem(lastItem.problem);
         if (lastItem.evaluation) setEvaluationResult(lastItem.evaluation);
@@ -916,10 +911,10 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
     if (!currentUser) return;
 
     // Explicitly refresh session to ensure cookies are up-to-date
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    console.log('Supabase session in fetchUserTestSeries:', session);
-    if (sessionError || !session) {
-      console.error('Failed to refresh session:', sessionError?.message);
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    console.log('Supabase session in fetchUserTestSeries:', user);
+    if (userError || !user) {
+      console.error('No active user found:', userError?.message);
       toast({
         title: 'Authentication Error',
         description: 'Could not refresh user session. Please try logging in again.',
@@ -971,10 +966,14 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
         },
         body: JSON.stringify({
           problemData: {
-            ...currentProblem,
-            problemType: currentProblemType, // Add problemType from state
-            difficulty: currentDifficulty,   // Add difficulty from state
-            topic: currentTopic,             // Add topic from state
+            problem_statement: currentProblem.problemStatement,
+            problem_type: currentProblemType,
+            difficulty: currentDifficulty,
+            correct_answer: currentProblem.correctAnswer || null,
+            explanation: currentProblem.answerFormat || null,
+            multiple_choice_options: currentProblem.multipleChoiceOptions || null,
+            answer_format: currentProblem.answerFormat, // Ensure answer_format is also passed
+            topic: currentTopic,
           }, 
           testSeriesId: selectedTestSeriesId,
         }),

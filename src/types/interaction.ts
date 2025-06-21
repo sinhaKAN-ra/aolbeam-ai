@@ -32,6 +32,7 @@ export interface UserInteraction {
   id: string;
   user_id: string;
   interaction_type: InteractionType;
+  topic: string;
   created_at: string;
 }
 

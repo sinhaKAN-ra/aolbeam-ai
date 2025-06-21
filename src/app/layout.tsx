@@ -7,6 +7,9 @@ import 'katex/dist/katex.min.css'; // Import KaTeX CSS
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { Analytics } from "@vercel/analytics/next";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
 import Header from '@/components/Header';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { Sidebar, SidebarProvider } from '@/components/ui/sidebar';
@@ -42,7 +45,8 @@ export default function RootLayout({
         >
           <AuthProvider>
             <SidebarProvider>
-              <div className="flex flex-col flex-1 relative">
+              <QueryClientProvider client={queryClient}>
+                <div className="flex flex-col flex-1 relative">
                {isMobile && <Header />} 
                 <div className="flex flex-1 pt-16">
                   <Sidebar collapsible='icon'>
@@ -53,6 +57,7 @@ export default function RootLayout({
                   <MainLayoutContainer>{children}</MainLayoutContainer>
                 </div>
               </div>
+            </QueryClientProvider>
             </SidebarProvider>
           </AuthProvider>
 

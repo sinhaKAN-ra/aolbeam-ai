@@ -53,7 +53,7 @@ async function retryWithExponentialBackoff<T>(
 
 const GeneratePracticeProblemInputSchema = z.object({
   topic: z.string().describe('The topic for which to generate a practice problem.'),
-  problemType: z.enum(['theory', 'practical', 'conceptual', 'numerical', 'diagram_based']).describe('The type of problem to generate.'),
+  problemType: z.enum(['theory', 'practical', 'practical_mcq', 'conceptual', 'numerical', 'diagram_based']).describe('The type of problem to generate.'),
   difficulty: z.enum(['easy', 'medium', 'hard'])
     .describe('The desired difficulty level for the problem (easy, medium, hard).')
     .refine(val => ['easy', 'medium', 'hard'].includes(val), {
@@ -78,6 +78,7 @@ const GeneratePracticeProblemOutputSchema = z.object({
 export type GeneratePracticeProblemOutput = z.infer<typeof GeneratePracticeProblemOutputSchema>;
 
 export async function generatePracticeProblem(input: GeneratePracticeProblemInput): Promise<GeneratePracticeProblemOutput> {
+  console.log('Server Action: generatePracticeProblem called with input:', input);
   // Validate difficulty parameter explicitly
   const difficulty = input.difficulty || 'medium';
   if (!['easy', 'medium', 'hard'].includes(difficulty)) {
@@ -181,7 +182,7 @@ Choose ONE format and follow it strictly:
   "correctAnswer": "9.8 m/s²"
 }
 
-Generate your response now following ALL requirements above:`, // add a newline here so output starts on a new line
+Generate your response now following ALL requirements above. Specifically, if the problemType is 'practical', 'conceptual', 'numerical', or 'diagram_based' and you are generating an MCQ, ensure that 'multipleChoiceOptions' contains exactly 4 options and 'correctAnswer' is one of them.`, // add a newline here so output starts on a new line
 });
 
 const generatePracticeProblemFlow = ai.defineFlow(
@@ -194,10 +195,11 @@ const generatePracticeProblemFlow = ai.defineFlow(
     // Use the retry helper for the prompt call
     const result = await retryWithExponentialBackoff(async () => {
       const { output } = await prompt(input);
+      console.log('Server Action: Prompt output received:', output);
       if (!output) {
         // This case might happen if the prompt itself fails in a non-exception way
         // or if the model returns an empty/invalid response that Genkit handles by returning null/undefined output
-        console.error("AI prompt returned no output or an invalid structure.");
+        console.error("Server Action: AI prompt returned no output or an invalid structure.");
         throw new Error("AI model did not return a valid output.");
       }
       return output;

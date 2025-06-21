@@ -73,12 +73,12 @@ export async function PUT(
     const supabase = await createSupabaseServerClient();
     
     // User auth check
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    const userId = session.user.id;
+    const userId = user.id;
     const { id } = params;
     const body = await request.json();
     
@@ -139,12 +139,12 @@ export async function DELETE(
     const supabase = await createSupabaseServerClient();
     
     // User auth check
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    const userId = session.user.id;
+    const userId = user.id;
     const { id } = params;
     
     // Check if user is the creator of this test series

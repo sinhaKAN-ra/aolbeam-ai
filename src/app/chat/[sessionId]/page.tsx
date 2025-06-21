@@ -29,15 +29,16 @@ const ChatTeacherPage: React.FC<ChatPageProps> = () => {
   const supabase = createSupabaseBrowserClient();
 
   useEffect(() => {
-    const getSession = async () => {
-      const { data, error } = await supabase.auth.getSession();
-      if (data.session) {
-        setUserId(data.session.user.id);
+    const getUser = async () => {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
       } else if (error) {
-        console.error('Error getting session:', error);
+        console.error('Error getting user:', error);
       }
     };
-    getSession();
+    getUser();
+    getUser();
   }, [supabase]);
 
   const { messages, isLoading, error, sendMessage, learningPath, searchHistory, topicSuggestions, topicTags, selectedTags, startNewChat, isNewSession } = useChat(userId, sessionId); // Pass sessionId to useChat

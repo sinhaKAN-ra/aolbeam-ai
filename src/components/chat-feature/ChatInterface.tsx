@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useRef, useEffect, useState } from 'react';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
+import { toast } from 'sonner';
 import type { Message, LearningPath, TopicTag, TopicSuggestion, EnhancedMessage, BranchingPath } from '../../types/chat-feature';
 import MessageBubble from './MessageBubble';
 import EnhancedMessageBubble from './EnhancedMessageBubble';
@@ -112,11 +114,72 @@ export const ChatInterface = ({
     return () => clearTimeout(timeout);
   }, [messages]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const { 
+    canUseFeature, 
+    recordFeatureUsage,
+    isLoading: isFeatureCheckLoading,
+    usage
+  } = useFeatureAccess();
+  
+  const [isProcessingMessage, setIsProcessingMessage] = useState(false);
+  const chatUsage = {
+    used: usage?.chat_interactions_today || 0,
+    limit: usage?.chat_limit || 30,
+    remaining: usage?.remaining_chats || 30
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim()) {
+    
+    if (!input.trim() || isProcessingMessage) return;
+    
+    try {
+      setIsProcessingMessage(true);
+      
+      // Check if user can send a message (client-side check for immediate feedback)
+      const canChat = await canUseFeature('chat');
+      
+      if (!canChat.allowed) {
+        toast.error(canChat.reason || 'You have reached your chat message limit for today');
+        return;
+      }
+      
+      // Call the server-side API to validate and record the chat message
+      const response = await fetch('/api/chat/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: input.trim()
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        // Handle API errors
+        if (data.code === 'CHAT_LIMIT_REACHED') {
+          toast.error(data.message || 'You have reached your chat message limit for today');
+        } else {
+          throw new Error(data.error || 'Failed to send message');
+        }
+        return;
+      }
+      
+      // Send the message to the parent component
       onSendMessage(input.trim());
       setInput('');
+      
+      // Show remaining messages in a toast if low
+      if (chatUsage.remaining <= Math.floor(chatUsage.limit * 0.2)) {
+        toast.info(`You have ${chatUsage.remaining} chat message${chatUsage.remaining === 1 ? '' : 's'} remaining today`);
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast.error('Failed to send message. Please try again.');
+    } finally {
+      setIsProcessingMessage(false);
     }
   };
 
@@ -489,7 +552,26 @@ const sampleTopics = [
         </div>
 
         <form onSubmit={handleSubmit} className="border-t border-gray-200 p-4 bg-background/80 backdrop-blur-sm">
-          <div className="flex items-end space-x-2">
+          <div className="flex items-end space-x-2 relative">
+            {/* Usage indicator for chat messages */}
+            <div className="absolute -top-8 right-0 text-xs text-muted-foreground">
+              {chatUsage.used} / {chatUsage.limit} messages used
+            </div>
+            {!isFeatureCheckLoading && (
+              <div className="absolute -top-6 right-0 text-xs text-gray-500">
+                {(() => {
+                  const { remaining, limit } = canUseFeature('chat');
+                  if (typeof remaining === 'number' && typeof limit === 'number') {
+                    return (
+                      <span>
+                        {remaining} of {limit} messages remaining today
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            )}
             <textarea
               ref={inputRef}
               value={input}
@@ -508,22 +590,10 @@ const sampleTopics = [
               }}
             />
             <div className="text-xs text-gray-500 ml-2">
-              {input.length}/{5000}
-            </div>
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading}
-              className="p-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Send className="w-5 h-5" />
-            </button>
-          </div>
-        </form>
+              </div>
       </div>
-
-      {/* Right Sidebar for Learning Path and Suggestions */}
-      {/* {(learningPath || topicSuggestions.length > 0 || topicTags.length > 0) && (
-        <LearningSidebar
+      </form>
+        {/* <LearningSidebar
           learningPath={learningPath || undefined}
           latestSuggestions={topicSuggestions}
           topicSuggestions={topicSuggestions}
@@ -538,7 +608,8 @@ const sampleTopics = [
             } else {
               onCustomPathCreated(pathOrId.id);
       )} */}
-    </div>
+      </div>
+      </div>
   );
 }
 

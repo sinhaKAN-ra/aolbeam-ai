@@ -9,12 +9,12 @@ export async function GET(request: NextRequest) {
     const supabase = await createSupabaseServerClient();
     
     // User auth check
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    const userId = session.user.id;
+    const userId = user.id;
     
     // Get query params
     const url = new URL(request.url);
@@ -85,12 +85,12 @@ export async function POST(request: NextRequest) {
     const supabase = await createSupabaseServerClient();
     
     // User auth check
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    const userId = session.user.id;
+    const userId = user.id;
     const body = await request.json();
     
     // Validate required fields

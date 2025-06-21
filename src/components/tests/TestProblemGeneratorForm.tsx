@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProblemGenerator, ProblemGeneratorHandles } from '@/components/ProblemGenerator';
-import type { TestProblem, ProblemType, DifficultyLevel } from '@/types';
+import type { TestProblem, ProblemType, DifficultyLevel, AIGeneratedProblemType } from '@/types';
 import {
   generatePracticeProblem,
   type GeneratePracticeProblemOutput,
@@ -24,14 +24,10 @@ interface TestProblemGeneratorFormProps {
 const problemTypeMap: Record<ProblemType, string> = {
   'theory': 'theory',
   'practical': 'practical',
+  'practical_mcq': 'practical',
   'conceptual': 'conceptual',
   'numerical': 'numerical',
   'diagram_based': 'diagram_based',
-  'mcq': 'practical', // Map mcq to practical as that's the closest equivalent
-  'multiple_choice': 'practical', // Map multiple_choice to practical as that's the closest equivalent
-  'essay': 'theory', // Map essay to theory as that's the closest equivalent
-  'code': 'practical', // Map code to practical
-  'random': 'theory', // Default random to theory
 };
 
 export const TestProblemGeneratorForm: React.FC<TestProblemGeneratorFormProps> = ({
@@ -60,21 +56,13 @@ export const TestProblemGeneratorForm: React.FC<TestProblemGeneratorFormProps> =
       // Map frontend problem type to backend-compatible type
       let backendType: ProblemType = problemType;
       
-      // Handle 'random' type
-      if (problemType === 'random') {
-        const allowedTypes = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
-        backendType = allowedTypes[Math.floor(Math.random() * allowedTypes.length)] as ProblemType;
-      } 
-      // Handle 'mcq' and other non-standard types
-      else if (!['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'].includes(problemType)) {
-        backendType = 'practical'; // Default to practical for mcq type
-      }
+      backendType = problemType as AIGeneratedProblemType;
       
       // Generate the problem with a valid backend type
       const problem = await generatePracticeProblem({
         topic,
         // Make sure we only pass allowed backend problem types
-        problemType: backendType as "theory" | "practical" | "conceptual" | "numerical" | "diagram_based",
+        problemType: backendType,
         difficulty,
       });
       
@@ -96,31 +84,18 @@ export const TestProblemGeneratorForm: React.FC<TestProblemGeneratorFormProps> =
     
     setIsSaving(true);
     try {
-      // Only use one of the allowed backend problem types
-      const allowedProblemTypes = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
-      
       // Map frontend problem type to an allowed backend type
-      let backendProblemType: ProblemType;
-      if (allowedProblemTypes.includes(currentProblemType)) {
-        backendProblemType = currentProblemType as ProblemType;
-      } else if (currentProblemType === 'mcq' || currentProblemType === 'multiple_choice') {
-        backendProblemType = 'practical';
-      } else if (currentProblemType === 'essay') {
-        backendProblemType = 'theory';
-      } else if (currentProblemType === 'code') {
-        backendProblemType = 'practical';
-      } else {
-        backendProblemType = 'theory'; // Default for 'random' or unknown types
-      }
+      let problemTypeToSave: ProblemType = currentProblemType;
       
       const problemData: Partial<TestProblem> = {
-        problem_statement: generatedProblem.problemStatement,
-        problem_type: backendProblemType,
+        problem_statement: generatedProblem.answerFormat.trim(),
+        problem_type: problemTypeToSave as AIGeneratedProblemType,
         difficulty: currentDifficulty,
         topic: currentTopic,
         correct_answer: generatedProblem.correctAnswer || null,
-        explanation: generatedProblem.answerFormat || null,
-        multiple_choice_options: generatedProblem.multipleChoiceOptions || null,
+        explanation: generatedProblem.problemStatement.trim(),
+        answer_format: generatedProblem.answerFormat.trim(),
+        multipleChoiceOptions: generatedProblem.multipleChoiceOptions || null,
       };
       
       // Send the problem to the API

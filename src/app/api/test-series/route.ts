@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServer';
+import { Database } from '@/types/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,12 +82,12 @@ export async function POST(request: NextRequest) {
     const supabase = await createSupabaseServerClient();
     
     // User auth check
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    const userId = session.user.id;
+    const userId = user.id;
     const body = await request.json();
     
     // Validate required fields
@@ -94,28 +95,49 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
     
-    // Create test series
+    // Use the database function to create test series with usage check
     const { data, error } = await supabase
-      .from('test_series')
-      .insert({
-        title: body.title,
-        description: body.description || null,
-        creator_id: userId,
-        is_public: body.is_public || false,
-        estimated_duration_minutes: body.estimated_duration_minutes || null,
-        tags: body.tags || null
-      })
-      .select()
-      .single();
+      .rpc('create_test_series_with_usage_check', {
+        p_title: body.title,
+        p_description: body.description || null,
+        p_creator_id: userId,
+        p_is_public: body.is_public || false,
+        p_estimated_duration: body.estimated_duration_minutes || null,
+        p_tags: body.tags || null
+      });
     
     if (error) {
-      console.error('Error creating test series:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('Error in create_test_series_with_usage_check:', error);
+      
+      // Handle test limit reached error specifically
+      if (error.code === 'P0001') {
+        return NextResponse.json({ 
+          error: 'Test creation limit reached',
+          code: 'TEST_LIMIT_REACHED',
+          message: error.message || 'You have reached your test creation limit for your current plan.'
+        }, { status: 403 });
+      }
+      
+      // For other database errors
+      return NextResponse.json({ 
+        error: error.message || 'Failed to create test series',
+        code: error.code || 'DATABASE_ERROR'
+      }, { status: 500 });
+    }
+    
+    if (!data || data.length === 0) {
+      return NextResponse.json({ 
+        error: 'Failed to create test series',
+        code: 'CREATION_FAILED'
+      }, { status: 500 });
     }
 
-    return NextResponse.json({ data }, { status: 201 });
+    return NextResponse.json({ data: data[0] }, { status: 201 });
   } catch (error) {
     console.error('Unexpected error in test series POST:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      code: 'INTERNAL_SERVER_ERROR'
+    }, { status: 500 });
   }
 }

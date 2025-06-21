@@ -37,7 +37,7 @@ BEGIN
   -- Check if user has an active subscription
   SELECT EXISTS (
     SELECT 1 
-    FROM user_subscriptions
+    FROM subscriptions
     WHERE user_id = p_user_id 
     AND status = 'active'
     AND (ends_at IS NULL OR ends_at > CURRENT_TIMESTAMP)

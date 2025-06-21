@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
+import { toast } from 'sonner';
 import { TestSeries, TestProblem } from '@/types/custom';
 import { 
   createTestSeries, 
@@ -25,6 +27,25 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [isCheckingLimit, setIsCheckingLimit] = useState(false);
+  
+  // Check feature access for test creation
+  const {
+    canUseFeature,
+    recordFeatureUsage,
+    isLoading: isFeatureCheckLoading,
+    usage
+  } = useFeatureAccess();
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const testUsage = {
+    used: usage?.tests_created || 0,
+    limit: usage?.test_creation_limit || 5,
+    remaining: usage?.remaining_tests || 5,
+    isLimitReached: (usage?.tests_created || 0) >= (usage?.test_creation_limit || 5),
+    isNearLimit: ((usage?.test_creation_limit || 5) - (usage?.tests_created || 0)) > 0 && ((usage?.test_creation_limit || 5) - (usage?.tests_created || 0)) <= 2, // Example: 1 or 2 remaining
+    percentage: ((usage?.tests_created || 0) / (usage?.test_creation_limit || 5)) * 100
+  };
   
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -74,7 +95,7 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
     }
     
     try {
-      setSaving(true);
+      setIsSubmitting(true);
       setError(null);
       
       const testSeriesData: Partial<TestSeries> = {
@@ -98,7 +119,7 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save test series');
     } finally {
-      setSaving(false);
+      setIsSubmitting(false);
     }
   };
   
@@ -129,16 +150,48 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
     }
   };
   
-  const handleProblemGenerated = (newProblem: TestProblem) => {
-    setProblems([...problems, newProblem]);
-    setShowGenerateProblemForm(false);
-    setSuccess('Problem added successfully');
+  // Handle AI-generated problem
+  const handleProblemGenerated = async (newProblem: TestProblem) => {
+    try {
+      // Record the test creation usage
+      try {
+        await recordFeatureUsage('test_creation');
+      } catch (error) {
+        console.error('Error recording test creation usage:', error);
+        // Re-throw the error to be handled by the outer catch block
+        throw error;
+      }
+      
+      setProblems([...problems, newProblem]);
+      setShowGenerateProblemForm(false);
+      setSuccess('Problem added successfully');
+      
+      // Show remaining tests in a toast if low
+      if (testUsage.remaining <= Math.floor(testUsage.limit * 0.3)) {
+        toast.info(`You have ${testUsage.remaining} test${testUsage.remaining === 1 ? '' : 's'} remaining in your plan`);
+      }
+    } catch (error) {
+      console.error('Error handling generated problem:', error);
+      setError('Failed to add generated problem. Please try again.');
+    }
   };
 
-  const handleGenerateNewProblem = () => {
-    // This will trigger a new generation by resetting the generated problem state in the child.
-    // The TestProblemGeneratorForm component itself will handle the actual API call for generation.
-    setShowGenerateProblemForm(true); // Ensure the form is visible to trigger generation
+  const handleGenerateNewProblem = async () => {
+    try {
+      // Check if user can create more tests
+      const canCreate = await canUseFeature('test_creation');
+      
+      if (!canCreate.allowed) {
+        toast.error(canCreate.reason || 'You have reached your test creation limit');
+        return;
+      }
+      
+      // Show the form to generate a new problem
+      setShowGenerateProblemForm(true);
+    } catch (error) {
+      console.error('Error checking test creation limit:', error);
+      toast.error('Failed to check test creation limit. Please try again.');
+    }
   };
   
   const handleReorderProblems = async (reorderedProblems: TestProblem[]) => {
@@ -311,6 +364,71 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
               </label>
             </div>
             
+            <div className="space-y-2 mt-4">
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>Test Creation Usage</span>
+                <span className="font-medium">
+                  {testUsage.used} / {testUsage.limit} tests
+                </span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full ${
+                    testUsage.isLimitReached ? 'bg-destructive' : 
+                    testUsage.isNearLimit ? 'bg-amber-500' : 'bg-primary'
+                  }`}
+                  style={{ width: `${testUsage.percentage}%` }}
+                />
+              </div>
+              
+              <button 
+                type="submit" 
+                className="flex items-center justify-center w-full mt-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                disabled={isSubmitting || isFeatureCheckLoading || testUsage.isLimitReached}
+              >
+                {isSubmitting ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                ) : (
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                )}
+                {testUsage.isLimitReached ? 'Limit Reached' : 'Create Test Series'}
+              </button>
+              
+              {testUsage.isLimitReached && (
+                <div className="mt-2 p-3 bg-destructive/10 text-destructive-foreground text-sm rounded-md flex items-start gap-2">
+                  <svg className="h-4 w-4 mt-0.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <p className="font-medium">Test creation limit reached</p>
+                    <p className="text-xs">
+                      You've reached your limit of {testUsage.limit} test creations for your current plan. 
+                      <a href="/pricing" className="font-medium underline hover:no-underline">
+                        Upgrade now
+                      </a> for more.
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {testUsage.isNearLimit && !testUsage.isLimitReached && (
+                <div className="mt-2 p-3 bg-amber-50 text-amber-900 text-sm rounded-md flex items-start gap-2">
+                  <svg className="h-4 w-4 mt-0.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <p className="font-medium">Almost there!</p>
+                    <p className="text-xs">
+                      You have {testUsage.remaining} test creation{testUsage.remaining === 1 ? '' : 's'} left this period.
+                      <a href="/pricing" className="font-medium underline hover:no-underline ml-1">
+                        Upgrade now
+                      </a> for more.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <div className="flex justify-end space-x-3 pt-4">
               <button
                 type="button"
@@ -319,27 +437,12 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
               >
                 Cancel
               </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-              >
-                {saving ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Saving...
-                  </>
-                ) : (
-                  isEditMode ? 'Update' : 'Create'
-                )}
-              </button>
             </div>
           </form>
         </div>
       </div>
       
-      {isEditMode && (
-        <div className="bg-white shadow-sm border border-gray-200 rounded-lg mb-6">
+      <div className="bg-white shadow-sm border border-gray-200 rounded-lg mb-6">
           <div className="p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Problems</h2>
             
@@ -367,28 +470,74 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
                 />
               </div>
             ) : (
-              <div className="mt-6 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowAddProblemForm(true)}
-                  className="flex items-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                >
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add Problem Manually
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowGenerateProblemForm(true)}
-                  className="flex items-center py-2 px-4 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Generate Problem with AI
-                </button>
+              <div className="mt-6">
+                <div className="flex flex-col space-y-3">
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddProblemForm(true)}
+                      className="flex-1 flex items-center justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                    >
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Add Problem Manually
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const { allowed, reason } = canUseFeature('test_creation');
+                          if (!allowed) {
+                            toast.error(reason || 'You have reached your test creation limit for your current plan');
+                            return;
+                          }
+                          setShowGenerateProblemForm(true);
+                          console.log('showAddProblemForm:', showAddProblemForm, 'showGenerateProblemForm:', true);
+                        } catch (err) {
+                          console.error('Error checking test creation limit:', err);
+                          // Still allow opening the form if there's an error checking the limit
+                          setShowGenerateProblemForm(true);
+                          console.log('showAddProblemForm:', showAddProblemForm, 'showGenerateProblemForm:', true);
+                        }
+                      }}
+                      className="flex-1 flex items-center justify-center py-2 px-4 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={isFeatureCheckLoading}
+                    >
+                      {isFeatureCheckLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Checking...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          Generate Problem with AI
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  
+                  {/* Usage indicator */}
+                  {!isEditMode && !isFeatureCheckLoading && (
+                    <div className="text-xs text-gray-500 text-center">
+                      {(() => {
+                        const { remaining, limit } = canUseFeature('test_creation');
+                        if (typeof remaining === 'number' && typeof limit === 'number') {
+                          return (
+                            <span>
+                              You can create {remaining} more test{remaining !== 1 ? 's' : ''} with your current plan
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
-      )}
+      {/* )} */}
     </div>
   );
 }

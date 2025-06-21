@@ -8,18 +8,16 @@ import { useSupabase } from '@/hooks/useSupabase';
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
   isLoading: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
-  refreshSession: () => Promise<Session | null>;
+  refreshUser: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
@@ -33,25 +31,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const getInitialSession = async () => {
       try {
         console.log('AuthProvider: Getting initial session');
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+        const { data: { user: initialUser }, error } = await supabase.auth.getUser();
         
         if (error) {
           console.error('AuthProvider: Error getting initial session:', error);
           throw error;
         }
         
-        console.log('AuthProvider: Initial session:', initialSession ? {
-          user: initialSession.user?.email,
-          expires_at: initialSession.expires_at,
-          access_token: initialSession.access_token ? 'present' : 'missing'
+        console.log('AuthProvider: Initial session:', initialUser ? {
+          user: initialUser?.email,
         } : 'Not found');
 
         if (mounted) {
-          if (initialSession) {
-            setSession(initialSession);
-            setUser(initialSession.user);
+          if (initialUser) {
+            setUser(initialUser);
           } else {
-            setSession(null);
             setUser(null);
           }
           setIsLoading(false);
@@ -59,7 +53,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error('AuthProvider: Error getting initial session:', error);
         if (mounted) {
-          setSession(null);
           setUser(null);
           setIsLoading(false);
         }
@@ -70,20 +63,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
+      async (event, session: Session | null) => {
         console.log('AuthProvider: Auth state changed:', {
           event,
-          user: newSession?.user?.email,
-          expires_at: newSession?.expires_at,
-          access_token: newSession?.access_token ? 'present' : 'missing'
+          user: session?.user?.email,
         });
         
         if (mounted) {
-          if (newSession) {
-            setSession(newSession);
-            setUser(newSession.user);
+          if (session?.user) {
+            setUser(session.user);
           } else {
-            setSession(null);
+            setUser(null);
             setUser(null);
           }
           setIsLoading(false);
@@ -94,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             router.refresh();
           } else if (event === 'SIGNED_OUT') {
             console.log('AuthProvider: User signed out, clearing state');
-            setSession(null);
+            setUser(null);
             setUser(null);
             router.refresh();
           } else if (event === 'TOKEN_REFRESHED') {
@@ -182,7 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Clear user data from state
       setUser(null);
-      setSession(null);
+      setUser(null);
       
       // Clear local storage data
       localStorage.removeItem('aolbeamGuestInteractionCount');
@@ -201,14 +191,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [router, toast, supabase.auth]);
 
-  const refreshSession = useCallback(async () => {
+  const refreshUser = useCallback(async () => {
     try {
-      const { data: { session: newSession }, error } = await supabase.auth.getSession();
+      const { data: { user: newUser }, error } = await supabase.auth.getUser();
       if (error) throw error;
       
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-      return newSession;
+      setUser(newUser);
+      setUser(newUser);
+      return newUser;
     } catch (error) {
       console.error('AuthProvider: Error refreshing session:', error);
       return null;
@@ -217,12 +207,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(() => ({
     user,
-    session,
     isLoading,
     signInWithGoogle,
     signOut,
-    refreshSession,
-  }), [user, session, isLoading, signInWithGoogle, signOut, refreshSession]);
+    refreshUser,
+  }), [user, isLoading, signInWithGoogle, signOut, refreshUser]);
 
   return (
     <AuthContext.Provider value={value}>

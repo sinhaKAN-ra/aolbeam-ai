@@ -1,6 +1,8 @@
 import { ProblemType, DifficultyLevel } from './index';
 import type { User } from '@supabase/supabase-js';
 
+
+
 export interface TestSeries {
   id: string;
   created_at: string;
@@ -25,7 +27,7 @@ export interface TestProblem {
   difficulty: DifficultyLevel;
   answer_format: string; // Added to align with GeneratePracticeProblemOutput
   correct_answer: string | null;
-  multiple_choice_options: string[] | null;
+  multipleChoiceOptions: string[] | null;
   explanation: string | null;
   topic: string | null;
   order_index: number;

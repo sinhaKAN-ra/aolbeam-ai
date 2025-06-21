@@ -130,14 +130,14 @@ export default function PricingPage() {
     const fetchUserData = async () => {
       setIsLoading(true);
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setIsLoggedIn(!!session);
+        const { data: { user } } = await supabase.auth.getUser();
+        setIsLoggedIn(!!user);
 
-        if (session) {
+        if (user) {
           const { data: profile, error } = await supabase
             .from('user_profiles')
             .select('*')
-            .eq('id', session.user.id)
+            .eq('id', user.id)
             .single();
 
           if (error) {

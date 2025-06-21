@@ -12,12 +12,12 @@ export async function GET(
     const supabase = await createSupabaseServerClient();
     
     // User auth check
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    const userId = session.user.id;
+    const userId = user.id;
     // Fix Next.js warning by using params.id directly
 const id = params.id;
     
@@ -97,12 +97,12 @@ export async function PUT(
     const supabase = await createSupabaseServerClient();
     
     // User auth check
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    const userId = session.user.id;
+    const userId = user.id;
     // Fix Next.js warning by using params.id directly
 const id = params.id;
     const body = await request.json();

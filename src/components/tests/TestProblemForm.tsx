@@ -19,28 +19,30 @@ const TestProblemForm: React.FC<TestProblemFormProps> = ({
   const [problemStatement, setProblemStatement] = useState(problem?.problem_statement || '');
   // Map between frontend and backend problem types
   const problemTypeMap = {
-    'mcq': 'multiple_choice',
-    'multiple_choice': 'multiple_choice',
     'theory': 'theory',
     'practical': 'practical',
+    'practical_mcq': 'practical_mcq',
     'conceptual': 'conceptual',
     'numerical': 'numerical',
     'diagram_based': 'diagram_based',
-    'essay': 'essay',
-    'code': 'code',
-    'random': 'theory' // Default to theory for random
   } as const;
 
-  const [problemType, setProblemType] = useState<keyof typeof problemTypeMap>(
-    (problem?.problem_type as keyof typeof problemTypeMap) || 'theory'
-  );
+  const [problemType, setProblemType] = useState<keyof typeof problemTypeMap>(() => {
+    const incomingProblemType = problem?.problem_type;
+    if (incomingProblemType && problemTypeMap.hasOwnProperty(incomingProblemType)) {
+      return incomingProblemType as keyof typeof problemTypeMap;
+    }
+    // Map old/invalid types to a default valid type
+
+    return 'practical_mcq'; // Default for any other invalid or missing type
+  });
   const [difficulty, setDifficulty] = useState(problem?.difficulty || 'medium');
   const [topic, setTopic] = useState(problem?.topic || '');
   const [correctAnswer, setCorrectAnswer] = useState(problem?.correct_answer || '');
   const [explanation, setExplanation] = useState(problem?.explanation || '');
   const [options, setOptions] = useState<string[]>(
-    (problem?.problem_type === 'mcq' || problem?.problem_type === 'multiple_choice') && problem.multiple_choice_options 
-      ? problem.multiple_choice_options 
+    problem?.problem_type === 'practical_mcq' && problem.multipleChoiceOptions
+      ? problem.multipleChoiceOptions
       : ['', '', '', '']
   );
   
@@ -53,7 +55,7 @@ const TestProblemForm: React.FC<TestProblemFormProps> = ({
       newErrors.problemStatement = 'Problem statement is required';
     }
     
-    if (problemType === 'mcq') {
+    if (problemType === 'practical_mcq') {
       if (!options.some(opt => opt.trim())) {
         newErrors.options = 'At least one option is required';
       }
@@ -103,7 +105,7 @@ const TestProblemForm: React.FC<TestProblemFormProps> = ({
       topic: topic.trim() || null,
       correct_answer: correctAnswer.trim() || null,
       explanation: explanation.trim() || null,
-      multiple_choice_options: (problemType === 'mcq' || problemType === 'multiple_choice') 
+      multipleChoiceOptions: problemType === 'practical_mcq'
         ? options.filter(opt => opt.trim())
         : null
     };
@@ -170,7 +172,7 @@ const TestProblemForm: React.FC<TestProblemFormProps> = ({
           {errors.topic && <p className="mt-2 text-sm text-red-600">{errors.topic}</p>}
         </div>
 
-        {(problemType === 'mcq' || problemType === 'multiple_choice') && (
+        {problemType === 'practical_mcq' && (
           <div className="col-span-full">
             <h3 className="text-lg font-medium leading-6 text-gray-900">Multiple Choice Options</h3>
             {options.map((option, index) => (

@@ -9,7 +9,7 @@ export interface CheckoutPlanInfo {
   id: string; // Original plan ID from pricing page
   name: string;
   features: string[];
-  originalType: 'subscription' | 'one_time'; // Type from pricing page plan definition
+  originalType: 'subscription' | 'one_time' | 'free'; // Type from pricing page plan definition
   countryCode: string;
   currencySymbol: string; // e.g., '₹', '$'
   baseNumericPrice: number; // Numeric price of the plan

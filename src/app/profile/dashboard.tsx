@@ -20,6 +20,7 @@ import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { SubscriptionStatus } from '@/components/usage/SubscriptionStatus';
 import {
   BarChart2,
   BookOpen,
@@ -28,7 +29,8 @@ import {
   CreditCard,
   Sparkles,
   Zap,
-  UserCircle
+  UserCircle,
+  ArrowRight
 } from 'lucide-react';
 
 // Types for user profile and stats
@@ -128,14 +130,21 @@ export default function Dashboard() {
       // Fetch topic-wise performance from user_interactions
       const { data: interactionData, error: interactionError } = await supabaseClient
         .from('user_interactions')
-        .select('interaction_type, count')
-        .eq('user_id', user.id)
-        .order('count', { ascending: false });
+        .select('interaction_type')
+        .eq('user_id', user.id);
 
       if (interactionError) {
-        console.error('Error fetching interaction data:', interactionError);
+        console.error('Error fetching interaction data:', interactionError.message);
       } else if (interactionData) {
-        fetchedStats.topics = interactionData.map(item => ({ name: item.interaction_type, count: item.count }));
+        const topicCounts: { [key: string]: number } = {};
+        interactionData.forEach((item: any) => {
+          if (item.interaction_type) {
+            topicCounts[item.interaction_type] = (topicCounts[item.interaction_type] || 0) + 1;
+          }
+        });
+        fetchedStats.topics = Object.entries(topicCounts)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count);
       }
 
       setStats(fetchedStats);
@@ -427,63 +436,25 @@ export default function Dashboard() {
           </CardFooter>
         </Card>
 
-        <Card className="col-span-1">
-          <CardHeader>
-            <CardTitle>Subscription Status</CardTitle>
-            <CardDescription>Your current plan and usage</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isSubscriptionLoading ? (
-              <div className="space-y-4 animate-pulse">
-                <div className="h-5 w-32 bg-gray-200 rounded" />
-                <div className="h-4 w-full bg-gray-200 rounded" />
-                <div className="h-4 w-40 bg-gray-200 rounded" />
-                <div className="h-4 w-40 bg-gray-200 rounded" />
+        <div className="col-span-1 space-y-4">
+          <SubscriptionStatus />
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex flex-col space-y-4">
+                <h3 className="text-lg font-medium">Usage Analytics</h3>
+                <p className="text-sm text-muted-foreground">
+                  View detailed usage statistics and manage your subscription
+                </p>
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/account/usage">
+                    View Detailed Usage
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Current Plan</span>
-                  <Badge variant={subscription ? "default" : (hasOneTimePayment ? "secondary" : "outline")}>
-                    {subscription?.plan_id || (hasOneTimePayment ? 'One-Time Purchase' : 'Free')}
-                  </Badge>
-                </div>
-                <Separator />
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">✨ AI Interactions</span>
-                    <span className="text-sm">
-                      {!profile ? '15 total' : 
-                       !profile.is_subscribed ? '100 / day' :
-                       subscription?.plan_id === 'weekly' ? '100 / day' :
-                       subscription?.plan_id === 'monthly' ? '500 / day' :
-                       subscription?.plan_id === 'quarterly' ? '1,500 / day' : 'Unlimited'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">🔮 Smart Suggestions</span>
-                    <span className="text-sm">
-                      {profile?.is_subscribed ? 'Unlimited' : 'Basic only'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">⚡ Genius Mode</span>
-                    <span className="text-sm">
-                      {profile?.is_subscribed ? 'Full access' : 'Locked'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-          <CardFooter className="border-t px-6 py-4">
-            <Link href="/profile/subscriptions" className="w-full">
-              <Button variant={subscription ? "outline" : (hasOneTimePayment ? "outline" : "default")} className="w-full">
-                {profile?.is_subscribed ? 'Manage Subscription' : 'Upgrade Now'}
-              </Button>
-            </Link>
-          </CardFooter>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

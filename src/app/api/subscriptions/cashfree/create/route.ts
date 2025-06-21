@@ -40,13 +40,13 @@ export async function POST(request: Request) {
       }
     );
     // Get user session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     // Debug: Log session data (safe)
-    console.log('Supabase session:', session, 'Session error:', sessionError);
-    if (!session?.user) {
+    console.log('Supabase session:', user, 'Session error:', userError);
+    if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized - Valid authentication required' }, { status: 401 });
     }
-    const user = session.user;
+    const userId = user.id;
 
     const body = await request.json();
     const {
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
       order_amount: orderAmount,
       order_currency: orderCurrency,
       customer_details: {
-        customer_id: user.id,
+        customer_id: userId,
         customer_name: customerName,
         customer_email: customerEmail,
         customer_phone: customerPhone,
@@ -211,8 +211,8 @@ export async function POST(request: Request) {
         order_id: subscriptionId, // This is our internal subscription ID
       },
     });
-    if (!paymentLink) {
-      console.error('No payment link found in Cashfree response:', data);
+    if (!cashfreeResponse.payment_link) {
+      console.error('No payment link found in Cashfree response:', cashfreeResponse.data);
       return NextResponse.json(
         { error: 'Payment link not found in Cashfree response' },
         { status: 500 }
@@ -222,8 +222,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       data: {
-        payment_link: paymentLink,  // Ensure consistent naming with Cashfree's response
-        order_id: data.order_id,
+        payment_link: cashfreeResponse.payment_link,  // Ensure consistent naming with Cashfree's response
+        order_id: cashfreeResponse.order_id,
         subscription_id: subscriptionId,
         is_subscription: true,
       },
