@@ -106,16 +106,13 @@ export const ChatInterface = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    console.log('scrollToBottom: attempting to scrollIntoView');
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
     if (forceScroll) {
-      console.log('useEffect: forceScroll detected, attempting to scroll');
       const timeout = setTimeout(() => {
         scrollToBottom();
-        console.log('scrollToBottom called, resetting forceScroll');
         setForceScroll(false); // Reset after scrolling
       }, 0);
       return () => clearTimeout(timeout);
@@ -179,7 +176,6 @@ export const ChatInterface = ({
       onSendMessage(input.trim());
       setInput('');
       setForceScroll(true); // Trigger scroll after sending message
-      console.log('handleSubmit: setForceScroll(true)');
       
       // Show remaining messages in a toast if low
       if (chatUsage.remaining <= Math.floor(chatUsage.limit * 0.2)) {
@@ -201,13 +197,12 @@ export const ChatInterface = ({
   };
 
   const handleBranchSelect = (path: BranchingPath) => {
-    // console.log('Branch selected:', path);
     // When a branch is selected, send a message to explore that branch
     onSendMessage(`I want to explore: ${path.title}`);
+    setForceScroll(true);
   };
 
   // const handleTagSelect = (tag: TopicSuggestion) => {
-  //   console.log('Tag selected:', tag);
   //   // Convert the TopicSuggestion to a TopicTag when needed
   //   const topicTag: TopicTag = {
   //     id: tag.id,
@@ -252,9 +247,9 @@ export const ChatInterface = ({
   // };
 
   const handleSuggestionClick = (suggestion: TopicSuggestion) => {
-    // console.log('Suggestion clicked:', suggestion);
     // When a suggestion is clicked, send a message to explore that topic
     onSendMessage(`Tell me about ${suggestion.title}`);
+    setForceScroll(true);
 
     // If it has tags, also trigger the tag selection flow
     if (suggestion.tags && suggestion.tags.length > 0) {
