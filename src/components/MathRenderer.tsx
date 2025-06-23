@@ -153,6 +153,18 @@ const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
   const [fixedDiagrams, setFixedDiagrams] = useState<{[key: string]: string}>({});
   const [copiedDiagrams, setCopiedDiagrams] = useState<{[key: string]: boolean}>({});
 
+  useEffect(() => {
+    // Add the fix function to the window object for the button to call
+    window.fixMermaidDiagram = (mermaidId: string) => {
+      fixDiagram(mermaidId);
+    };
+    
+    return () => {
+      // Clean up when component unmounts
+      delete window.fixMermaidDiagram;
+    };
+  }, []);
+
   // Function to copy diagram code to clipboard
   const copyDiagramCode = async (mermaidId: string, content: string) => {
     try {
@@ -642,18 +654,7 @@ const MathRenderer: React.FC<MathRendererProps> = ({ content }) => {
     }
   };
 
-  // Add window function for button click handler
-  useEffect(() => {
-    // Add the fix function to the window object for the button to call
-    window.fixMermaidDiagram = (mermaidId: string) => {
-      fixDiagram(mermaidId);
-    };
-    
-    return () => {
-      // Clean up when component unmounts
-      delete window.fixMermaidDiagram;
-    };
-  }, []);
+
   
   return (
     <div className="math-renderer-content overflow-hidden" data-renderer-id={componentId} ref={containerRef}>

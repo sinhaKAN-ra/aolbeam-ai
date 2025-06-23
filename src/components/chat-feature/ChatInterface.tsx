@@ -198,7 +198,7 @@ export const ChatInterface = ({
 
   const handleBranchSelect = (path: BranchingPath) => {
     // When a branch is selected, send a message to explore that branch
-    onSendMessage(`I want to explore: ${path.title}`);
+    onSendMessage(`I want to explore: ${path.title} in this context ${path.description}`);
     setForceScroll(true);
   };
 

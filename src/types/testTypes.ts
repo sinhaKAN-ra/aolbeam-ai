@@ -33,6 +33,7 @@ export interface TestProblem {
   order_index: number;
   created_at: string;
   updated_at: string;
+  problemStatement: string
 }
 
 export interface TestSeriesShare {

@@ -149,7 +149,8 @@ console.log('Problem type:', problemType);
       </CardHeader>
       <CardContent>
         <div className="mb-4 text-base prose max-w-none dark:prose-invert">
-          <p>{problem.problemStatement}</p>
+          {/* <p>{problem.problemStatement}</p> */}
+          <MathRenderer content={problem.problemStatement} />
         </div>
 
         <div className="mb-4 flex flex-col sm:flex-row items-center justify-between gap-3 p-3 border rounded-lg bg-muted/50 overflow-hidden">
