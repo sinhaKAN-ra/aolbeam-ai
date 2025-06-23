@@ -99,42 +99,28 @@ export const ChatInterface = ({
   const [selectedLearningMode, setSelectedLearningMode] = useState<'fundamental' | 'applied' | 'advanced'>('fundamental');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showLearningModeTooltip, setShowLearningModeTooltip] = useState(false);
+  const [forceScroll, setForceScroll] = useState(false); // New state to force scroll
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const prevMessagesLengthRef = useRef(messages.length);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
+    console.log('scrollToBottom: attempting to scrollIntoView');
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
-    if (!scrollContainerRef.current) return;
-
-    const { scrollHeight, scrollTop, clientHeight } = scrollContainerRef.current;
-    const isAtBottom = scrollHeight - scrollTop <= clientHeight + 100;
-
-    const hasNewMessage = messages.length > prevMessagesLengthRef.current;
-    const isInitialLoadWithMessages = prevMessagesLengthRef.current === 0 && messages.length > 0;
-    const isUpdatingExistingMessage = messages.length === prevMessagesLengthRef.current && messages.length > 0;
-
-    if (hasNewMessage || isInitialLoadWithMessages) {
-      // Always scroll for new messages or initial load with messages
+    if (forceScroll) {
+      console.log('useEffect: forceScroll detected, attempting to scroll');
       const timeout = setTimeout(() => {
         scrollToBottom();
-      }, 0);
-      return () => clearTimeout(timeout);
-    } else if (isUpdatingExistingMessage && isAtBottom) {
-      // Only scroll for updates to existing messages if user is already at the bottom
-      const timeout = setTimeout(() => {
-        scrollToBottom();
+        console.log('scrollToBottom called, resetting forceScroll');
+        setForceScroll(false); // Reset after scrolling
       }, 0);
       return () => clearTimeout(timeout);
     }
-
-    // Update the ref for the next render
-    prevMessagesLengthRef.current = messages.length;
-  }, [messages]);
+  }, [forceScroll]);
 
   const { 
     canUseFeature, 
@@ -192,6 +178,8 @@ export const ChatInterface = ({
       // Send the message to the parent component
       onSendMessage(input.trim());
       setInput('');
+      setForceScroll(true); // Trigger scroll after sending message
+      console.log('handleSubmit: setForceScroll(true)');
       
       // Show remaining messages in a toast if low
       if (chatUsage.remaining <= Math.floor(chatUsage.limit * 0.2)) {
