@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BookText, MessageSquareText, ListChecks, Sparkles, Loader2, BarChartBig, Brain, Sigma, GitFork, Shuffle } from 'lucide-react';
 import type { ProblemType, DifficultyLevel, AIGeneratedProblemType } from '@/types';
 
-const ALL_CONCRETE_PROBLEM_TYPES: AIGeneratedProblemType[] = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
+export const ALL_CONCRETE_PROBLEM_TYPES: AIGeneratedProblemType[] = ['theory', 'practical', 'practical_mcq', 'conceptual', 'numerical', 'diagram_based'];
 
 interface ProblemGeneratorProps {
   onGenerate: (topic: string, type: AIGeneratedProblemType, difficulty: DifficultyLevel) => void;
@@ -25,9 +25,13 @@ export interface ProblemGeneratorHandles {
   focusTopicInput: () => void;
 }
 
-const problemTypeOptions: { value: ProblemType; label: string; icon: React.ElementType }[] = [
+// Include 'random' as an extended problem type option for UI only
+type UISpecificProblemType = ProblemType | 'random';
+
+const problemTypeOptions: { value: UISpecificProblemType; label: string; icon: React.ElementType }[] = [
   { value: 'theory', label: 'Theory', icon: MessageSquareText },
-  { value: 'practical', label: 'Practical (MCQ)', icon: ListChecks },
+  { value: 'practical_mcq', label: 'Practical (MCQ)', icon: ListChecks },
+  { value: 'practical', label: 'Practical', icon: ListChecks },
   { value: 'conceptual', label: 'Conceptual', icon: Brain },
   { value: 'numerical', label: 'Numerical', icon: Sigma },
   { value: 'diagram_based', label: 'Diagram-Based', icon: GitFork },
@@ -46,7 +50,7 @@ export const ProblemGenerator = forwardRef<ProblemGeneratorHandles, ProblemGener
     ref
   ) => {
     const [topic, setTopic] = useState<string>(defaultTopic);
-    const [problemType, setProblemType] = useState<ProblemType>(defaultProblemType);
+    const [problemType, setProblemType] = useState<UISpecificProblemType>(defaultProblemType);
     const [difficulty, setDifficulty] = useState<DifficultyLevel>(defaultDifficulty);
     
     const topicInputRef = useRef<HTMLInputElement>(null);
@@ -74,7 +78,7 @@ export const ProblemGenerator = forwardRef<ProblemGeneratorHandles, ProblemGener
       const trimmedTopic = topic.trim();
       if (trimmedTopic) {
         let actualProblemType: AIGeneratedProblemType;
-        if (problemType === 'random') {
+        if (problemType === 'random' as UISpecificProblemType) {
           actualProblemType = ALL_CONCRETE_PROBLEM_TYPES[Math.floor(Math.random() * ALL_CONCRETE_PROBLEM_TYPES.length)];
         } else {
           actualProblemType = problemType as AIGeneratedProblemType;
@@ -114,7 +118,7 @@ export const ProblemGenerator = forwardRef<ProblemGeneratorHandles, ProblemGener
               <Label className="text-base font-medium">Problem Type</Label>
               <RadioGroup
                 value={problemType}
-                onValueChange={(value: string) => setProblemType(value as ProblemType)}
+                onValueChange={(value: string) => setProblemType(value as UISpecificProblemType)}
                 className="grid grid-cols-2 sm:grid-cols-3 gap-3"
               >
                 {problemTypeOptions.map(option => (

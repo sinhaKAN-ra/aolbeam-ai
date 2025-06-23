@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProblemGenerator, ProblemGeneratorHandles } from '@/components/ProblemGenerator';
 import type { TestProblem, ProblemType, DifficultyLevel, AIGeneratedProblemType } from '@/types';
+import { ALL_CONCRETE_PROBLEM_TYPES } from '@/components/ProblemGenerator';
 import {
   generatePracticeProblem,
   type GeneratePracticeProblemOutput,
@@ -20,15 +21,7 @@ interface TestProblemGeneratorFormProps {
   onGenerateNewProblem: () => void;
 }
 
-// Map between frontend problem types and backend problem types
-const problemTypeMap: Record<ProblemType, string> = {
-  'theory': 'theory',
-  'practical': 'practical',
-  'practical_mcq': 'practical',
-  'conceptual': 'conceptual',
-  'numerical': 'numerical',
-  'diagram_based': 'diagram_based',
-};
+// Problem types are now consistent between frontend and backend
 
 export const TestProblemGeneratorForm: React.FC<TestProblemGeneratorFormProps> = ({
   testSeriesId,
@@ -49,23 +42,31 @@ export const TestProblemGeneratorForm: React.FC<TestProblemGeneratorFormProps> =
   const handleGenerateProblem = async (topic: string, problemType: ProblemType, difficulty: DifficultyLevel) => {
     setIsGenerating(true);
     setCurrentTopic(topic);
-    setCurrentProblemType(problemType);
     setCurrentDifficulty(difficulty);
     
     try {
-      // Map frontend problem type to backend-compatible type
-      let backendType: ProblemType = problemType;
+      // Map problemType if it's 'random' to a concrete type for the AI flow
+      const aiProblemType = problemType === 'random' 
+        ? ALL_CONCRETE_PROBLEM_TYPES[Math.floor(Math.random() * ALL_CONCRETE_PROBLEM_TYPES.length)]
+        : problemType === 'mcq' ? 'practical_mcq' : problemType as AIGeneratedProblemType;
       
-      backendType = problemType as AIGeneratedProblemType;
-      
-      // Generate the problem with a valid backend type
       const problem = await generatePracticeProblem({
         topic,
-        // Make sure we only pass allowed backend problem types
-        problemType: backendType,
+        problemType: aiProblemType,
         difficulty,
       });
       
+      // Debug log to see the complete AI response
+      console.log('PROBLEM GENERATOR DEBUG - AI Response:', {
+        requestedType: problemType,
+        actualType: aiProblemType,
+        result: problem,
+        hasOptions: problem?.multipleChoiceOptions?.length > 0,
+      });
+      
+      // Update the current problem type to the actual generated type for consistent saving
+      // This ensures we always save with a valid concrete type, not 'random' or 'mcq'
+      setCurrentProblemType(problem.problemType as ProblemType);
       setGeneratedProblem(problem);
     } catch (error) {
       console.error('Error generating problem:', error);
@@ -84,18 +85,16 @@ export const TestProblemGeneratorForm: React.FC<TestProblemGeneratorFormProps> =
     
     setIsSaving(true);
     try {
-      // Map frontend problem type to an allowed backend type
-      let problemTypeToSave: ProblemType = currentProblemType;
-      
-      const problemData: Partial<TestProblem> = {
-        problem_statement: generatedProblem.answerFormat.trim(),
-        problem_type: problemTypeToSave as AIGeneratedProblemType,
+      const problemData = {
+        problem_statement: generatedProblem.problemStatement.trim(),
+        // Map 'mcq' to 'practical_mcq' to match database enum
+        problem_type: (currentProblemType === 'mcq' ? 'practical_mcq' : currentProblemType) as AIGeneratedProblemType,
         difficulty: currentDifficulty,
         topic: currentTopic,
-        correct_answer: generatedProblem.correctAnswer || null,
-        explanation: generatedProblem.problemStatement.trim(),
-        answer_format: generatedProblem.answerFormat.trim(),
-        multipleChoiceOptions: generatedProblem.multipleChoiceOptions || null,
+        correctAnswer: generatedProblem.correctAnswer || null,
+        explanation: generatedProblem.answerFormat.trim(),
+        answerFormat: generatedProblem.answerFormat.trim(),
+        multipleChoiceOptions: generatedProblem.multipleChoiceOptions || [],
       };
       
       // Send the problem to the API

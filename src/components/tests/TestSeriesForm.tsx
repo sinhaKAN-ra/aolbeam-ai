@@ -17,9 +17,10 @@ import { PlusCircle, Sparkles } from 'lucide-react';
 
 interface TestSeriesFormProps {
   testSeriesId?: string;
+  onSuccess: () => void;
 }
 
-const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
+const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess }) => {
   const router = useRouter();
   const isEditMode = !!testSeriesId;
   
@@ -438,6 +439,15 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
                 Cancel
               </button>
             </div>
+            <div className="flex justify-end space-x-3 pt-4">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? 'Saving...' : (isEditMode ? 'Save Changes' : 'Create Test Series')}
+              </button>
+            </div>
           </form>
         </div>
       </div>
@@ -451,7 +461,7 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
               onReorder={handleReorderProblems}
             />
             
-            {showAddProblemForm ? (
+            {showAddProblemForm ? (console.log("Add form open"),
               <div className="mt-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Problem</h3>
                 <TestProblemForm 
@@ -459,7 +469,7 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
                   onCancel={() => setShowAddProblemForm(false)}
                 />
               </div>
-            ) : showGenerateProblemForm ? (
+            ) : showGenerateProblemForm ? (console.log("AI form open"),
               <div className="mt-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Generate New Problem with AI</h3>
                 <TestProblemGeneratorForm 
@@ -483,18 +493,20 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
                     </button>
                     <button
                       type="button"
-                      onClick={async () => {
+                      onClick={() => {
                         try {
-                          const { allowed, reason } = canUseFeature('test_creation');
-                          if (!allowed) {
-                            toast.error(reason || 'You have reached your test creation limit for your current plan');
-                            return;
-                          }
+                          // const { allowed, reason } = canUseFeature('test_creation');
+                          // if (!allowed) {
+                          //   toast.error(reason || 'You have reached your test creation limit for your current plan');
+                          //   return;
+                          // }
+                          setShowAddProblemForm(false);
                           setShowGenerateProblemForm(true);
-                          console.log('showAddProblemForm:', showAddProblemForm, 'showGenerateProblemForm:', true);
+                          console.log('showAddProblemForm:', false, 'showGenerateProblemForm:', true);
                         } catch (err) {
                           console.error('Error checking test creation limit:', err);
                           // Still allow opening the form if there's an error checking the limit
+                          setShowAddProblemForm(false);
                           setShowGenerateProblemForm(true);
                           console.log('showAddProblemForm:', showAddProblemForm, 'showGenerateProblemForm:', true);
                         }
@@ -505,7 +517,7 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId }) => {
                       {isFeatureCheckLoading ? (
                         <>
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Checking...
+                          Checking... 
                         </>
                       ) : (
                         <>

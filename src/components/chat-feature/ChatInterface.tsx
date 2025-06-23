@@ -101,17 +101,39 @@ export const ChatInterface = ({
   const [showLearningModeTooltip, setShowLearningModeTooltip] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const prevMessagesLengthRef = useRef(messages.length);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
-    // Delay to ensure DOM has rendered
-    const timeout = setTimeout(() => {
-      scrollToBottom();
-    }, 0);
-    return () => clearTimeout(timeout);
+    if (!scrollContainerRef.current) return;
+
+    const { scrollHeight, scrollTop, clientHeight } = scrollContainerRef.current;
+    const isAtBottom = scrollHeight - scrollTop <= clientHeight + 100;
+
+    const hasNewMessage = messages.length > prevMessagesLengthRef.current;
+    const isInitialLoadWithMessages = prevMessagesLengthRef.current === 0 && messages.length > 0;
+    const isUpdatingExistingMessage = messages.length === prevMessagesLengthRef.current && messages.length > 0;
+
+    if (hasNewMessage || isInitialLoadWithMessages) {
+      // Always scroll for new messages or initial load with messages
+      const timeout = setTimeout(() => {
+        scrollToBottom();
+      }, 0);
+      return () => clearTimeout(timeout);
+    } else if (isUpdatingExistingMessage && isAtBottom) {
+      // Only scroll for updates to existing messages if user is already at the bottom
+      const timeout = setTimeout(() => {
+        scrollToBottom();
+      }, 0);
+      return () => clearTimeout(timeout);
+    }
+
+    // Update the ref for the next render
+    prevMessagesLengthRef.current = messages.length;
   }, [messages]);
 
   const { 
@@ -137,12 +159,12 @@ export const ChatInterface = ({
       setIsProcessingMessage(true);
       
       // Check if user can send a message (client-side check for immediate feedback)
-      const canChat = await canUseFeature('chat');
+      // const canChat = await canUseFeature('chat');
       
-      if (!canChat.allowed) {
-        toast.error(canChat.reason || 'You have reached your chat message limit for today');
-        return;
-      }
+      // if (!canChat.allowed) {
+      //   toast.error(canChat.reason || 'You have reached your chat message limit for today');
+      //   return;
+      // }
       
       // Call the server-side API to validate and record the chat message
       const response = await fetch('/api/chat/messages', {
@@ -157,15 +179,15 @@ export const ChatInterface = ({
       
       const data = await response.json();
       
-      if (!response.ok) {
-        // Handle API errors
-        if (data.code === 'CHAT_LIMIT_REACHED') {
-          toast.error(data.message || 'You have reached your chat message limit for today');
-        } else {
-          throw new Error(data.error || 'Failed to send message');
-        }
-        return;
-      }
+      // if (!response.ok) {
+      //   // Handle API errors
+      //   if (data.code === 'CHAT_LIMIT_REACHED') {
+      //     toast.error(data.message || 'You have reached your chat message limit for today');
+      //   } else {
+      //     throw new Error(data.error || 'Failed to send message');
+      //   }
+      //   return;
+      // }
       
       // Send the message to the parent component
       onSendMessage(input.trim());
@@ -423,12 +445,11 @@ const sampleTopics = [
       .flatMap(msg => msg.enhancedContent?.suggestions || [])
       .slice(0, 5)
     : sampleSuggestions;
-
   console.log('isNewSession', isNewSession);
   return (
     <div className="flex h-screen bg-background">
       <div className="flex-1 flex flex-col relative bg-gray-50">
-        <div className={`flex-1 overflow-y-auto p-4 md:p-6 transition-all duration-300 ${isSidebarCollapsed ? 'pr-4 md:pr-6' : 'pr-4 md:pr-[calc(5rem+1.5rem)]'}`}>
+        <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto p-4 md:p-6 transition-all duration-300 ${isSidebarCollapsed ? 'pr-4 md:pr-6' : 'pr-4 md:pr-[calc(5rem+1.5rem)]'}`}>
           {/* Welcome screen for new chat */}
           {/* Welcome/Mission screen for brand new chat only (no messages, first session, or some isNewSession prop) */}
           { !isNewSession && (
@@ -590,7 +611,17 @@ const sampleTopics = [
               }}
             />
             <div className="text-xs text-gray-500 ml-2">
-              </div>
+            {input.length}/{5000}
+            </div>
+            <button
+              type="submit"
+              disabled={!input.trim() || isLoading}
+              className="p-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+
+              
       </div>
       </form>
         {/* <LearningSidebar

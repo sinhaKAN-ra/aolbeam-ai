@@ -18,19 +18,21 @@ const TestProblemForm: React.FC<TestProblemFormProps> = ({
 }) => {
   const [problemStatement, setProblemStatement] = useState(problem?.problem_statement || '');
   // Map between frontend and backend problem types
-  const problemTypeMap = {
+  const problemTypeMap: Record<ProblemType, ProblemType> = {
     'theory': 'theory',
     'practical': 'practical',
     'practical_mcq': 'practical_mcq',
     'conceptual': 'conceptual',
     'numerical': 'numerical',
     'diagram_based': 'diagram_based',
-  } as const;
+    'mcq': 'practical_mcq', // Map UI-specific 'mcq' to backend-compatible 'practical_mcq'
+    'random': 'practical', // Map 'random' to a safe default
+  };
 
-  const [problemType, setProblemType] = useState<keyof typeof problemTypeMap>(() => {
+  const [problemType, setProblemType] = useState<ProblemType>(() => {
     const incomingProblemType = problem?.problem_type;
-    if (incomingProblemType && problemTypeMap.hasOwnProperty(incomingProblemType)) {
-      return incomingProblemType as keyof typeof problemTypeMap;
+    if (incomingProblemType && Object.keys(problemTypeMap).includes(incomingProblemType)) {
+      return incomingProblemType as ProblemType;
     }
     // Map old/invalid types to a default valid type
 
@@ -138,11 +140,10 @@ const TestProblemForm: React.FC<TestProblemFormProps> = ({
             <option value="mcq">Multiple Choice</option>
             <option value="theory">Theory</option>
             <option value="practical">Practical</option>
+            <option value="practical_mcq">Practical (MCQ)</option>
             <option value="conceptual">Conceptual</option>
             <option value="numerical">Numerical</option>
-            {/* <option value="diagram_based">Diagram Based</option> */}
-            <option value="essay">Essay</option>
-            <option value="code">Code</option>
+            <option value="diagram_based">Diagram Based</option>
           </select>
           {errors.problemType && <p className="mt-2 text-sm text-red-600">{errors.problemType}</p>}
         </div>

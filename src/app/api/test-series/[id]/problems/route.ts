@@ -98,7 +98,7 @@ export async function POST(
     }
     
     // Validate problem_type
-    const allowedProblemTypes = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based'];
+    const allowedProblemTypes = ['theory', 'practical', 'conceptual', 'numerical', 'diagram_based', 'practical_mcq'];
     if (!body.problem_type || !allowedProblemTypes.includes(body.problem_type)) {
       return NextResponse.json({ 
         error: `Invalid problem type. Must be one of: ${allowedProblemTypes.join(', ')}` 

@@ -510,8 +510,14 @@ const handleGenerateProblem = useCallback(async (topic: string, type: AIGenerate
   setEvaluationResult(null);
   setProblemInsights(null);
 
-  const actualProblemTypeForAI: AIGeneratedProblemType = type;
-  setCurrentProblemType(actualProblemTypeForAI);
+  // Determine the actual problem type to send to the AI.
+  // If the user selected 'random' or 'mcq', we map it to a concrete type.
+  const actualProblemTypeForAI: AIGeneratedProblemType = 
+    type === 'random' ? 'practical' : 
+    type === 'mcq' ? 'practical_mcq' : 
+    type;
+
+  // DO NOT set currentProblemType here. It will be set *after* the AI responds.
 
   let problemGeneratedSuccessfully = false;
   try {
@@ -519,6 +525,10 @@ const handleGenerateProblem = useCallback(async (topic: string, type: AIGenerate
     const problemDifficulty = result.difficulty || difficulty;
     const problemWithDifficulty = {...result, difficulty: problemDifficulty};
     console.log('handleGenerateProblem: Setting currentProblem with:', problemWithDifficulty);
+    
+    // THIS IS THE FIX: Update state with the *actual* problem type returned by the AI
+    setCurrentProblemType(result.problemType as ProblemType);
+    
     setCurrentProblem(problemWithDifficulty);
     console.log('Page: Attempting to highlight and scroll with direct refs');
     if (problemDisplayRef.current?.timerRef.current) {
@@ -536,8 +546,8 @@ const handleGenerateProblem = useCallback(async (topic: string, type: AIGenerate
     }
     await addToHistory({
       topic,
-      problemType: type,
-      actualProblemType: actualProblemTypeForAI,
+      problemType: result.problemType as ProblemType, // Log the actual generated type
+      actualProblemType: actualProblemTypeForAI, // This can be useful for analytics
       difficulty: problemDifficulty,
       problem: problemWithDifficulty,
     });
@@ -966,13 +976,14 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
         },
         body: JSON.stringify({
           problemData: {
-            problem_statement: currentProblem.problemStatement,
-            problem_type: currentProblemType,
+            problemStatement: currentProblem.problemStatement,
+            // Map 'mcq' to 'practical_mcq' to match database enum
+            problemType: currentProblemType === 'mcq' ? 'practical_mcq' : currentProblemType,
             difficulty: currentDifficulty,
-            correct_answer: currentProblem.correctAnswer || null,
+            correctAnswer: currentProblem.correctAnswer || null,
             explanation: currentProblem.answerFormat || null,
-            multiple_choice_options: currentProblem.multipleChoiceOptions || null,
-            answer_format: currentProblem.answerFormat, // Ensure answer_format is also passed
+            multipleChoiceOptions: currentProblem.multipleChoiceOptions || [],
+            answerFormat: currentProblem.answerFormat,
             topic: currentTopic,
           }, 
           testSeriesId: selectedTestSeriesId,

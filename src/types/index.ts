@@ -2,7 +2,11 @@
 import type { GeneratePracticeProblemOutput, GeneratePracticeProblemInput } from '@/ai/flows/generate-practice-problem'; // This will now include correctAnswer
 import type { EvaluateTheoryAnswerOutput } from '@/ai/flows/evaluate-theory-answer';
 
-export type ProblemType = 'theory' | 'practical' | 'practical_mcq' | 'conceptual' | 'numerical' | 'diagram_based';
+// ProblemType includes all valid problem types used in the UI, including special types like 'mcq' and 'random'
+export type ProblemType = 'theory' | 'practical' | 'practical_mcq' | 'conceptual' | 'numerical' | 'diagram_based' | 'mcq' | 'random';
+
+// AIGeneratedProblemType only includes types that are valid in the backend database schema
+// These are the concrete types that should be used when saving to the database
 export type AIGeneratedProblemType = 'theory' | 'practical' | 'practical_mcq' | 'conceptual' | 'numerical' | 'diagram_based';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 
