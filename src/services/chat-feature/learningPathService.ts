@@ -1,59 +1,36 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { LearningPath, CustomLearningGoal, UserProfile } from '../../types/chat-feature';
+import { LearningPath, CustomLearningGoal, UserProfile, LearningStep } from '../../types/chat-feature';
 
 export class LearningPathService {
-  async saveLearningPath(learningPath: LearningPath, userId?: string): Promise<void> {
-    if (!isSupabaseConfigured()) {
-      // Store in localStorage for demo
-      const paths = this.getStoredPaths();
-      paths.push(learningPath);
-      localStorage.setItem('learningPaths', JSON.stringify(paths));
-      return;
-    }
-
+  async saveLearningPath(learningPath: LearningPath): Promise<LearningPath> {
     try {
-      const { error } = await supabase!
-        .from('learning_paths')
-        .insert([{
-          id: learningPath.id,
-          user_id: userId,
-          title: learningPath.title,
-          description: learningPath.description,
-          main_topic: learningPath.main_topic,
-          current_step: learningPath.current_step,
-          total_steps: learningPath.total_steps,
-          steps: learningPath.steps,
-          estimated_hours: learningPath.estimated_hours,
-          completed_topics: learningPath.completed_topics,
-          suggested_topics: learningPath.suggested_topics,
-          is_custom_path: learningPath.is_custom_path || false,
-          goals: learningPath.goals || [],
-          timeline: learningPath.timeline,
-          created_at: (learningPath.created_at instanceof Date ? learningPath.created_at.toISOString() : learningPath.created_at) || new Date().toISOString(),
-          updated_at: (learningPath.updated_at instanceof Date ? learningPath.updated_at.toISOString() : learningPath.updated_at) || new Date().toISOString()
-        }]);
+      const response = await fetch('/api/learning-paths', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(learningPath),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save learning path');
+      }
+      return await response.json();
     } catch (error) {
       console.error('Error saving learning path:', error);
       throw error;
     }
   }
 
-  async getUserLearningPaths(userId: string): Promise<LearningPath[]> {
-    if (!isSupabaseConfigured()) {
-      return this.getStoredPaths();
-    }
-
+  async getUserLearningPaths(): Promise<LearningPath[]> {
     try {
-      const { data, error } = await supabase!
-        .from('learning_paths')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
+      const response = await fetch('/api/learning-paths');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch learning paths');
+      }
+      const data = await response.json();
       return data.map(this.mapFromDatabase);
     } catch (error) {
       console.error('Error fetching learning paths:', error);
@@ -108,34 +85,40 @@ export class LearningPathService {
 
   async createCustomLearningPath(
     goals: CustomLearningGoal[],
-    searchHistory: string[],
-    userId?: string
+    searchHistory: any[]
   ): Promise<LearningPath> {
     // Generate custom learning path based on goals and history
     const mainTopic = goals[0]?.title || 'Custom Learning Journey';
-    const allTopics = goals.flatMap(goal => goal.topics);
     const totalEstimatedHours = goals.reduce((sum, goal) => sum + goal.estimatedHours, 0);
     
+    const steps: LearningStep[] = goals.map((goal, index) => ({
+      step: index + 1,
+      title: goal.title,
+      description: goal.description || `A step focused on mastering ${goal.title}`,
+      completed: false,
+      estimated_hours: goal.estimatedHours,
+      resources: [],
+      practice_problems: [],
+    }));
+
     const customPath: LearningPath = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       title: mainTopic, 
       description: `A custom learning path focused on ${mainTopic}`,
-      main_topic: mainTopic,
-      current_step: 1,
+      topic: mainTopic,
+      current_step: 0,
       total_steps: goals.length,
-      steps: [], 
+      steps: steps, 
       estimated_hours: totalEstimatedHours,
       completed_topics: [],
       suggested_topics: this.generateSuggestionsFromGoals(goals),
       is_custom_path: true,
       goals: goals.map(g => g.title),
       timeline: `${Math.ceil(totalEstimatedHours / 10)} weeks`,
-      created_at: new Date(),
-      updated_at: new Date()
     };
 
-    await this.saveLearningPath(customPath, userId);
-    return customPath;
+
+    return await this.saveLearningPath(customPath as LearningPath);
   }
 
   private generateSuggestionsFromGoals(goals: CustomLearningGoal[]) {
@@ -158,21 +141,41 @@ export class LearningPathService {
     }
   }
 
+  async deleteLearningPath(pathId: string): Promise<void> {
+    try {
+      const response = await fetch(`/api/learning-paths/${pathId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete learning path');
+      }
+    } catch (error) {
+      console.error('Error deleting learning path:', error);
+      throw error;
+    }
+  }
+
   private mapFromDatabase(data: any): LearningPath {
     return {
       id: data.id,
+      user_id: data.user_id,
       title: data.title,
       description: data.description,
+      topic: data.topic,
       main_topic: data.main_topic,
+      steps: data.steps || [],
       current_step: data.current_step,
       total_steps: data.total_steps,
-      steps: data.steps || [],
       estimated_hours: data.estimated_hours,
       completed_topics: data.completed_topics || [],
       suggested_topics: data.suggested_topics || [],
       is_custom_path: data.is_custom_path || false,
       goals: data.goals || [],
       timeline: data.timeline,
+      is_public: data.is_public,
+      progress: data.progress,
       created_at: data.created_at,
       updated_at: data.updated_at
     };

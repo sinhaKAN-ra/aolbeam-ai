@@ -46,24 +46,43 @@ export async function POST(request: Request) {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle();
+      .single();
 
     const planId = subscription?.plan_id || 'free';
     
-    // Get usage for the current period
-    const { data: usage, error: usageError } = await supabaseAdmin
-      .rpc('get_user_usage', { 
-        p_user_id: user.id,
-        p_plan_id: planId
-      });
-
-    if (usageError) {
-      console.error('Error getting user usage:', usageError);
-      return NextResponse.json(
-        { error: 'Failed to check usage limits' },
-        { status: 500 }
-      );
+    // Note: Usage tracking and limits are now handled by useFeatureAccess on the client side
+    // This is just a fallback check to prevent API abuse
+    
+    // Get count of today's chat interactions with proper timezone handling
+    // Create date range for today in UTC (database timezone)
+    const now = new Date();
+    
+    // Calculate today's start (midnight) and end (23:59:59) in local timezone first
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    
+    // Format as ISO strings for database query
+    const todayStartISO = todayStart.toISOString();
+    const todayEndISO = todayEnd.toISOString();
+    
+    console.log(`Counting chat interactions between ${todayStartISO} and ${todayEndISO}`);
+    
+    // Use a count query with proper date range filtering
+    const { count, error: countError } = await supabaseAdmin
+      .from('user_interactions')
+      .select('*', { count: 'exact' })
+      .eq('user_id', user.id)
+      .eq('interaction_type', 'chat')
+      .gte('created_at', todayStartISO)
+      .lte('created_at', todayEndISO);
+      
+    if (countError) {
+      console.error('Error counting user interactions:', countError);
+      // Continue anyway - don't block the user if just the count fails
     }
+    
+    // Ensure we have a number, not null
+    const chatInteractionsToday = count || 0;
     
     // Check if user has reached their chat limit
     const planLimits = {
@@ -74,7 +93,7 @@ export async function POST(request: Request) {
     };
 
     const limit = planLimits[planId as keyof typeof planLimits] || 0;
-    const remaining = limit - (usage?.chat_interactions_today || 0);
+    const remaining = limit - chatInteractionsToday; // chatInteractionsToday is guaranteed to be a number now
     
     if (remaining <= 0) {
       return NextResponse.json(
@@ -89,17 +108,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // Record the chat message usage
-    const { data: updatedUsage, error: updateError } = await supabaseAdmin
-      .rpc('increment_usage', { 
-        p_user_id: user.id, 
-        p_feature: 'chat'
+    // Record the chat message usage by inserting directly into user_interactions table
+    const { error: insertError } = await supabaseAdmin
+      .from('user_interactions')
+      .insert({
+        user_id: user.id,
+        interaction_type: 'chat',
+        created_at: new Date().toISOString(),
+        topic: message.substring(0, 100) || 'Chat message' // Use the first 100 chars of message as topic or default
       });
 
-    if (updateError) {
-      console.error('Error recording chat usage:', updateError);
+    if (insertError) {
+      console.error('Error recording chat usage:', insertError);
       // Continue with the chat even if recording fails
     }
+    
+    // Increment the count for our response
+    const updatedChatCount = chatInteractionsToday + 1;
 
     // Here you would typically process the chat message with your AI service
     // For now, we'll just return a success response
@@ -109,7 +134,7 @@ export async function POST(request: Request) {
       usage: {
         limit,
         remaining: Math.max(0, remaining - 1), // Subtract 1 for this message
-        used: (usage?.chat_interactions_today || 0) + 1
+        used: updatedChatCount
       }
     });
 

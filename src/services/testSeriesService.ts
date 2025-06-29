@@ -43,16 +43,24 @@ export async function createTestSeries(testSeries: Partial<TestSeries>): Promise
     const response = await fetch('/api/test-series', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(testSeries)
+      body: JSON.stringify(testSeries),
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to create test series');
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to create test series');
     }
 
-    const { data } = await response.json();
-    return data as TestSeries;
+    const responseData = await response.json();
+    // Handle responses that might be wrapped in a 'data' object or not
+    const newTestSeries = responseData.data || responseData;
+
+    if (!newTestSeries || typeof newTestSeries.id !== 'string') {
+      console.error('Invalid response from createTestSeries API:', responseData);
+      throw new Error('Failed to create test series due to invalid API response.');
+    }
+
+    return newTestSeries as TestSeries;
   } catch (error) {
     console.error('Error creating test series:', error);
     throw error;

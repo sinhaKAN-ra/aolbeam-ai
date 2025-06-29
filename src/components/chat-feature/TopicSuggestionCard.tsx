@@ -22,9 +22,15 @@ const TopicSuggestionCard: React.FC<TopicSuggestionCardProps> = ({ suggestion, o
 
   // Get icon based on difficulty or type
   const getIcon = () => {
-    if (suggestion.icon) return suggestion.icon;
-    
-    switch(suggestion.difficulty) {
+    if (typeof suggestion.icon === 'string' && suggestion.icon) {
+      // This is a placeholder. In a real app, you'd have a map of string names to actual icon components.
+      // For now, we'll just return the name, which is valid to render.
+      // A better implementation would be:
+      // const IconComponent = iconMap[suggestion.icon];
+      // return IconComponent ? <IconComponent /> : <DefaultIcon />;
+      return suggestion.icon;
+    }
+    switch (suggestion.difficulty) {
       case 'beginner': return <BookOpen className="w-5 h-5" />;
       case 'intermediate': return <Route className="w-5 h-5" />;
       case 'advanced': return <Brain className="w-5 h-5" />;

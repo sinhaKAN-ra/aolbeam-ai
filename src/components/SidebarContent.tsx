@@ -235,13 +235,13 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
           icon: <BookOpen className="h-4 w-4" />,
           description: "Curated study materials"
         },
-        // { 
-        //   href: "/flashcards", 
-        //   label: "Flashcards", 
-        //   icon: <Zap className="h-4 w-4" />, 
-        //   isPro: true,
-        //   description: "Spaced repetition flashcards"
-        // },
+        { 
+          href: "/learning-paths", 
+          label: "Learning Paths", 
+          icon: <Zap className="h-4 w-4" />, 
+          // isPro: true,
+          description: "Create and manage learning paths"
+        },
       ]
     },
     {

@@ -57,18 +57,24 @@ export interface LearningResource {
 
 export interface LearningPath {
   id: string;
-  userId: string;
+  user_id?: string; // Added server-side
   title: string;
-  description: string;
-  topic: string;
+  description?: string;
+  topic: string; // The main, required topic
+  main_topic?: string; // Optional, maybe for sub-topics
   steps: LearningStep[];
-  createdAt: string;
-  updatedAt: string;
-  isPublic: boolean;
-  progress: number;
-  estimatedHours: number;
-  difficulty: 'beginner' | 'intermediate' | 'advanced';
-  tags: string[];
+  current_step: number;
+  total_steps: number;
+  estimated_hours?: number;
+  completed_topics?: string[];
+  suggested_topics?: TopicSuggestion[];
+  is_custom_path: boolean;
+  goals?: string[];
+  timeline?: string;
+  is_public?: boolean;
+  progress?: number;
+  created_at?: Date | string;
+  updated_at?: Date | string;
 }
 
 // Practice problem types
@@ -115,11 +121,11 @@ export interface CustomLearningGoal {
   id: string;
   title: string;
   description?: string;
-  targetDate?: Date;
+  targetDate?: Date | undefined;
   topics: string[];
   estimatedHours?: number;
-  priority: 'low' | 'medium' | 'high';
   difficulty: 'beginner' | 'intermediate' | 'advanced';
+  priority: 'low' | 'medium' | 'high';
 }
 
 // Search history types

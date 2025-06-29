@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
-    const { interactionType, topic } = await request.json();
+    const { interactionType, topic, problem_type } = await request.json();
     
     if (!interactionType) {
       return NextResponse.json(
@@ -15,6 +15,14 @@ export async function POST(request: Request) {
     if (!topic) {
       return NextResponse.json(
         { error: 'Topic is required' },
+        { status: 400 }
+      );
+    }
+    
+    // Validate problem_type is provided for test_creation
+    if (interactionType === 'test_creation' && !problem_type) {
+      return NextResponse.json(
+        { error: 'Problem type is required for test creation' },
         { status: 400 }
       );
     }
@@ -39,7 +47,9 @@ export async function POST(request: Request) {
           user_id: user.id, 
           interaction_type: interactionType,
           topic,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          // Include problem_type for test_creation interactions
+          ...(interactionType === 'test_creation' ? { problem_type } : {})
         }
       ]);
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFeatureAccess } from '@/hooks/useFeatureAccess';
 import { toast } from 'sonner';
@@ -35,18 +35,29 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
     canUseFeature,
     recordFeatureUsage,
     isLoading: isFeatureCheckLoading,
-    usage
+    usage,
+    refetchUsage
   } = useFeatureAccess();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const testUsage = {
-    used: usage?.tests_created || 0,
-    limit: usage?.test_creation_limit || 5,
-    remaining: usage?.remaining_tests || 5,
-    isLimitReached: (usage?.tests_created || 0) >= (usage?.test_creation_limit || 5),
-    isNearLimit: ((usage?.test_creation_limit || 5) - (usage?.tests_created || 0)) > 0 && ((usage?.test_creation_limit || 5) - (usage?.tests_created || 0)) <= 2, // Example: 1 or 2 remaining
-    percentage: ((usage?.tests_created || 0) / (usage?.test_creation_limit || 5)) * 100
-  };
+  // Debug log for usage data from hook
+  console.log('Raw usage data:', usage);
+  
+  // Use useMemo to recalculate testUsage whenever usage changes
+  const testUsage = useMemo(() => {
+    console.log('Recalculating testUsage with usage:', usage);
+    return {
+      used: usage?.tests_created || 0,
+      limit: usage?.test_creation_limit || 5,
+      remaining: usage?.remaining_tests || 5,
+      isLimitReached: (usage?.tests_created || 0) >= (usage?.test_creation_limit || 5),
+      isNearLimit: ((usage?.test_creation_limit || 5) - (usage?.tests_created || 0)) > 0 && ((usage?.test_creation_limit || 5) - (usage?.tests_created || 0)) <= 2, // Example: 1 or 2 remaining
+      percentage: ((usage?.tests_created || 0) / (usage?.test_creation_limit || 5)) * 100
+    };
+  }, [usage]);
+  
+  // Debug log for calculated testUsage
+  console.log('Calculated testUsage:', testUsage);
   
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -86,32 +97,72 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
       loadTestSeriesData();
     }
   }, [isEditMode, testSeriesId]);
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!title.trim()) {
       setError('Title is required');
       return;
     }
-    
+
+    // Duration is required
+    if (!estimatedDuration) {
+      setError('Estimated duration is required');
+      return;
+    }
+
+    // Check usage limit before creating a new test series
+    if (!isEditMode) {
+      const canCreate = canUseFeature('test_creation');
+      if (!canCreate.allowed) {
+        toast.error(canCreate.reason || 'You have reached your test creation limit.');
+        return;
+      }
+    }
+
     try {
       setIsSubmitting(true);
       setError(null);
-      
+
       const testSeriesData: Partial<TestSeries> = {
         title: title.trim(),
         description: description.trim() || null,
         is_public: isPublic,
         estimated_duration_minutes: estimatedDuration ? Number(estimatedDuration) : null,
-        tags: tags.length > 0 ? tags : null
+        tags: tags.length > 0 ? tags : null,
       };
-      
+
       if (isEditMode && testSeriesId) {
         await updateTestSeries(testSeriesId, testSeriesData);
         setSuccess('Test series updated successfully');
       } else {
         const newTestSeries = await createTestSeries(testSeriesData);
+
+        // Record usage after successful creation
+        try {
+          console.log('Before recording test_creation usage:', usage);
+          await recordFeatureUsage('test_creation');
+          
+          // Explicitly refetch usage data to ensure UI updates properly
+          console.log('Calling refetchUsage() to get fresh data');
+          const { data: updatedUsage } = await refetchUsage();
+          console.log('Usage data refetched after test series creation', updatedUsage);
+          console.log('Original usage data for comparison:', usage);
+          
+          // Get the latest usage data to show correct remaining count
+          const remainingTests = updatedUsage?.remaining_tests ?? 0;
+          const limit = updatedUsage?.test_creation_limit ?? (usage?.test_creation_limit ?? 5);
+          console.log(`Remaining tests: ${remainingTests}, Limit: ${limit}`);
+          if (remainingTests <= Math.floor(limit * 0.3)) {
+            toast.info(`You have ${remainingTests} test${remainingTests === 1 ? '' : 's'} remaining in your plan`);
+          }
+        } catch (usageError) {
+          console.error('Failed to record usage, but test series was created.', usageError);
+          // Non-critical error, so we don't block the user
+          toast.warning('Your test was created, but we could not update your usage count.');
+        }
+
         setProblems(newTestSeries.test_problems || []);
         setSuccess('Test series created successfully');
         // Redirect to edit page to add problems
@@ -154,9 +205,16 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
   // Handle AI-generated problem
   const handleProblemGenerated = async (newProblem: TestProblem) => {
     try {
+      console.log('Before recording usage - testUsage:', testUsage);
+      
       // Record the test creation usage
       try {
         await recordFeatureUsage('test_creation');
+        console.log('Usage recorded successfully');
+        
+        // Explicitly refetch usage data to ensure UI updates properly
+        await refetchUsage();
+        console.log('Usage data refetched successfully');
       } catch (error) {
         console.error('Error recording test creation usage:', error);
         // Re-throw the error to be handled by the outer catch block
@@ -167,9 +225,13 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
       setShowGenerateProblemForm(false);
       setSuccess('Problem added successfully');
       
-      // Show remaining tests in a toast if low
-      if (testUsage.remaining <= Math.floor(testUsage.limit * 0.3)) {
-        toast.info(`You have ${testUsage.remaining} test${testUsage.remaining === 1 ? '' : 's'} remaining in your plan`);
+      // Get the latest usage data
+      const latestUsageData = usage;
+      console.log('After recording usage - checking remaining tests:', latestUsageData);
+      
+      const remainingTests = latestUsageData?.remaining_tests || 0;
+      if (remainingTests <= Math.floor((latestUsageData?.test_creation_limit || 5) * 0.3)) {
+        toast.info(`You have ${remainingTests} test${remainingTests === 1 ? '' : 's'} remaining in your plan`);
       }
     } catch (error) {
       console.error('Error handling generated problem:', error);
@@ -180,7 +242,8 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
   const handleGenerateNewProblem = async () => {
     try {
       // Check if user can create more tests
-      const canCreate = await canUseFeature('test_creation');
+      const canCreate = canUseFeature('test_creation');
+      console.log('canUseFeature result:', canCreate);
       
       if (!canCreate.allowed) {
         toast.error(canCreate.reason || 'You have reached your test creation limit');
@@ -299,7 +362,7 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
                     }
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="60"
+                  placeholder="60" required
                 />
               </div>
             </div>
@@ -495,11 +558,11 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
                       type="button"
                       onClick={() => {
                         try {
-                          // const { allowed, reason } = canUseFeature('test_creation');
-                          // if (!allowed) {
-                          //   toast.error(reason || 'You have reached your test creation limit for your current plan');
-                          //   return;
-                          // }
+                          const { allowed, reason } = canUseFeature('test_creation');
+                          if (!allowed) {
+                            toast.error(reason || 'You have reached your test creation limit for your current plan');
+                            return;
+                          }
                           setShowAddProblemForm(false);
                           setShowGenerateProblemForm(true);
                           console.log('showAddProblemForm:', false, 'showGenerateProblemForm:', true);

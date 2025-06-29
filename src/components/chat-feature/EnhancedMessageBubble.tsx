@@ -15,9 +15,10 @@ interface EnhancedMessageBubbleProps {
   message: EnhancedMessage;
   onBranchSelect: (path: BranchingPath) => void;
   onTagSelect: (suggestion: TopicSuggestion) => void;
+  onRetry?: () => void;
 }
 
-const EnhancedMessageBubble: React.FC<EnhancedMessageBubbleProps> = ({ message, onBranchSelect, onTagSelect }) => {
+const EnhancedMessageBubble: React.FC<EnhancedMessageBubbleProps> = ({ message, onBranchSelect, onTagSelect, onRetry }) => {
   // Use the helper hook to extract all sections from the message
   const {
     main,
@@ -53,6 +54,17 @@ const EnhancedMessageBubble: React.FC<EnhancedMessageBubbleProps> = ({ message, 
           practiceProblems={practiceProblems} 
           topicFallback={topicFallback} 
         />
+      {/* Retry button for error messages */}
+      {message.type === 'error' && onRetry && (
+        <div className="pt-2">
+          <button
+            onClick={() => onRetry()}
+            className="flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm hover:border-primary/50 text-gray-700 hover:text-primary transition-colors duration-200"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       </div>
     </div>
   );

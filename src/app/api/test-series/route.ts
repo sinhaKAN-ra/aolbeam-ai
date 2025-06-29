@@ -95,19 +95,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
     
-    // Use the database function to create test series with usage check
+    // Create the new test series directly
     const { data, error } = await supabase
-      .rpc('create_test_series_with_usage_check', {
-        p_title: body.title,
-        p_description: body.description || null,
-        p_creator_id: userId,
-        p_is_public: body.is_public || false,
-        p_estimated_duration: body.estimated_duration_minutes || null,
-        p_tags: body.tags || null
-      });
-    
+      .from('test_series')
+      .insert({
+        title: body.title,
+        description: body.description || null,
+        is_public: body.is_public || false,
+        estimated_duration_minutes: body.estimated_duration_minutes || null,
+        tags: body.tags || null,
+        creator_id: userId,
+      })
+      .select()
+      .single();
+
     if (error) {
-      console.error('Error in create_test_series_with_usage_check:', error);
+      console.error('Error creating test series:', error);
       
       // Handle test limit reached error specifically
       if (error.code === 'P0001') {
@@ -125,14 +128,14 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
     
-    if (!data || data.length === 0) {
+    if (!data) {
       return NextResponse.json({ 
-        error: 'Failed to create test series',
+        error: 'Failed to create test series or return the created record.',
         code: 'CREATION_FAILED'
       }, { status: 500 });
     }
 
-    return NextResponse.json({ data: data[0] }, { status: 201 });
+    return NextResponse.json({ data: data }, { status: 201 });
   } catch (error) {
     console.error('Unexpected error in test series POST:', error);
     return NextResponse.json({ 

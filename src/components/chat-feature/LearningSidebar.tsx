@@ -52,11 +52,14 @@ export default function LearningSidebar({
     console.log(`Step ${stepId} marked as ${completed ? 'completed' : 'incomplete'}`);
   };
 
-  const handleCustomPathCreated = (newPath: LearningPath | string) => {
+  const handleCustomPathCreated = (goals: any) => {
     setShowCustomPathModal(false);
+    // Custom learning paths are created in the modal component now
+    // The onCustomPathCreated will be called with the new path ID
     if (typeof onCustomPathCreated === 'function') {
-      // @ts-ignore - We know the types are compatible at runtime
-      onCustomPathCreated(newPath);
+      // Use the ID of the first goal as a temporary ID if needed
+      const pathId = goals?.[0]?.id || String(Date.now());
+      onCustomPathCreated(pathId);
     }
   };
 
@@ -232,7 +235,7 @@ export default function LearningSidebar({
           <CustomLearningPathModal
             isOpen={true}
             onClose={() => setShowCustomPathModal(false)}
-            onPathCreated={handleCustomPathCreated}
+            onSubmit={handleCustomPathCreated}
             searchHistory={searchHistory || []}
           />
         )}

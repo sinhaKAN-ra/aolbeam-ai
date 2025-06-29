@@ -8,7 +8,8 @@ export async function GET(
   request: NextRequest,
   context: { params: { id: string } }
 ) {
-  const { id } = context.params;
+  const params = await Promise.resolve(context.params);
+  const { id } = params;
   console.log(`GET request for test series with ID: ${id}`);
   try {
     const supabase = await createSupabaseServerClient();
@@ -79,7 +80,8 @@ export async function PUT(
     }
     
     const userId = user.id;
-    const { id } = params;
+    const resolvedParams = await Promise.resolve(params);
+    const { id } = resolvedParams;
     const body = await request.json();
     
     // Check if user is the creator of this test series
@@ -145,7 +147,8 @@ export async function DELETE(
     }
     
     const userId = user.id;
-    const { id } = params;
+    const resolvedParams = await Promise.resolve(params);
+    const { id } = resolvedParams;
     
     // Check if user is the creator of this test series
     const { data: testSeries, error: fetchError } = await supabase

@@ -1,13 +1,12 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useSupabase } from './useSupabase';
-import { SubscriptionPlan } from '@/types';
-import { plans } from '@/app/pricing/page';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { createSupabaseBrowserClient } from '@/lib/supabase';
+import { useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createSupabaseBrowserClient } from '@/lib/supabase';
+import { plans } from '@/app/pricing/page';
+import { SubscriptionPlan } from '@/types';
 
 // Define the structure of the usage data from the API
-type UsageData = {
+export type UsageData = {
   user_id: string;
   plan_id: string;
   chat_interactions_today: number;
@@ -75,48 +74,44 @@ const featureLimits: FeatureLimits = {
     quarterly: true,
   },
   ai_generation: {
-    free: false,
+    free: 20, // 20 interactions for free users
     weekly: true,
     monthly: true,
     quarterly: true,
   },
 };
 
-// Usage stats for a specific feature
-type FeatureUsage = {
-  used: number;
-  limit: number;
-  remaining: number;
-  percentage: number;
-}
-
+// Define the return type for canUseFeature
+export type FeatureAccessResult = {
+  allowed: boolean;
+  reason?: string;
+  remaining?: number;
+  limit?: number;
+  percentage?: number;
+};
 
 // Helper function to fetch usage data
-const fetchUsage = async (): Promise<UsageData> => {
+const fetchUsage = async (userId: string): Promise<UsageData> => {
   const supabase = createSupabaseBrowserClient();
-  const { user } = useAuth(); // Get user from AuthContext
-
-  if (!user) {
-    throw new Error('User not authenticated.');
-  }
+  if (!userId) throw new Error('User not authenticated.');
 
   // Fetch all user interactions
-  const { data: interactions, error } = await supabase
+  const { data: interactions, error: interactionsError } = await supabase
     .from('user_interactions')
     .select('interaction_type, created_at')
-    .eq('user_id', user.id);
+    .eq('user_id', userId);
 
-  if (error) {
-    throw new Error(`Failed to fetch user interactions: ${error.message}`);
+  if (interactionsError) {
+    throw new Error(`Failed to fetch user interactions: ${interactionsError.message}`);
   }
 
+  const testCreationInteractions = interactions?.filter(i => i.interaction_type === 'test_creation') || [];
+  
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   let chatInteractionsToday = 0;
-  let testsCreated = 0;
-
-  interactions.forEach(interaction => {
+  interactions?.forEach(interaction => {
     if (interaction.interaction_type === 'chat') {
       const interactionDate = new Date(interaction.created_at);
       interactionDate.setHours(0, 0, 0, 0);
@@ -124,22 +119,29 @@ const fetchUsage = async (): Promise<UsageData> => {
         chatInteractionsToday++;
       }
     }
-    if (interaction.interaction_type === 'test_creation') {
-      testsCreated++;
-    }
   });
 
-  // Determine the user's current plan (assuming 'free' if not subscribed or plan not found)
-  const userProfile = await supabase.from('user_profiles').select('is_subscribed, subscription_plan').eq('id', user.id).single();
-  const currentPlanId = userProfile.data?.is_subscribed ? userProfile.data.subscription_plan : 'free';
-  const currentPlan = plans.find(p => p.id === currentPlanId) || plans.find(p => p.id === 'free');
+  const testsCreated = testCreationInteractions.length;
 
-  const chatLimit = currentPlan?.chat_limit || 0;
-  const testCreationLimit = currentPlan?.test_creation_limit || 0;
+  // Get user's subscription plan
+  const { data: subscription } = await supabase
+    .from('subscriptions')
+    .select('plan_id')
+    .eq('user_id', userId)
+    .in('status', ['trialing', 'active'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const planId = subscription?.plan_id || 'free';
+  const currentPlan = plans.find(p => p.id === planId) || plans.find(p => p.id === 'free');
+  
+  const chatLimit = currentPlan?.chat_limit ?? featureLimits.chat[planId] as number;
+  const testCreationLimit = currentPlan?.test_creation_limit ?? featureLimits.test_creation[planId] as number;
 
   return {
-    user_id: user.id,
-    plan_id: currentPlan?.id || 'free',
+    user_id: userId,
+    plan_id: planId,
     chat_interactions_today: chatInteractionsToday,
     chat_limit: chatLimit,
     tests_created: testsCreated,
@@ -151,185 +153,64 @@ const fetchUsage = async (): Promise<UsageData> => {
 };
 
 export function useFeatureAccess() {
-  const [currentPlan, setCurrentPlan] = useState<ExtendedSubscriptionPlan | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const supabase = useSupabase();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  // Fetch usage data using React Query
-  const { data: usage, refetch: refetchUsage } = useQuery<UsageData>({
-    queryKey: ['usage'],
-    queryFn: fetchUsage,
-    enabled: false, // We'll manually trigger this when needed
-  });
-
-  // Mutation to record feature usage
-  const recordUsage = useMutation({
-    mutationFn: async (feature: 'chat' | 'test_creation') => {
-      const response = await fetch('/api/usage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feature }),
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        const error = new Error(data.error || 'Failed to record usage');
-        (error as any).code = data.code;
-        throw error;
-      }
-      
+  const { data: usage, isLoading, error, refetch } = useQuery({
+    queryKey: ['usage-stats', user?.id],
+    queryFn: async () => {
+      console.log('Fetching fresh usage data for user:', user?.id);
+      const data = await fetchUsage(user!.id);
+      console.log('Fresh usage data received:', data);
       return data;
     },
+    enabled: !!user,
+    staleTime: 0, // Always refetch fresh data
+    refetchOnWindowFocus: true,
+  });
+
+  const recordUsageMutation = useMutation({
+    mutationFn: async (feature: 'chat' | 'test_creation') => {
+      if (!user) throw new Error('User not authenticated');
+      
+      console.log(`Recording usage for feature: ${feature}`);
+      const supabase = createSupabaseBrowserClient();
+      // Set default topic based on interaction type
+      const chatContext = (window as any).__CHAT_CONTEXT__ || {};
+      const currentTopic = chatContext.currentTopic || 'General Discussion';
+  
+      const topic = feature === 'chat' ? currentTopic : 'Test Creation';
+  
+      const { error } = await supabase.from('user_interactions').insert({
+        user_id: user.id,
+        interaction_type: feature,
+        topic: topic // This is now guaranteed to be non-null
+      });
+
+      if (error) {
+        if (error.message.includes('check_test_creation_limit')) {
+            const limitError = new Error('You have reached your test creation limit.');
+            (limitError as any).code = 'TEST_LIMIT_REACHED';
+            throw limitError;
+        }
+        throw new Error(`Failed to record usage: ${error.message}`);
+      }
+      console.log(`Successfully recorded usage for ${feature}`);
+      return { success: true };
+    },
     onSuccess: () => {
-      // Refetch usage data after recording
-      refetchUsage();
+      console.log('Usage recorded successfully, invalidating queries');
+      queryClient.invalidateQueries({ queryKey: ['usage-stats', user?.id] });
     },
   });
-  
-  // Record feature usage with better error handling
-  // const recordFeatureUsage = useCallback(async (feature: FeatureName): Promise<boolean> => {
-  //   try {
-  //     if (feature !== 'chat' && feature !== 'test_creation') {
-  //       console.warn(`Usage tracking not implemented for feature: ${feature}`);
-  //       return true; // Allow features that don't have usage tracking yet
-  //     }
-      
-  //     await recordUsage.mutateAsync(feature);
-  //     return true;
-  //   } catch (error) {
-  //     console.error('Error recording feature usage:', error);
-      
-  //     // If this is a test limit reached error, rethrow it
-  //     if ((error as any)?.code === 'TEST_LIMIT_REACHED') {
-  //       throw error;
-  //     }
-      
-  //     // For other errors, log but don't block the user
-  //     return false;
-  //   }
-  // }, [recordUsage]);
 
-  // Load user's subscription and usage data
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        // Get current user
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setIsLoading(false);
-          return;
-        }
+  const canUseFeature = useCallback((feature: FeatureName): FeatureAccessResult => {
+    if (isLoading) return { allowed: false, reason: 'Loading user data...' };
+    if (error || !usage) return { allowed: false, reason: 'Could not load usage data.' };
 
-        // Get user's subscription
-        const { data: subscription } = await supabase
-          .from('subscriptions')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        // Update state with subscription
-        if (subscription) {
-          const planDetails = plans.find(p => p.id === subscription.plan_id) || {
-            id: 'free',
-            name: 'Free',
-            price: '0',
-            currency: 'INR',
-            order: 0,
-            features: [],
-            type: 'free' as const,
-          };
-          
-          setCurrentPlan({
-            ...planDetails,
-            usage: {
-              chat: { used: 0, limit: 15, remaining: 15, percentage: 0 },
-              test_creation: { used: 0, limit: 5, remaining: 5, percentage: 0 },
-            },
-            updated_at: new Date().toISOString(),
-          });
-        } else {
-          // Default to free plan if no subscription found
-          setCurrentPlan({
-            id: 'free',
-            name: 'Free',
-            price: '0',
-            currency: 'INR',
-            order: 0,
-            features: [],
-            type: 'free',
-            usage: {
-              chat: { used: 0, limit: 15, remaining: 15, percentage: 0 },
-              test_creation: { used: 0, limit: 5, remaining: 5, percentage: 0 },
-            },
-            updated_at: new Date().toISOString(),
-          });
-        }
-
-        // Fetch usage data
-        await refetchUsage();
-      } catch (error) {
-        console.error('Error loading feature access data:', error);
-        setError(error instanceof Error ? error : new Error('Failed to load feature access data'));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
-  }, [supabase, refetchUsage]);
-
-  // Update current plan with usage data when it changes
-  useEffect(() => {
-    if (usage && currentPlan) {
-      setCurrentPlan({
-        ...currentPlan,
-        usage: {
-          chat: {
-            used: usage.chat_interactions_today,
-            limit: usage.chat_limit,
-            remaining: usage.remaining_chats,
-            percentage: Math.round((usage.chat_interactions_today / (usage.chat_limit || 1)) * 100)
-          },
-          test_creation: {
-            used: usage.tests_created,
-            limit: usage.test_creation_limit,
-            remaining: usage.remaining_tests,
-            percentage: Math.round((usage.tests_created / (usage.test_creation_limit || 1)) * 100)
-          }
-        },
-        updated_at: usage.updated_at
-      });
-    }
-  }, [usage]);
-
-  // Define the return type for canUseFeature
-  type FeatureAccessResult = {
-    allowed: boolean;
-    reason?: string;
-    remaining?: number;
-    limit?: number;
-    percentage?: number;
-  };
-
-  // Check if a feature is available for the current user's plan
-  const canUseFeature = (feature: FeatureName): FeatureAccessResult => {
-    // If user is not loaded yet, assume not allowed until we know for sure
-    if (isLoading) return { 
-      allowed: false, 
-      reason: 'Loading user data...' 
-    };
-    
-    const planId = currentPlan?.id || 'free';
+    const planId = usage.plan_id;
     const featureLimit = featureLimits[feature][planId];
 
-    // For boolean features (like advanced_analytics, test_sharing, ai_generation)
     if (typeof featureLimit === 'boolean') {
       return { 
         allowed: featureLimit,
@@ -337,160 +218,42 @@ export function useFeatureAccess() {
       };
     }
 
-    // For numeric features (like chat, test_creation)
-    if (typeof featureLimit === 'number' && usage) {
+    if (typeof featureLimit === 'number') {
       const usageCount = feature === 'chat' ? usage.chat_interactions_today : usage.tests_created;
-      const remaining = Math.max(0, featureLimit - usageCount);
-      
-      const percentage = Math.min(Math.round((usageCount / featureLimit) * 100), 100);
+      const remaining = feature === 'chat' ? usage.remaining_chats : usage.remaining_tests;
+      const limit = feature === 'chat' ? usage.chat_limit : usage.test_creation_limit;
+      const percentage = limit > 0 ? Math.min(Math.round((usageCount / limit) * 100), 100) : 0;
       
       return {
         allowed: remaining > 0,
         remaining,
-        limit: featureLimit,
-        reason: remaining > 0 
-          ? undefined 
-          : `You've reached your limit of ${featureLimit} ${feature === 'chat' ? 'chat interactions' : 'tests'} for your plan.`,
+        limit,
+        reason: remaining > 0 ? undefined : `You've reached your limit for this feature.`,
         percentage,
       };
     }
 
-    // Default to not allowed if feature/plan combination is not found
-    return { 
-      allowed: false, 
-      reason: 'Feature not available with your current plan.' 
-    };
-  };
+    return { allowed: false, reason: 'Feature not available.' };
+  }, [usage, isLoading, error]);
 
-  // Record usage of a feature
-  const recordFeatureUsage = useCallback(async (feature: FeatureName): Promise<boolean> => {
+  const recordFeatureUsage = useCallback(async (feature: 'chat' | 'test_creation') => {
     try {
-      if (feature !== 'chat' && feature !== 'test_creation') {
-        console.warn(`Cannot record usage for feature: ${feature}`);
-        return false;
-      }
-      
-      // Record the usage via the API
-      await recordUsage.mutateAsync(feature);
+      console.log(`Starting recordFeatureUsage for ${feature}`);
+      await recordUsageMutation.mutateAsync(feature);
+      console.log(`Completed recordFeatureUsage for ${feature}`);
       return true;
     } catch (error) {
-      console.error('Error recording feature usage:', error);
-      return false;
+      console.error(`Failed to record usage for ${feature}:`, error);
+      throw error;
     }
-  }, [recordUsage]);
-  
-  // Get the current user's plan ID
-  const getCurrentPlanId = useCallback((): string => {
-    return currentPlan?.id || 'free';
-  }, [currentPlan]);
-
-  // Get usage statistics for a feature
-  const getUsageStats = useCallback((feature: FeatureName) => {
-    const defaultStats = { 
-      used: 0, 
-      limit: 0,
-      remaining: 0,
-      percentage: 0,
-      isNearLimit: false,
-      isLimitReached: false,
-    };
-
-    if (isLoading || !usage) {
-      return defaultStats;
-    }
-    
-    const planId = getCurrentPlanId();
-    
-    // Handle features with usage tracking (chat, test_creation)
-    if (feature === 'chat' || feature === 'test_creation') {
-      const featureData = {
-        chat: {
-          used: usage.chat_interactions_today,
-          limit: usage.chat_limit,
-          remaining: usage.remaining_chats
-        },
-        test_creation: {
-          used: usage.tests_created,
-          limit: usage.test_creation_limit,
-          remaining: usage.remaining_tests
-        },
-      }[feature];
-      
-      if (!featureData) return defaultStats;
-      
-      const remaining = featureData.remaining;
-      const percentage = Math.min(Math.round((featureData.used / (featureData.limit || 1)) * 100), 100);
-      
-      return {
-        used: featureData.used,
-        limit: featureData.limit,
-        remaining,
-        percentage,
-        isNearLimit: percentage >= 80 && percentage < 100,
-        isLimitReached: percentage >= 100,
-      };
-    }
-    
-    // Handle boolean features (advanced_analytics, ai_generation, test_sharing)
-    const isAllowed = !!featureLimits[feature][planId];
-    
-    return {
-      ...defaultStats,
-      allowed: isAllowed,
-      isLimitReached: !isAllowed,
-      reason: isAllowed ? undefined : 'This feature requires a paid plan.'
-    };
-  }, [isLoading, usage, getCurrentPlanId]);
-
-  // Memoize the return value to prevent unnecessary re-renders
-  const result = useMemo(() => ({
-    currentPlan,
-    usage: usage ? {
-      user_id: usage.user_id,
-      plan_id: usage.plan_id,
-      chat_interactions_today: usage.chat_interactions_today,
-      chat_limit: usage.chat_limit,
-      tests_created: usage.tests_created,
-      test_creation_limit: usage.test_creation_limit,
-      remaining_chats: usage.remaining_chats,
-      remaining_tests: usage.remaining_tests,
-      updated_at: usage.updated_at
-    } : null,
-    isLoading: isLoading || recordUsage.isPending,
-    error,
-    canUseFeature,
-    recordFeatureUsage,
-    getCurrentPlanId,
-    getUsageStats,
-  }), [
-    currentPlan, 
-    usage, 
-    isLoading, 
-    recordUsage.isPending, 
-    error, 
-    canUseFeature, 
-    recordFeatureUsage, 
-    getCurrentPlanId,
-    getUsageStats
-  ]);
-
-  return result;
-};
-
-// Helper hook for checking specific feature access
-export function useCanUseFeature(feature: FeatureName) {
-  const { canUseFeature } = useFeatureAccess();
-  return canUseFeature(feature);
-}
-
-// Helper hook for getting subscription status
-export function useSubscriptionStatus() {
-  const { currentPlan, isLoading, error, usage } = useFeatureAccess();
+  }, [recordUsageMutation]);
 
   return {
-    plan: currentPlan,
-    isLoading,
-    error,
     usage,
+    isLoading,
+    error: error as Error | null,
+    canUseFeature,
+    recordFeatureUsage,
+    refetchUsage: refetch,
   };
 }

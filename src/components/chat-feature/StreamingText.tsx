@@ -8,7 +8,7 @@ interface StreamingTextProps {
   speed?: number;
 }
 
-const StreamingText: React.FC<StreamingTextProps> = ({ text, isComplete = false, speed = 20 }) => {
+const StreamingText: React.FC<StreamingTextProps> = ({ text, isComplete = false, speed = 5 }) => {
   const [displayedText, setDisplayedText] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
 

@@ -15,6 +15,8 @@ import {
   ChatMessage
 } from '../../types/chat-feature';
 import { useChatHistory } from '../useChatHistory';
+import { useFeatureAccess } from '../useFeatureAccess';
+import { toast } from 'sonner';
 
 interface AddMessageOptions {
   saveToHistory?: boolean;
@@ -353,8 +355,23 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
    * Sends a user message and generates an AI response
    * The AI response is generated using parallel API calls for better performance
    */
+  // Import feature access hooks
+  const { canUseFeature, recordFeatureUsage } = useFeatureAccess();
+
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim()) return;
+    
+    // Check if the user can use the chat feature
+    const { allowed, reason, remaining, limit } = canUseFeature('chat');
+    
+    if (!allowed) {
+      // Show error toast with reason
+      toast.error(reason || 'Feature limit reached', {
+        description: `You've used all ${limit} chat interactions available in your plan.`,
+        duration: 5000,
+      });
+      return;
+    }
 
     // Add user message to the chat
     const userMsg: Message = {
@@ -366,6 +383,14 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
       timestamp: new Date().toISOString(),
     };
     setMessages(prev => [...prev, userMsg]);
+    
+    // Record feature usage
+    try {
+      await recordFeatureUsage('chat');
+    } catch (error) {
+      console.error('Failed to record chat usage:', error);
+      // Continue anyway since the message was already displayed
+    }
 
     // Update search history
     const updatedHistory = [

@@ -35,57 +35,39 @@ export async function GET() {
 export async function POST(req: Request) {
   const supabase = await createSupabaseServerClient();
   try {
-    const requestBody = await req.json();
-    console.log('Incoming request body for POST /api/learning-paths:', requestBody);
-
-    const { title, description, steps, topic, isPublic } = requestBody;
+    const learningPath = await req.json();
 
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
       return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
     }
-    const userId = user.id;
     
-    // Validate required fields
-    if (!title || !description || !steps || !topic) {
-      console.error('Missing required fields for learning path:', { title, description, steps, topic });
-      return NextResponse.json(
-        { error: 'Missing required fields: title, description, steps, and topic are mandatory.' },
-        { status: 400 }
-      );
-    }
-
-    const newPath = {
-      id: uuidv4(),
-      user_id: userId,
-      title,
-      description,
-      topic,
-      steps,
-      is_public: isPublic || false,
-      progress: 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+    const newPathData = {
+      ...learningPath,
+      user_id: user.id,
+      updated_at: new Date().toISOString(),
     };
 
-    console.log('Attempting to insert new learning path:', newPath);
+    // Ensure created_at is also set if not provided by client
+    if (!newPathData.created_at) {
+      newPathData.created_at = new Date().toISOString();
+    }
 
     const { data, error } = await supabase
       .from('learning_paths')
-      .insert(newPath)
+      .insert(newPathData)
       .select()
       .single();
 
     if (error) {
       console.error('Supabase insert error:', error);
-      throw error;
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    console.log('Successfully created learning path:', data);
     return NextResponse.json(data);
   } catch (error: any) {
-    console.error('Error creating learning path:', error);
+    console.error('Error in POST /api/learning-paths:', error);
     return NextResponse.json(
       { error: `Failed to create learning path: ${error.message || 'Unknown error'}` },
       { status: 500 }

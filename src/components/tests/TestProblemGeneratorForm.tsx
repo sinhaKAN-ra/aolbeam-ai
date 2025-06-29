@@ -110,6 +110,7 @@ export const TestProblemGeneratorForm: React.FC<TestProblemGeneratorFormProps> =
       }
       
       const { data } = await response.json();
+      console.log('API response for new problem:', data);
       onProblemAdded(data);
       
       toast({

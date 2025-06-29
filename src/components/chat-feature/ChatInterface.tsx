@@ -123,7 +123,8 @@ export const ChatInterface = ({
     canUseFeature, 
     recordFeatureUsage,
     isLoading: isFeatureCheckLoading,
-    usage
+    usage,
+    refetchUsage
   } = useFeatureAccess();
   
   const [isProcessingMessage, setIsProcessingMessage] = useState(false);
@@ -141,13 +142,7 @@ export const ChatInterface = ({
     try {
       setIsProcessingMessage(true);
       
-      // Check if user can send a message (client-side check for immediate feedback)
-      // const canChat = await canUseFeature('chat');
-      
-      // if (!canChat.allowed) {
-      //   toast.error(canChat.reason || 'You have reached your chat message limit for today');
-      //   return;
-      // }
+      // Feature limit checks are now handled directly in the useChat hook
       
       // Call the server-side API to validate and record the chat message
       const response = await fetch('/api/chat/messages', {
@@ -176,6 +171,15 @@ export const ChatInterface = ({
       onSendMessage(input.trim());
       setInput('');
       setForceScroll(true); // Trigger scroll after sending message
+      
+      // Log current usage before refetch
+      console.log('Chat usage before refetch:', usage);
+      console.log('Current chatUsage object:', chatUsage);
+      
+      // Refetch chat usage to update counts in UI
+      console.log('Calling refetchUsage() to get fresh chat data');
+      const { data: updatedUsage } = await refetchUsage();
+      console.log('Fresh chat usage data after refetch:', updatedUsage);
       
       // Show remaining messages in a toast if low
       if (chatUsage.remaining <= Math.floor(chatUsage.limit * 0.2)) {
@@ -516,11 +520,13 @@ const sampleTopics = [
                       <EnhancedMessageBubble
                         message={message}
                         onBranchSelect={handleBranchSelect}
-                        onTagSelect={handleSuggestionClick} />
+                        onTagSelect={handleSuggestionClick}
+                        onRetry={onRetry}
+                      />
                     ) : (
                       <>
 
-                        <MessageBubble message={message} isCurrentUser={false} />
+                        <MessageBubble message={message} isCurrentUser={false} onRetry={onRetry} />
                       </>
                     )}
                   </div>
@@ -539,11 +545,9 @@ const sampleTopics = [
               {onRetry && (
                 <button
                   onClick={() => {
-                    // Reset UI state when starting a new chat
-                    setInput('');
-                    setShowCustomPathModal(false);
-                    setIsLearningPathVisible(true);
-                    onNewChat();
+                    if (onRetry) {
+                      onRetry();
+                    }
                   }}
                   className="flex items-center px-4 py-2 border border-gray-200 rounded-md hover:border-primary/50 text-gray-700 hover:text-primary transition-colors duration-200"
                 >
@@ -558,11 +562,11 @@ const sampleTopics = [
         <form onSubmit={handleSubmit} className="border-t border-gray-200 p-4 bg-background/80 backdrop-blur-sm">
           <div className="flex items-end space-x-2 relative">
             {/* Usage indicator for chat messages */}
-            <div className="absolute -top-8 right-0 text-xs text-muted-foreground">
+            {/* <div className="absolute -top-8 right-0 text-xs text-muted-foreground">
               {chatUsage.used} / {chatUsage.limit} messages used
-            </div>
+            </div> */}
             {!isFeatureCheckLoading && (
-              <div className="absolute -top-6 right-0 text-xs text-gray-500">
+              <div className="absolute -top-8 right-0 text-xs text-gray-500">
                 {(() => {
                   const { remaining, limit } = canUseFeature('chat');
                   if (typeof remaining === 'number' && typeof limit === 'number') {
