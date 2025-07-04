@@ -1,5 +1,6 @@
 import React from 'react';
 import { Json } from '../supabase';
+import { LearningPath } from './chat-feature';
 
 // Message types
 export type MessageSender = 'user' | 'ai';
@@ -86,37 +87,37 @@ export interface LearningStepResource {
   type: 'video' | 'article' | 'documentation' | 'tutorial';
 }
 
-export interface LearningStep {
-  id: string;
-  title: string;
-  description?: string;
-  completed?: boolean;
-  category?: string;
-  estimatedTime?: string;
-  resources?: LearningStepResource[];
-  branches?: string[];
-}
+// export interface LearningStep {
+//   id: string;
+//   title: string;
+//   description?: string;
+//   completed?: boolean;
+//   category?: string;
+//   estimatedTime?: string;
+//   resources?: LearningStepResource[];
+//   branches?: string[];
+// }
 
 // --- PATCHED FOR useChat.ts compatibility ---
-export interface LearningPath {
-  id: string;
-  title: string;
-  description: string;
-  main_topic: string;
-  current_step: number;
-  total_steps: number;
-  steps: LearningStep[];
-  estimated_hours: number;
-  difficulty?: 'beginner' | 'intermediate' | 'advanced';
-  tags?: string[];
-  completed_topics: string[];
-  suggested_topics: TopicSuggestion[];
-  is_custom_path?: boolean;
-  goals?: string[];
-  timeline?: string;
-  created_at?: string | Date; // PATCH: allow string timestamp
-  updated_at?: string | Date; // PATCH: required by useChat.ts
-}
+// export interface LearningPath {
+//   id: string;
+//   title: string;
+//   description: string;
+//   main_topic: string;
+//   current_step: number;
+//   total_steps: number;
+//   steps: LearningStep[];
+//   estimated_hours: number;
+//   difficulty?: 'beginner' | 'intermediate' | 'advanced';
+//   tags?: string[];
+//   completed_topics: string[];
+//   suggested_topics: TopicSuggestion[];
+//   is_custom_path?: boolean;
+//   goals?: string[];
+//   timeline?: string;
+//   created_at?: string | Date; // PATCH: allow string timestamp
+//   updated_at?: string | Date; // PATCH: required by useChat.ts
+// }
 // --- END PATCH ---
 
 export interface CustomLearningGoal {

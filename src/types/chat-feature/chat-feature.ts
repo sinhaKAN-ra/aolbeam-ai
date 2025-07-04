@@ -38,7 +38,7 @@ export interface LearningStep {
   description: string;
   completed: boolean;
   resources?: LearningResource[];
-  order: number;
+  order?: number;
   estimatedTime?: string;
   category?: string; // For categorizing steps into branches/paths
   branches?: string[]; // Branching options from this step
@@ -55,13 +55,15 @@ export interface LearningResource {
   completed?: boolean;
 }
 
+export type PathType = 'skill' | 'advancement' | 'career-change';
+
 export interface LearningPath {
   id: string;
   user_id?: string; // Added server-side
   title: string;
-  description?: string;
+  description: string;
   topic: string; // The main, required topic
-  main_topic?: string; // Optional, maybe for sub-topics
+  main_topic: string; // Required for compatibility
   steps: LearningStep[];
   current_step: number;
   total_steps: number;
@@ -69,12 +71,15 @@ export interface LearningPath {
   completed_topics?: string[];
   suggested_topics?: TopicSuggestion[];
   is_custom_path: boolean;
+  path_id?: string;
+  path_type?: PathType; // Added to differentiate between path types
   goals?: string[];
   timeline?: string;
   is_public?: boolean;
   progress?: number;
   created_at?: Date | string;
   updated_at?: Date | string;
+  order?: number;
 }
 
 // Practice problem types

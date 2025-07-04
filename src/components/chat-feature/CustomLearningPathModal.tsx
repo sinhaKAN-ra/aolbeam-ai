@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { X, Plus, ArrowRight, Clock, Zap, AlertCircle, Sparkles, Trash2, Book, BookOpen, Check, Clipboard, CheckCircle2, Loader2, Brain } from "lucide-react";
+import { X, Plus, ArrowRight, Clock, Zap, AlertCircle, Sparkles, Trash2, Book, BookOpen, Check, Clipboard, CheckCircle2, Loader2, Brain, ListChecks, AlertTriangle } from "lucide-react";
 import { CustomLearningGoal, LearningPath, LearningStep } from '../../types/chat-feature/chat-feature';
 import { useToast } from '@/hooks/use-toast';
 
@@ -47,8 +47,12 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
   const [validationErrors, setValidationErrors] = useState<{[key: string]: boolean}>({});
   const [conversionStatus, setConversionStatus] = useState('idle'); // idle, converting, success, failed
 
+  // Use a ref to track if the modal has been initialized
+  const isInitializedRef = React.useRef(false);
+  
   useEffect(() => {
-    if (isOpen) {
+    // Only initialize when the modal opens and hasn't been initialized yet
+    if (isOpen && !isInitializedRef.current) {
       setStep(1);
       setGoals(initialGoals);
       setCurrentGoal({ ...initialGoal, title: topic || '' });
@@ -76,8 +80,22 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
           setGoals([mainGoal]);
         }
       }
+      
+      // Mark as initialized
+      isInitializedRef.current = true;
+    } else if (!isOpen) {
+      // Reset the initialization flag when modal closes
+      isInitializedRef.current = false;
     }
   }, [isOpen, initialGoals, topic, existingPath]);
+  
+  // Add a new useEffect to monitor goals array changes
+  useEffect(() => {
+    // Log when goals state changes
+    console.log('Goals state updated:', goals);
+    console.log('Goals length:', goals.length);
+    // You could add additional logic here if needed
+  }, [goals]);
 
   useEffect(() => {
     if (isOpen && searchHistory && searchHistory.length > 0 && !topic) {
@@ -118,13 +136,33 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
     
     setValidationErrors({});
     const newGoal: CustomLearningGoal = { ...currentGoal, id: Date.now().toString() };
-    setGoals(prev => [...prev, newGoal]);
+    
+    console.log('Before adding goal, goals:', goals);
+    
+    // Add the new goal to the goals array - using functional update to ensure latest state
+    setGoals(prev => {
+      const updatedGoals = [...prev, newGoal];
+      console.log('After adding goal, updatedGoals:', updatedGoals);
+      return updatedGoals;
+    });
+    
+    // Force a re-render by setting a dummy state
+    setError(null);
+    
     setCurrentGoal({
       ...initialGoal,
       topics: [], // Reset topics for the next goal
       title: '' // Reset title for the next goal
     });
+    
     toast({ title: "Goal added", description: `"${newGoal.title}" has been added to your learning path.` });
+    
+    // Removed auto-navigation - let user explicitly navigate with the Next button
+    // This ensures state is fully updated before navigation
+    
+    // Log the goals state after all updates
+    console.log('Goals after all updates:', goals); // This might show stale state due to closure
+    setTimeout(() => console.log('Goals after timeout:', goals), 100); // This might show updated state
   };
 
   const removeGoal = (id: string) => {
@@ -185,11 +223,22 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
     return true;
   };
 
-  const handleCreatePath = async () => {
+  const handleReviewPath = () => {
     if (!user) {
       toast({ 
         title: "Authentication required", 
         description: "You need to be logged in to create a learning path.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    // Do an explicit check for goals length here before calling validateBeforeSubmit
+    // This ensures we're working with the most current state
+    if (goals.length === 0) {
+      toast({ 
+        title: "No goals defined", 
+        description: "Please add at least one learning goal to create a path.", 
         variant: "destructive" 
       });
       return;
@@ -205,15 +254,35 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
       // Convert goals to learning steps for preview
       const steps = convertGoalsToSteps();
       setGeneratedSteps(steps);
+      setConversionStatus('success');
       
+      // Move to the confirmation step
+      setStep(2);
+    } catch (error) {
+      console.error('Error during path preview generation:', error);
+      setError(typeof error === 'string' ? error : 'Failed to generate learning path preview. Please try again.');
+      setConversionStatus('failed');
+      toast({ 
+        title: 'Error', 
+        description: 'Failed to generate learning path preview. Please try again.', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+  
+  const handleCreatePath = async () => {
+    setIsCreating(true);
+    setError(null);
+    
+    try {
       // The onSubmit function is now expected to handle the async creation
       await onSubmit(goals);
-      setConversionStatus('success');
-      setStep(3);
+      setStep(3); // Move to success step
     } catch (error) {
       console.error('Error during path creation submission:', error);
       setError(typeof error === 'string' ? error : 'Failed to submit learning path. Please try again.');
-      setConversionStatus('failed');
       toast({ 
         title: 'Error', 
         description: 'Failed to create learning path. Please try again.', 
@@ -436,7 +505,13 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
                 </div>
               )}
               <div className="flex justify-end mt-8">
-                <button onClick={() => setStep(2)} disabled={goals.length === 0} className="flex items-center gap-2 px-6 py-3 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">Next: Review Path <ArrowRight className="w-5 h-5" /></button>
+                <button 
+                  onClick={handleReviewPath} 
+                  disabled={goals.length === 0} 
+                  className={`flex items-center gap-2 px-6 py-3 ${goals.length > 0 ? 'bg-accent text-accent-foreground hover:bg-accent/90' : 'bg-gray-200 text-gray-500'} rounded-lg transition-colors duration-200 ${goals.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  Next: Review Path <ArrowRight className="w-5 h-5" />
+                </button>
               </div>
             </div>
           )}
@@ -496,6 +571,44 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
                   </div>
                 ))}
               </div>
+              
+              {/* Generated Learning Steps for Review */}
+              {generatedSteps && generatedSteps.length > 0 && (
+                <div className="space-y-4 mt-8">
+                  <h4 className="font-semibold text-foreground flex items-center gap-2">
+                    <ListChecks className="w-5 h-5 text-secondary" /> 
+                    Learning Path Steps
+                  </h4>
+                  <div className="max-h-64 overflow-y-auto bg-background/50 rounded-xl border border-border">
+                    <ul className="divide-y divide-border">
+                      {generatedSteps.map((step, index) => (
+                        <li key={step.id} className="p-4 hover:bg-muted/50 transition-colors">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="bg-primary/10 text-primary w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium">{index + 1}</span>
+                                <h6 className="font-medium text-foreground">{step.title}</h6>
+                                {step.category && <span className="text-xs px-2 py-1 bg-secondary/10 text-secondary rounded-full">{step.category}</span>}
+                              </div>
+                              {step.description && <p className="text-sm text-muted-foreground mt-1 ml-8">{step.description}</p>}
+                            </div>
+                            <span className="text-xs px-2 py-1 bg-muted rounded-full">{step.difficulty}</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <p className="text-sm text-muted-foreground italic">These learning steps will be created based on your goals. You can return to the previous step if you want to make changes.</p>
+                </div>
+              )}
+              
+              {/* Show message if no steps were generated but should have been */}
+              {goals.length > 0 && (!generatedSteps || generatedSteps.length === 0) && (
+                <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500 rounded-lg flex items-center gap-3 text-amber-600">
+                  <AlertTriangle className="w-5 h-5" />
+                  <p>No learning steps could be generated. Please go back and review your goals.</p>
+                </div>
+              )}
               <div className="flex justify-between mt-8">
                 <button onClick={() => setStep(1)} className="flex items-center gap-2 px-6 py-3 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 transition-colors duration-200">Back</button>
                 <button onClick={handleCreatePath} disabled={isCreating} className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors duration-200 disabled:opacity-50">

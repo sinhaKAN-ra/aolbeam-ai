@@ -1,5 +1,8 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { LearningPath, CustomLearningGoal, UserProfile, LearningStep } from '../../types/chat-feature';
+import { UserProfile } from '../../types/chat-feature';
+import { CustomLearningGoal } from '@/types/chat-feature/chat-feature';
+import { LearningStep } from '@/types/chat-feature/chat-feature';
+import { LearningPath } from '@/types/chat-feature/chat-feature';
 
 export class LearningPathService {
   async saveLearningPath(learningPath: LearningPath): Promise<LearningPath> {
@@ -62,11 +65,16 @@ export class LearningPathService {
   }
 
   async getUserSearchHistory(userId: string): Promise<string[]> {
+    // Always check localStorage first
+    const localHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+    
+    // If Supabase is not configured, just return localStorage data
     if (!isSupabaseConfigured()) {
-      return JSON.parse(localStorage.getItem('searchHistory') || '[]');
+      return localHistory;
     }
 
     try {
+      // Try to fetch from Supabase
       const { data, error } = await supabase!
         .from('search_history')
         .select('search_term')
@@ -74,12 +82,17 @@ export class LearningPathService {
         .order('created_at', { ascending: false })
         .limit(50);
 
-      if (error) throw error;
+      // If there's an error (including missing table), fall back to localStorage
+      if (error) {
+        console.warn('Falling back to localStorage for search history:', error.message);
+        return localHistory;
+      }
 
       return data.map(item => item.search_term);
     } catch (error) {
       console.error('Error fetching search history:', error);
-      return [];
+      // Fall back to localStorage on error
+      return localHistory;
     }
   }
 
@@ -87,57 +100,79 @@ export class LearningPathService {
     goals: CustomLearningGoal[],
     searchHistory: any[]
   ): Promise<LearningPath> {
-    // Generate custom learning path based on goals and history
-    const mainTopic = goals[0]?.title || 'Custom Learning Journey';
-    const totalEstimatedHours = goals.reduce((sum, goal) => sum + goal.estimatedHours, 0);
-    
-    const steps: LearningStep[] = goals.map((goal, index) => ({
-      step: index + 1,
-      title: goal.title,
-      description: goal.description || `A step focused on mastering ${goal.title}`,
-      completed: false,
-      estimated_hours: goal.estimatedHours,
-      resources: [],
-      practice_problems: [],
-    }));
-
-    const customPath: LearningPath = {
-      id: crypto.randomUUID(),
-      title: mainTopic, 
-      description: `A custom learning path focused on ${mainTopic}`,
-      topic: mainTopic,
-      current_step: 0,
-      total_steps: goals.length,
-      steps: steps, 
-      estimated_hours: totalEstimatedHours,
-      completed_topics: [],
-      suggested_topics: this.generateSuggestionsFromGoals(goals),
-      is_custom_path: true,
-      goals: goals.map(g => g.title),
-      timeline: `${Math.ceil(totalEstimatedHours / 10)} weeks`,
-    };
-
-
-    return await this.saveLearningPath(customPath as LearningPath);
-  }
-
-  private generateSuggestionsFromGoals(goals: CustomLearningGoal[]) {
-    return goals.map((goal, index) => ({
-      id: `goal-${index}`,
-      title: goal.title,
-      description: goal.description,
-      difficulty: goal.difficulty,
-      estimatedTime: `${goal.estimatedHours} hours`,
-      category: 'Custom Goal',
-      tags: goal.topics
-    }));
-  }
-
-  private getStoredPaths(): LearningPath[] {
     try {
-      return JSON.parse(localStorage.getItem('learningPaths') || '[]');
-    } catch {
-      return [];
+      const mainGoal = goals[0];
+      
+      // Create a basic learning path structure
+      const newPath: Partial<LearningPath> = {
+        id: `path_${Date.now()}`,
+        title: mainGoal.title,
+        description: mainGoal.description || `Custom learning path for ${mainGoal.title}`,
+        main_topic: mainGoal.title,
+        is_custom_path: true,
+        estimated_hours: mainGoal.estimatedHours || 10,
+        steps: [],
+        current_step: 0,
+        total_steps: 0,
+        goals: goals.map(g => g.title),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      // Generate steps from goals and topics
+      const steps: LearningStep[] = [];
+      
+      goals.forEach((goal, goalIndex) => {
+        // Create a main step for the goal itself
+        steps.push({
+          id: `step_${Date.now()}_${goalIndex}`,
+          title: goal.title,
+          description: goal.description || `Learn about ${goal.title}`,
+          completed: false,
+          estimatedTime: `${goal.estimatedHours || 5} hours`,
+          category: goal.difficulty || 'beginner',
+          resources: []
+        });
+        
+        // Create steps for each topic
+        if (goal.topics && goal.topics.length > 0) {
+          goal.topics.forEach((topic, topicIndex) => {
+            if (topic.toLowerCase() !== goal.title.toLowerCase()) {
+              steps.push({
+                id: `step_${Date.now()}_${goalIndex}_${topicIndex}`,
+                title: topic,
+                description: `Explore ${topic} as part of ${goal.title}`,
+                completed: false,
+                estimatedTime: `${Math.round((goal.estimatedHours || 5) / goal.topics.length)} hours`,
+                category: goal.difficulty || 'beginner',
+                resources: []
+              });
+            }
+          });
+        }
+      });
+      
+      newPath.steps = steps;
+      newPath.total_steps = steps.length;
+      
+      // Save the path to the database
+      const response = await fetch('/api/learning-paths', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newPath),
+      });
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save learning path');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error creating custom learning path:', error);
+      throw error;
     }
   }
 
@@ -157,14 +192,12 @@ export class LearningPathService {
     }
   }
 
-  private mapFromDatabase(data: any): LearningPath {
+  private mapFromDatabase(data: any): Partial<LearningPath> {
     return {
       id: data.id,
-      user_id: data.user_id,
       title: data.title,
       description: data.description,
-      topic: data.topic,
-      main_topic: data.main_topic,
+      main_topic: data.main_topic || data.topic,
       steps: data.steps || [],
       current_step: data.current_step,
       total_steps: data.total_steps,
@@ -174,8 +207,6 @@ export class LearningPathService {
       is_custom_path: data.is_custom_path || false,
       goals: data.goals || [],
       timeline: data.timeline,
-      is_public: data.is_public,
-      progress: data.progress,
       created_at: data.created_at,
       updated_at: data.updated_at
     };

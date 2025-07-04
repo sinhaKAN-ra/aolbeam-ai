@@ -1,194 +1,83 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Plus, XCircle, Clock, BookOpen, Sparkles, Brain, CheckCircle2, ArrowRight, Zap, MessageSquare } from "lucide-react";
+import React, { useEffect, useState, useRef } from "react";
+import { Plus, Code, TrendingUp, Shuffle, BookOpen, CheckCircle2, Sparkles, XCircle } from "lucide-react";
 import Confetti from "react-confetti";
-import { formatDistanceToNow } from "date-fns";
-import { CustomLearningGoal, TopicSuggestion, LearningPath as ModalLearningPath } from "@/types/chat-feature/chat-feature";
-import { LearningPath } from "@/types/chat-feature";
-import { learningPathService } from '@/services/chat-feature/learningPathService';
-
-// Type adapter to convert between different LearningPath definitions
-function adaptLearningPath(path: LearningPath): ModalLearningPath {
-  return {
-    ...path,
-    topic: path.main_topic || '',
-    description: path.description || '',
-    steps: path.steps.map((step, index) => ({
-      ...step,
-      order: index + 1,
-    })),
-  } as ModalLearningPath;
-}
-
-// Type adapter for CustomLearningGoal
-function adaptCustomLearningGoal(goal: CustomLearningGoal): any {
-  return {
-    ...goal,
-    description: goal.description || '',
-    targetDate: goal.targetDate || new Date(),
-    estimatedHours: goal.estimatedHours || 10,
-    priority: goal.priority || 'medium',
-  };
-}
-
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import CustomLearningPathModal from "@/components/chat-feature/CustomLearningPathModal";
+import { formatDistanceToNow } from "date-fns";
 
-// Helper function to generate study cards from steps
-function generateStudyCards(steps: any[]): { id: string; front: string; back: string; reviewed: boolean }[] {
-  return steps
-    .filter(step => step.description && step.description.trim() !== '')
-    .map(step => ({
-      id: step.id,
-      front: step.title,
-      back: step.description || '',
-      reviewed: false
-    }));
-}
+// Type imports
+// Import all types from a single source to avoid type conflicts
+import { LearningPath, CustomLearningGoal, PathType, LearningStep, LearningResource } from '@/types/chat-feature/chat-feature';
+// Ensure we're not importing any conflicting types from index.ts
+
+// Services
+import { learningPathService } from '@/services/chat-feature/learningPathService';
+
+// Components
+import CustomLearningPathModal from "@/components/chat-feature/CustomLearningPathModal";
+import PathCreationCard from "@/components/learning-paths/PathCreationCard";
+import PathTypeSelector from "@/components/learning-paths/PathTypeSelector";
+import StepperModal from "@/components/learning-paths/StepperModal";
+import PathCard from '@/components/learning-paths/PathCard';
+import GoalDefinition from "@/components/learning-paths/GoalDefinition";
+import PathReview from "@/components/learning-paths/PathReview";
+import PathDetailView from "@/components/learning-paths/PathDetailView";
+
+// Use LearningStep from chat-feature.ts for consistency
 
 export default function LearningPathsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [paths, setPaths] = useState<LearningPath[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showEditor, setShowEditor] = useState(false);
-  const [showCustomModal, setShowCustomModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [showConfetti, setShowConfetti] = useState(false);
+  
+  // New path creation state
+  const [showPathCreator, setShowPathCreator] = useState(false);
+  const [selectedPathType, setSelectedPathType] = useState<PathType | null>(null);
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [creationStep, setCreationStep] = useState(0);
+  const [goals, setGoals] = useState<CustomLearningGoal[]>([]);
+  const [generatedSteps, setGeneratedSteps] = useState<LearningStep[]>([]);
   const [editingPath, setEditingPath] = useState<LearningPath | null>(null);
 
   useEffect(() => {
-    async function loadPaths() {
-      if (!user?.id) return;
-      
-      try {
-        setIsLoading(true);
-        const userPaths = await learningPathService.getUserLearningPaths();
-        setPaths(userPaths);
-        
-        // Load search history for suggestions
-        const history = await learningPathService.getUserSearchHistory(user.id);
-        setSearchHistory(history || []);
-        
-        if (userPaths.length > 0 && !selectedId) {
-          setSelectedId(userPaths[0].id);
-        }
-      } catch (err) {
-        console.error("Failed to load paths:", err);
-        toast({
-          title: "Error",
-          description: "Failed to load your learning paths",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
+    if (user?.id) {
+      loadPaths();
+      loadSearchHistory();
     }
-    
-    loadPaths();
-  }, [user?.id, toast, selectedId]);
+  }, [user?.id]);
 
-  const handleCreate = () => {
-    setEditingPath(null);
-    setShowCustomModal(true);
-  };
-
-  const handleEdit = (path: LearningPath) => {
-    setEditingPath(path);
-    setShowCustomModal(true);
-  };
-  
-  const handleCustomPathSubmit = async (goals: CustomLearningGoal[]) => {
-    if (!user?.id || goals.length === 0) return;
-
-    setIsLoading(true);
-    let updatedPath: LearningPath;
-
+  const loadPaths = async () => {
     try {
-      // If we're editing an existing path, update it
-      if (editingPath) {
-        // Update the existing path with new goal data
-        const updatedPathData = {
-          ...editingPath,
-          title: goals[0]?.title || editingPath.title,
-          description: goals[0]?.description || editingPath.description,
-          main_topic: goals[0]?.title || editingPath.main_topic,
-          updated_at: new Date().toISOString()
-        };
-        
-        const newPath = await learningPathService.saveLearningPath(updatedPathData);
-
-        // Convert the returned path to the expected LearningPath type
-        updatedPath = {
-          ...newPath,
-          title: goals[0]?.title || 'Custom Learning Path',
-          description: goals[0]?.description || 'A custom learning journey',
-          steps: newPath.steps?.map(step => ({
-            ...step,
-            // Ensure any required properties from index.ts LearningStep are present
-            description: step.description || ''
-          })) || [],
-          total_steps: newPath.steps?.length || 0,
-          current_step: 0,
-          main_topic: goals[0]?.title || 'Custom Learning Path',
-          updated_at: new Date().toISOString()
-        } as LearningPath;
-
-        // Update the paths array with the new path
-        setPaths(prevPaths => {
-          const filteredPaths = prevPaths.filter(p => p.id !== updatedPath.id);
-          return [updatedPath, ...filteredPaths];
-        });
-        
-        setSelectedId(newPath.id);
-        
-        toast({
-          title: "Success",
-          description: "Custom learning path updated",
-        });
-      } else {
-        // Create a new path
-        const newPath = await learningPathService.createCustomLearningPath(
-          [adaptCustomLearningGoal(goals[0])],
-          searchHistory || []
-        );
-
-        // Convert the returned path to the expected LearningPath type
-        updatedPath = {
-          ...newPath,
-          title: goals[0]?.title || 'Custom Learning Path',
-          description: goals[0]?.description || 'A custom learning journey',
-          steps: newPath.steps?.map(step => ({
-            ...step,
-            // Ensure any required properties from index.ts LearningStep are present
-            description: step.description || ''
-          })) || [],
-          total_steps: newPath.steps?.length || 0,
-          current_step: 0,
-          main_topic: goals[0]?.title || 'Custom Learning Path',
-          updated_at: new Date().toISOString()
-        } as LearningPath;
-
-        // Add the new path to the paths array
-        setPaths(prevPaths => [updatedPath, ...prevPaths]);
-        setSelectedId(newPath.id);
-        
-        toast({
-          title: "Success",
-          description: "Custom learning path created",
-        });
-      }
-
-      setShowCustomModal(false);
-      setEditingPath(null);
+      setIsLoading(true);
+      const result = await learningPathService.getUserLearningPaths();
+      // Ensure each path has required fields for type compatibility
+      const processedPaths = result.map(path => ({
+        ...path,
+        topic: path.topic || path.main_topic || '',
+        main_topic: path.main_topic || path.topic || '',
+        description: path.description || '',
+        // Ensure steps have the required 'order' property
+        steps: path.steps.map((step, index) => ({
+          ...step,
+          order: step.order !== undefined ? step.order : index,
+          description: step.description || '',
+          completed: typeof step.completed === 'boolean' ? step.completed : false
+        })) as LearningStep[],
+        is_custom_path: path.is_custom_path !== undefined ? path.is_custom_path : true
+      })) as LearningPath[];
+      setPaths(processedPaths);
     } catch (error) {
-      console.error("Error creating custom learning path:", error);
+      console.error("Error loading paths:", error);
       toast({
         title: "Error",
-        description: "Failed to create custom learning path",
+        description: "Failed to load your learning paths",
         variant: "destructive",
       });
     } finally {
@@ -196,438 +85,451 @@ export default function LearningPathsPage() {
     }
   };
 
-  const handleDeletePath = async (pathId: string) => {
+  const loadSearchHistory = async () => {
     try {
-      await learningPathService.deleteLearningPath(pathId);
-      setPaths(prevPaths => prevPaths.filter(path => path.id !== pathId));
-      
-      if (selectedId === pathId) {
-        const remainingPaths = paths.filter(path => path.id !== pathId);
-        setSelectedId(remainingPaths.length > 0 ? remainingPaths[0].id : null);
+      const history = await learningPathService.getUserSearchHistory(user?.id as string);
+      setSearchHistory(history);
+    } catch (error) {
+      console.error("Error loading search history:", error);
+      // Fall back to localStorage if database fetch fails
+      const localHistory = localStorage.getItem('searchHistory');
+      if (localHistory) {
+        setSearchHistory(JSON.parse(localHistory));
       }
+    }
+  };
+
+  // Helper to calculate path progress percentage
+  const calculateProgress = (path: LearningPath) => {
+    if (!path.steps || path.steps.length === 0) return 0;
+    const completedSteps = path.steps.filter(step => step.completed).length;
+    return Math.round((completedSteps / path.steps.length) * 100);
+  };
+  
+  // Path creation and editing functions
+  const openPathCreator = (type: PathType) => {
+    setSelectedPathType(type);
+    setGoals([]);
+    setGeneratedSteps([]);
+    setCreationStep(0);
+    setShowPathCreator(true);
+  };
+  
+  const handleAddGoal = (goal: CustomLearningGoal) => {
+    setGoals(prev => [...prev, goal]);
+  };
+  
+  const handleRemoveGoal = (goalId: string) => {
+    setGoals(prev => prev.filter(g => g.id !== goalId));
+  };
+  
+  const handleEditStep = (stepId: string, updatedStep: Partial<LearningStep>) => {
+    setGeneratedSteps(prev => 
+      prev.map(step => step.id === stepId ? { ...step, ...updatedStep } : step)
+    );
+  };
+  
+  const handleReorderSteps = (reorderedSteps: LearningStep[]) => {
+    // Update order property for each step based on its index
+    const stepsWithOrder = reorderedSteps.map((step, index) => ({
+      ...step,
+      order: index + 1
+    }));
+    setGeneratedSteps(stepsWithOrder);
+  };
+  
+  // Handle toggle step completion
+  const handleToggleStep = async (stepId: string) => {
+    // Extract path ID from the element ID format: "path-{pathId}-step-{stepId}"
+    const parts = stepId.split('-');
+    if (parts.length < 4) return;
+    
+    const pathId = parts[1];
+    const actualStepId = parts[3];
+    
+    // Find path and step
+    const pathIndex = paths.findIndex(p => p.id === pathId);
+    if (pathIndex === -1) return;
+
+    const path = paths[pathIndex];
+    
+    // Update completion status
+    const updatedPath = {
+      ...path,
+      steps: [...path.steps],
+      updated_at: new Date().toISOString(),
+      topic: path.topic || path.main_topic || '',
+      main_topic: path.main_topic || path.topic || '',
+      description: path.description || '',
+      is_custom_path: path.is_custom_path !== undefined ? path.is_custom_path : true,
+      current_step: path.current_step || 0,
+      total_steps: path.total_steps || path.steps.length || 0
+    } as LearningPath;
+    
+    const stepIndex = updatedPath.steps.findIndex(s => s.id === actualStepId);
+    if (stepIndex === -1) return;
+    
+    updatedPath.steps[stepIndex] = {
+      ...updatedPath.steps[stepIndex],
+      completed: !updatedPath.steps[stepIndex].completed,
+      order: updatedPath.steps[stepIndex].order !== undefined ? updatedPath.steps[stepIndex].order : stepIndex
+    };
+
+    // Calculate new progress
+    const completedSteps = updatedPath.steps.filter(step => step.completed).length;
+    const progress = (completedSteps / updatedPath.steps.length) * 100;
+
+    // Update state with proper type handling
+    setPaths(prev => {
+      const newPaths = [...prev];
+      newPaths[pathIndex] = updatedPath;
+      return newPaths;
+    });
+
+    try {
+      // Save the updated path with type assertion
+      const savedPath = await learningPathService.saveLearningPath(updatedPath as any);
       
-      toast({
-        title: "Success",
-        description: "Learning path deleted",
+      // Update the paths state with the saved path
+      setPaths(prev => {
+        const newPaths = [...prev];
+        const savedIndex = newPaths.findIndex(p => p.id === pathId);
+        if (savedIndex !== -1) {
+          newPaths[savedIndex] = savedPath as LearningPath;
+        }
+        return newPaths;
       });
-    } catch (err) {
-      console.error("Failed to delete path:", err);
+      
+      // Show confetti if path is completed
+      if (updatedPath.steps.every(step => step.completed)) {
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 5000);
+      }
+    } catch (error) {
+      console.error("Error toggling step completion:", error);
       toast({
         title: "Error",
-        description: "Failed to delete learning path",
+        description: "Failed to update step status",
         variant: "destructive",
       });
     }
   };
 
-  if (!user) {
-    return (
-      <div className="flex h-[calc(100vh-64px)] items-center justify-center">
-        <p className="text-muted-foreground">Please sign in to view your learning paths.</p>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex h-[calc(100vh-64px)] items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading your learning paths...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const selectedPath = paths.find((p) => p.id === selectedId) || null;
-
-  return (
-    <div className="container mx-auto py-8 px-4 lg:px-8">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* LEFT COLUMN: Path List */}
-        <div className="md:col-span-1 space-y-6">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">Learning Paths</h1>
-            <button 
-              onClick={handleCreate}
-              className="flex items-center gap-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full w-8 h-8 justify-center"
-            >
-              <Plus size={16} />
-              <span className="sr-only">Create new path</span>
-            </button>
-          </div>
-          
-          <PathList
-            paths={paths}
-            selectedId={selectedId}
-            onSelect={(id) => setSelectedId(id)}
-            onDelete={handleDeletePath}
-          />
-        </div>
-        
-        {/* RIGHT COLUMN: Selected Path Detail */}
-        <div className="md:col-span-2">
-          {selectedPath ? (
-            <PathDetail 
-              path={selectedPath} 
-              onEdit={() => handleEdit(selectedPath)}
-              onUpdatePath={(updatedPath) => {
-                setPaths(prevPaths => 
-                  prevPaths.map(path => 
-                    path.id === updatedPath.id ? updatedPath : path
-                  )
-                );
-              }}
-            />
-          ) : (
-            <div className="bg-muted/20 border border-border rounded-xl p-8 text-center">
-              <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <h2 className="text-xl font-medium mb-2">No Path Selected</h2>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                Select a learning path from the list or create a new one to get started on your learning journey.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Custom Learning Path Modal */}
-      {showCustomModal && (
-        <CustomLearningPathModal
-          isOpen={showCustomModal}
-          onClose={() => {
-            setShowCustomModal(false);
-            setEditingPath(null);
-          }}
-          onSubmit={handleCustomPathSubmit}
-          searchHistory={searchHistory}
-          topic={editingPath?.main_topic || ''}
-          existingPath={editingPath ? adaptLearningPath(editingPath) : undefined}
-          initialGoals={editingPath ? [{
-            id: editingPath.id,
-            title: editingPath.title,
-            description: editingPath.description || '',
-            topics: editingPath.main_topic ? [editingPath.main_topic] : [],
-            estimatedHours: editingPath.estimated_hours || 10,
-            difficulty: 'beginner',
-            priority: 'medium'
-          }] : []}
-        />
-      )}
-    </div>
-  );
-}
-
-/* PathList Component */
-interface PathListProps {
-  paths: LearningPath[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onDelete: (id: string) => void;
-}
-
-function PathList({ paths, selectedId, onSelect, onDelete }: PathListProps) {
-  if (paths.length === 0) {
-    return (
-      <div className="bg-muted/20 border border-border rounded-xl p-6 text-center">
-        <p className="text-muted-foreground">You haven't created any learning paths yet.</p>
-        <p className="text-xs text-muted-foreground mt-2">
-          Create your first path to start learning!
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {paths.map((path) => (
-        <div
-          key={path.id}
-          className={`w-full text-left p-4 rounded-xl border transition-all relative group ${
-            path.id === selectedId
-              ? "bg-primary/5 border-primary"
-              : "hover:bg-accent/10 border-border"
-          }`}
-        >
-          <button
-            onClick={() => onSelect(path.id)}
-            className="w-full text-left"
-          >
-            <h3 className="font-medium truncate">{path.title}</h3>
-            <p className="text-xs text-muted-foreground truncate">
-              {path.current_step}/{path.total_steps} steps • Updated {formatDistanceToNow(new Date(path.updated_at || new Date()), { addSuffix: true })}
-            </p>
-            <div className="mt-2 flex items-center gap-1">
-              <div className="bg-muted/30 h-1.5 flex-1 rounded-full overflow-hidden">
-                <div
-                  style={{ width: `${Math.round((path.current_step / path.total_steps) * 100) || 0}%` }}
-                  className="h-full bg-primary"
-                />
-              </div>
-              <span className="text-xs font-medium">
-                {Math.round((path.current_step / path.total_steps) * 100) || 0}%
-              </span>
-            </div>
-          </button>
-          
-          <button
-            onClick={() => onDelete(path.id)}
-            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-destructive/10 rounded"
-          >
-            <XCircle size={16} className="text-destructive" />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* Path Detail Component */
-interface PathDetailProps {
-  path: LearningPath;
-  onEdit: () => void;
-  onUpdatePath: (path: LearningPath) => void;
-}
-
-function PathDetail({ path, onEdit, onUpdatePath }: PathDetailProps) {
-  const { toast } = useToast();
-  const completedSteps = path.steps?.filter(s => s.completed).length || 0;
-  const progress = Math.round((completedSteps / (path.total_steps || 1)) * 100) || 0;
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-
-  useEffect(() => {
-    if (progress === 100 && completedSteps > 0) {
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 3000);
+  const handleDeletePath = async (pathId: string) => {
+    if (confirm('Are you sure you want to delete this learning path? This cannot be undone.')) {
+      try {
+        await learningPathService.deleteLearningPath(pathId);
+        // Use type assertion to ensure proper typing
+        setPaths((prev: LearningPath[]) => prev.filter(path => path.id !== pathId));
+        if (selectedId === pathId) {
+          setSelectedId(null);
+        }
+        toast({
+          title: "Path Deleted",
+          description: "The learning path has been deleted successfully.",
+        });
+      } catch (error) {
+        console.error("Error deleting path:", error);
+        toast({
+          title: "Error",
+          description: "Failed to delete the learning path",
+          variant: "destructive",
+        });
+      }
     }
-  }, [progress, completedSteps]);
-
-  useEffect(() => {
-    setDimensions({ width: window.innerWidth, height: window.innerHeight });
-  }, []);
-
-  const handleToggleStep = async (stepId: string) => {
-    const stepIndex = path.steps.findIndex(s => s.id === stepId);
-    if (stepIndex === -1) return;
-
-    const updatedSteps = [...path.steps];
-    updatedSteps[stepIndex] = {
-      ...updatedSteps[stepIndex],
-      completed: !updatedSteps[stepIndex].completed
-    };
-
-    const updatedPath: LearningPath = {
+  };
+  
+  // Legacy modal functions
+  const handleEdit = (path: LearningPath) => {
+    // Ensure path has all required fields before editing
+    const editablePath = {
       ...path,
-      steps: updatedSteps,
-      current_step: updatedSteps.filter(s => s.completed).length,
-      completed_topics: updatedSteps
-        .filter(s => s.completed)
-        .map(s => s.title),
-      updated_at: new Date().toISOString()
+      topic: path.topic || path.main_topic || '',
+      description: path.description || '',
     };
+    setEditingPath(editablePath);
+    setShowCustomModal(true);
+  };
 
-    try {
-      await learningPathService.saveLearningPath(updatedPath);
-      onUpdatePath(updatedPath);
-      toast({
-        title: "Success",
-        description: `Step ${updatedSteps[stepIndex].completed ? 'completed' : 'uncompleted'}`
-      });
-    } catch (err) {
-      console.error("Failed to update step:", err);
+  const handleCustomPathSubmit = async (goals: CustomLearningGoal[]) => {
+    if (goals.length === 0) {
       toast({
         title: "Error",
-        description: "Failed to update step status",
+        description: "Please add at least one goal to your learning path",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      
+      const mainGoal = goals[0];
+      const newPath: Partial<LearningPath> = {
+        user_id: user?.id,
+        title: mainGoal.title,
+        description: mainGoal.description,
+        main_topic: mainGoal.topics[0] || "",
+        estimated_hours: mainGoal.estimatedHours,
+        path_type: selectedPathType || "skill",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      // Create path differently depending on whether we're editing or creating
+      let createdPath;
+      if (editingPath) {
+        createdPath = await learningPathService.saveLearningPath({
+          ...newPath,
+          id: editingPath.id,
+          steps: editingPath.steps,
+        } as LearningPath);
+      } else {
+        createdPath = await learningPathService.createCustomLearningPath([goals[0]], searchHistory);
+      }
+
+      // Refresh paths
+      await loadPaths();
+      
+      // Reset state and show success message
+      setShowCustomModal(false);
+      setShowPathCreator(false);
+      setEditingPath(null);
+      setGoals([]);
+      setGeneratedSteps([]);
+      
+      toast({
+        title: "Success",
+        description: editingPath ? "Learning path updated successfully" : "Learning path created successfully",
+      });
+      
+      // Select the new path
+      if (createdPath) {
+        setSelectedId(createdPath.id);
+      }
+    } catch (error) {
+      console.error("Error creating/updating path:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save your learning path",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle path creation completion through new UI
+  const handlePathCreationComplete = async () => {
+    if (goals.length === 0) {
+      toast({ 
+        title: "Error", 
+        description: "Please add at least one goal", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    try {
+      const newLearningGoals = goals.map(goal => ({
+        ...goal,
+        description: goal.description || '',
+        targetDate: goal.targetDate || new Date(),
+        estimatedHours: goal.estimatedHours || 10,
+        priority: goal.priority || 'medium',
+      }));
+      
+      // Create the path using the service
+      const newPath = await learningPathService.createCustomLearningPath(newLearningGoals, searchHistory);
+      
+      // Add the new path to the local state
+      setPaths(prev => [...prev, newPath]);
+      
+      // Reset and close modal
+      setShowPathCreator(false);
+      setSelectedPathType(null);
+      setGoals([]);
+      setGeneratedSteps([]);
+      setCreationStep(0);
+      
+      // Select the newly created path
+      setSelectedId(newPath.id);
+      
+      toast({
+        title: "Success",
+        description: "Your learning path has been created!"
+      });
+    } catch (error) {
+      console.error("Error creating path:", error);
+      toast({ 
+        title: "Error", 
+        description: "There was a problem creating your learning path",
         variant: "destructive"
       });
     }
   };
+
+  // Modal step navigation
+  const handleNextStep = () => {
+    setCreationStep(prev => prev + 1);
+  };
+
+  const handlePrevStep = () => {
+    setCreationStep(prev => Math.max(0, prev - 1));
+  };
   
-  return (
-    <div className="space-y-6 max-w-3xl mx-auto">
-      {showConfetti && <Confetti width={dimensions.width} height={dimensions.height} recycle={false} numberOfPieces={500} />}
-      <header className="flex justify-between items-start">
-        <div>
-          <h1 className="text-2xl font-semibold mb-1">{path.title}</h1>
-          <p className="text-muted-foreground max-w-prose">{path.description}</p>
-        </div>
-        <button
-          onClick={onEdit}
-          className="text-sm bg-muted px-3 py-1.5 rounded-md hover:bg-muted/80"
-        >
-          Edit
-        </button>
-      </header>
-
-      {/* Progress bar */}
-      <div className="space-y-2">
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Progress</span>
-          <span className="font-medium">{completedSteps}/{path.total_steps} steps ({progress}%)</span>
-        </div>
-        <div className="w-full bg-muted/30 h-2 rounded-full overflow-hidden">
-          <div
-            style={{ width: `${progress}%` }}
-            className="h-full bg-primary transition-all duration-300"
-          />
-        </div>
-      </div>
-
-      {/* Steps list */}
-      {path.steps && path.steps.length > 0 ? (
-        <ol className="space-y-4">
-          {path.steps.map((step, index) => (
-            <li
-              key={step.id}
-              className={`p-4 rounded-xl border flex justify-between items-center transition-colors ${
-                step.completed ? "bg-green-50 border-green-300" : "border-border hover:bg-accent/10"
-              }`}
-            >
-              <div className="flex-1">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => handleToggleStep(step.id)}
-                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                      step.completed 
-                        ? "bg-green-500 border-green-500 text-white" 
-                        : "border-muted-foreground hover:border-primary"
-                    }`}
-                  >
-                    {step.completed && <CheckCircle2 className="w-4 h-4" />}
-                  </button>
-                  <div>
-                    <h4 className={`font-medium ${step.completed ? 'line-through text-muted-foreground' : ''}`}>
-                      {step.title}
-                    </h4>
-                    <p className="text-xs text-muted-foreground">
-                      {step.estimatedTime} • {step.category || 'General'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Link
-                  href={`/tests/new?topic=${encodeURIComponent(step.title)}`}
-                  className="text-sm bg-secondary text-secondary-foreground px-3 py-1 rounded-md hover:bg-secondary/90"
-                >
-                  Practice
-                </Link>
-                <Link
-                  href={`/chat/new?topic=${encodeURIComponent(step.title)}`}
-                  className="text-sm bg-primary text-primary-foreground px-3 py-1 rounded-md hover:bg-primary/90 flex items-center gap-1"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  Chat
-                </Link>
-              </div>
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <div className="text-center py-8">
-          <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-          <p className="text-muted-foreground">No steps available for this learning path.</p>
-        </div>
-      )}
-
-      {/* Study cards - Generated from step descriptions */}
-      <div className="mt-10">
-        <h3 className="text-lg font-semibold mb-3">Study Cards</h3>
-        <StudyCardCarousel 
-          cards={generateStudyCards(path.steps || [])} 
-        />
-      </div>
-    </div>
-  );
-}
-
-/* Study Card Carousel Component */
-interface StudyCard {
-  id: string;
-  front: string;
-  back: string;
-  reviewed: boolean;
-}
-
-interface StudyCardCarouselProps {
-  cards: StudyCard[];
-}
-
-function StudyCardCarousel({ cards }: StudyCardCarouselProps) {
-  const [index, setIndex] = useState(0);
-  const [flipped, setFlipped] = useState(false);
-
-  if (!cards.length) {
+  // This function is already defined above
+  
+  if (!user) {
     return (
-      <div className="bg-muted/20 border border-border rounded-xl p-8 text-center">
-        <p className="text-muted-foreground">No study cards available for this path yet.</p>
-        <p className="text-xs text-muted-foreground mt-2">
-          Complete some steps to generate study cards from their descriptions.
-        </p>
+      <div className="flex h-[calc(100vh-64px)] items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold mb-4">Please Sign In</h2>
+          <p className="text-muted-foreground mb-6">You need to sign in to view your learning paths.</p>
+          <Link 
+            href="/auth/signin" 
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md shadow hover:bg-primary/90"
+          >
+            Sign In
+          </Link>
+        </div>
       </div>
     );
   }
 
-  const card = cards[index];
-
-  const nextCard = () => {
-    setIndex((i) => (i + 1) % cards.length);
-    setFlipped(false);
-  };
-
-  const prevCard = () => {
-    setIndex((i) => (i - 1 + cards.length) % cards.length);
-    setFlipped(false);
-  };
-
+  const selectedPath = paths.find(p => p.id === selectedId);
+  
   return (
-    <div className="bg-muted/20 border border-border rounded-xl p-8">
-      <div className="flex justify-between items-center mb-4">
-        <p className="text-sm text-muted-foreground">Card {index + 1} of {cards.length}</p>
-        <button
-          onClick={() => setFlipped(!flipped)}
-          className="text-sm bg-primary/10 text-primary px-3 py-1 rounded-md hover:bg-primary/20"
-        >
-          {flipped ? 'Show Question' : 'Show Answer'}
-        </button>
-      </div>
+    <main className="container mx-auto p-6 min-h-screen">
+      {showConfetti && <Confetti recycle={false} numberOfPieces={500} />}
       
-      <div className="min-h-[120px] flex items-center justify-center mb-6">
-        <div className="text-center">
-          <h4 className="font-semibold text-lg mb-2">
-            {flipped ? 'Answer' : 'Question'}
-          </h4>
-          <p className="whitespace-pre-wrap text-muted-foreground max-w-2xl">
-            {flipped ? card.back : card.front}
-          </p>
+      {/* Hero Section with Path Type Selector */}
+      <section className="mb-12">
+        <h1 className="text-3xl font-bold mb-6 text-center">Your Learning Journey</h1>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <PathCreationCard
+            icon={<Code className="w-6 h-6" />}
+            title="Learn a Skill"
+            description="Master a specific skill or technology"
+            onClick={() => openPathCreator('skill')}
+          />
+          
+          <PathCreationCard
+            icon={<TrendingUp className="w-6 h-6" />}
+            title="Advance Your Career"
+            description="Level up in your current career path"
+            onClick={() => openPathCreator('advancement')}
+          />
+          
+          <PathCreationCard
+            icon={<Shuffle className="w-6 h-6" />}
+            title="Change Careers"
+            description="Transition to a new career field"
+            onClick={() => openPathCreator('career-change')}
+          />
         </div>
-      </div>
+      </section>
+
+      {/* Loading State */}
+      {isLoading ? (
+        <div className="flex justify-center my-10">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading your learning paths...</p>
+          </div>
+        </div>
+      ) : paths.length === 0 ? (
+        <div className="text-center py-12 border border-dashed border-border rounded-xl">
+          <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+          <h2 className="text-2xl font-semibold mb-2">No learning paths yet</h2>
+          <p className="text-muted-foreground mb-6">Create your first learning path to begin your journey</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left panel: Path cards */}
+          <div>
+            <div className="sticky top-20">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Your Paths</h2>
+              </div>
+
+              <div className="space-y-3">
+                {paths.map(path => (
+                  <PathCard
+                    key={path.id}
+                    path={path}
+                    isSelected={selectedId === path.id}
+                    onClick={() => setSelectedId(path.id)}
+                    progress={calculateProgress(path)}
+                    onDelete={() => handleDeletePath(path.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          {/* Right panel: Selected path details */}
+          <div className="lg:col-span-2 bg-background rounded-xl border border-border p-6">
+            {selectedPath ? (
+              <PathDetailView 
+                path={selectedPath} 
+                onEdit={() => handleEdit(selectedPath)} 
+                onUpdateProgress={handleToggleStep}
+              />
+            ) : (
+              <div className="text-center py-20">
+                <Sparkles className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                <h2 className="text-2xl font-semibold mb-2">Select a learning path</h2>
+                <p className="text-muted-foreground">Choose a learning path from the list to view its details</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       
-      <div className="flex justify-between items-center">
-        <button
-          onClick={prevCard}
-          className="text-sm px-4 py-2 bg-muted rounded-md hover:bg-muted/80"
-        >
-          Previous
-        </button>
-        <div className="flex gap-1">
-          {cards.map((_, i) => (
-            <div
-              key={i}
-              className={`w-2 h-2 rounded-full ${
-                i === index ? 'bg-primary' : 'bg-muted'
-              }`}
-            />
-          ))}
-        </div>
-        <button
-          onClick={nextCard}
-          className="text-sm px-4 py-2 bg-muted rounded-md hover:bg-muted/80"
-        >
-          Next
-        </button>
-      </div>
-    </div>
+      {/* Multi-step modal for path creation */}
+      {showPathCreator && (
+        <StepperModal
+          isOpen={showPathCreator}
+          onClose={() => setShowPathCreator(false)}
+          onComplete={handlePathCreationComplete}
+          steps={[
+            {
+              title: "Select Path Type",
+              component: (
+                <PathTypeSelector
+                  selectedType={selectedPathType}
+                  onChange={setSelectedPathType}
+                />
+              )
+            },
+            {
+              title: "Define Goals",
+              component: (
+                <GoalDefinition
+                  goals={goals}
+                  onAddGoal={handleAddGoal}
+                  onRemoveGoal={handleRemoveGoal}
+                  pathType={selectedPathType}
+                />
+              )
+            },
+            {
+              title: "Review Path",
+              component: (
+                <PathReview
+                  goals={goals}
+                  generatedSteps={generatedSteps}
+                  onEditStep={handleEditStep}
+                  onReorderSteps={handleReorderSteps}
+                />
+              )
+            }
+          ]}
+        />
+      )}
+      {/* Legacy modal content removed - now handled by StepperModal */}
+    </main>
   );
 }
