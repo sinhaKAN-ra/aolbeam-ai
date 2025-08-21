@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { CalendarDays, UserCircle } from 'lucide-react';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
+import { sanitizeHtml } from '@/utils/sanitizeHtml';
 // Footer is now global
 
 // This is a placeholder. In a real app, you'd fetch this data based on the slug.
@@ -98,7 +99,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
           
           <div 
             className="prose prose-lg dark:prose-invert max-w-none" 
-            dangerouslySetInnerHTML={{ __html: post.content }} 
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(post.content) }} 
           />
 
         </article>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
+import Markdown from '@/components/Markdown';
 import Link from 'next/link';
 import {
   BookOpen,
@@ -59,7 +59,7 @@ export const DetailedContentSection: React.FC<DetailedProps> = ({ detailed }) =>
       </button>
       {show && (
         <div className="prose prose-sm max-w-none">
-          <ReactMarkdown>{detailed}</ReactMarkdown>
+          <Markdown content={detailed} />
         </div>
       )}
     </div>
