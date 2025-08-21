@@ -12,8 +12,10 @@ export class GeminiService {
   }
 
   async generateLearningContext(topic: string): Promise<string> {
-    // For demo purposes, return enhanced simulated responses
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Remove artificial delay in production
+    if (process.env.NODE_ENV !== 'production') {
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
 
     const responses = {
       'machine learning': `Machine Learning is a subset of artificial intelligence (AI) that enables computers to learn and improve from experience without being explicitly programmed for every task.
@@ -114,7 +116,9 @@ I'll provide you with a structured learning path and suggest related topics that
   }
 
   async generateTopicSuggestions(currentTopic: string): Promise<TopicSuggestion[]> {
-    await new Promise(resolve => setTimeout(resolve, 800));
+    if (process.env.NODE_ENV !== 'production') {
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
 
     const suggestionMap: Record<string, TopicSuggestion[]> = {
       'machine learning': [

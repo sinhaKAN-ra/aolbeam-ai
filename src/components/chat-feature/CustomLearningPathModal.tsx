@@ -90,11 +90,13 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
   }, [isOpen, initialGoals, topic, existingPath]);
   
   // Add a new useEffect to monitor goals array changes
+  // Remove verbose dev logs in production
   useEffect(() => {
-    // Log when goals state changes
-    console.log('Goals state updated:', goals);
-    console.log('Goals length:', goals.length);
-    // You could add additional logic here if needed
+    if (process.env.NODE_ENV !== 'production') {
+      // Log when goals state changes (dev only)
+      console.debug('Goals state updated:', goals);
+      console.debug('Goals length:', goals.length);
+    }
   }, [goals]);
 
   useEffect(() => {
@@ -137,12 +139,12 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
     setValidationErrors({});
     const newGoal: CustomLearningGoal = { ...currentGoal, id: Date.now().toString() };
     
-    console.log('Before adding goal, goals:', goals);
+    if (process.env.NODE_ENV !== 'production') console.debug('Before adding goal, goals:', goals);
     
     // Add the new goal to the goals array - using functional update to ensure latest state
     setGoals(prev => {
       const updatedGoals = [...prev, newGoal];
-      console.log('After adding goal, updatedGoals:', updatedGoals);
+      if (process.env.NODE_ENV !== 'production') console.debug('After adding goal, updatedGoals:', updatedGoals);
       return updatedGoals;
     });
     
@@ -160,9 +162,11 @@ const CustomLearningPathModal: React.FC<CustomLearningPathModalProps> = ({
     // Removed auto-navigation - let user explicitly navigate with the Next button
     // This ensures state is fully updated before navigation
     
-    // Log the goals state after all updates
-    console.log('Goals after all updates:', goals); // This might show stale state due to closure
-    setTimeout(() => console.log('Goals after timeout:', goals), 100); // This might show updated state
+    // Dev aid only
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('Goals after all updates:', goals);
+      setTimeout(() => console.debug('Goals after timeout:', goals), 100);
+    }
   };
 
   const removeGoal = (id: string) => {

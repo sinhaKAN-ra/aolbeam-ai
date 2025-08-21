@@ -40,12 +40,12 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
   } = useFeatureAccess();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Debug log for usage data from hook
-  console.log('Raw usage data:', usage);
+  // Debug in dev only
+  if (process.env.NODE_ENV !== 'production') console.debug('Raw usage data:', usage);
   
   // Use useMemo to recalculate testUsage whenever usage changes
   const testUsage = useMemo(() => {
-    console.log('Recalculating testUsage with usage:', usage);
+    if (process.env.NODE_ENV !== 'production') console.debug('Recalculating testUsage with usage:', usage);
     return {
       used: usage?.tests_created || 0,
       limit: usage?.test_creation_limit || 5,
@@ -57,7 +57,7 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
   }, [usage]);
   
   // Debug log for calculated testUsage
-  console.log('Calculated testUsage:', testUsage);
+  if (process.env.NODE_ENV !== 'production') console.debug('Calculated testUsage:', testUsage);
   
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -141,19 +141,21 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
 
         // Record usage after successful creation
         try {
-          console.log('Before recording test_creation usage:', usage);
+          if (process.env.NODE_ENV !== 'production') console.debug('Before recording test_creation usage:', usage);
           await recordFeatureUsage('test_creation');
           
           // Explicitly refetch usage data to ensure UI updates properly
-          console.log('Calling refetchUsage() to get fresh data');
+          if (process.env.NODE_ENV !== 'production') console.debug('Calling refetchUsage() to get fresh data');
           const { data: updatedUsage } = await refetchUsage();
-          console.log('Usage data refetched after test series creation', updatedUsage);
-          console.log('Original usage data for comparison:', usage);
+          if (process.env.NODE_ENV !== 'production') {
+            console.debug('Usage data refetched after test series creation', updatedUsage);
+            console.debug('Original usage data for comparison:', usage);
+          }
           
           // Get the latest usage data to show correct remaining count
           const remainingTests = updatedUsage?.remaining_tests ?? 0;
           const limit = updatedUsage?.test_creation_limit ?? (usage?.test_creation_limit ?? 5);
-          console.log(`Remaining tests: ${remainingTests}, Limit: ${limit}`);
+          if (process.env.NODE_ENV !== 'production') console.debug(`Remaining tests: ${remainingTests}, Limit: ${limit}`);
           if (remainingTests <= Math.floor(limit * 0.3)) {
             toast.info(`You have ${remainingTests} test${remainingTests === 1 ? '' : 's'} remaining in your plan`);
           }
@@ -205,16 +207,16 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
   // Handle AI-generated problem
   const handleProblemGenerated = async (newProblem: TestProblem) => {
     try {
-      console.log('Before recording usage - testUsage:', testUsage);
+      if (process.env.NODE_ENV !== 'production') console.debug('Before recording usage - testUsage:', testUsage);
       
       // Record the test creation usage
       try {
         await recordFeatureUsage('test_creation');
-        console.log('Usage recorded successfully');
+        if (process.env.NODE_ENV !== 'production') console.debug('Usage recorded successfully');
         
         // Explicitly refetch usage data to ensure UI updates properly
         await refetchUsage();
-        console.log('Usage data refetched successfully');
+        if (process.env.NODE_ENV !== 'production') console.debug('Usage data refetched successfully');
       } catch (error) {
         console.error('Error recording test creation usage:', error);
         // Re-throw the error to be handled by the outer catch block
@@ -227,7 +229,7 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
       
       // Get the latest usage data
       const latestUsageData = usage;
-      console.log('After recording usage - checking remaining tests:', latestUsageData);
+      if (process.env.NODE_ENV !== 'production') console.debug('After recording usage - checking remaining tests:', latestUsageData);
       
       const remainingTests = latestUsageData?.remaining_tests || 0;
       if (remainingTests <= Math.floor((latestUsageData?.test_creation_limit || 5) * 0.3)) {
@@ -243,7 +245,7 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
     try {
       // Check if user can create more tests
       const canCreate = canUseFeature('test_creation');
-      console.log('canUseFeature result:', canCreate);
+      if (process.env.NODE_ENV !== 'production') console.debug('canUseFeature result:', canCreate);
       
       if (!canCreate.allowed) {
         toast.error(canCreate.reason || 'You have reached your test creation limit');
@@ -532,7 +534,7 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
                   onCancel={() => setShowAddProblemForm(false)}
                 />
               </div>
-            ) : showGenerateProblemForm ? (console.log("AI form open"),
+            ) : showGenerateProblemForm ? (
               <div className="mt-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Generate New Problem with AI</h3>
                 <TestProblemGeneratorForm 
@@ -565,13 +567,13 @@ const TestSeriesForm: React.FC<TestSeriesFormProps> = ({ testSeriesId, onSuccess
                           }
                           setShowAddProblemForm(false);
                           setShowGenerateProblemForm(true);
-                          console.log('showAddProblemForm:', false, 'showGenerateProblemForm:', true);
+                          if (process.env.NODE_ENV !== 'production') console.debug('showAddProblemForm:', false, 'showGenerateProblemForm:', true);
                         } catch (err) {
                           console.error('Error checking test creation limit:', err);
                           // Still allow opening the form if there's an error checking the limit
                           setShowAddProblemForm(false);
                           setShowGenerateProblemForm(true);
-                          console.log('showAddProblemForm:', showAddProblemForm, 'showGenerateProblemForm:', true);
+                          if (process.env.NODE_ENV !== 'production') console.debug('showAddProblemForm:', showAddProblemForm, 'showGenerateProblemForm:', true);
                         }
                       }}
                       className="flex-1 flex items-center justify-center py-2 px-4 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"

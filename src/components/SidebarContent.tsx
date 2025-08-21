@@ -172,7 +172,7 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
   const toggleHistory = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('Toggling history sidebar. Current state:', isHistoryOpen);
+    if (process.env.NODE_ENV !== 'production') console.debug('Toggling history sidebar. Current state:', isHistoryOpen);
     setIsHistoryOpen(!isHistoryOpen);
   }, [isHistoryOpen]);
 
