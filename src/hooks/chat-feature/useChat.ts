@@ -59,8 +59,21 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
     }
   }, []);
 
-  // Reload messages every time the current session changes
+  // Reload messages only when the ACTIVE SESSION actually changes.
+  // (Previously this also fired on sessions.length changes — which happen when
+  // we persist a message mid-stream — overwriting the live streamed messages
+  // and blanking the chat. Keyed on currentSession?.id only now.)
+  const loadedSessionRef = useRef<string | null>(null);
   useEffect(() => {
+    const activeId = currentSession?.id ?? null;
+
+    // Don't reload the same session we already loaded (avoids clobbering live
+    // messages when `sessions` updates but the active session is unchanged).
+    if (activeId && loadedSessionRef.current === activeId) {
+      setIsInitialized(true);
+      return;
+    }
+
     if (currentSession?.messages) {
       const formattedMessages = currentSession.messages.map(msg => ({
         id: msg.id,
@@ -71,6 +84,7 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
         timestamp: msg.createdAt,
         ...(msg.metadata || {})
       }));
+      loadedSessionRef.current = activeId;
       setMessages(formattedMessages);
       if (formattedMessages.length === 0) {
         setLearningPath(null);
@@ -82,12 +96,12 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
       // No sessions exist, create a new one (only on first load)
       createNewSession('New Chat');
       setIsNewSession(true);
-    } else {
+    } else if (!activeId) {
       setMessages([]);
       setIsNewSession(false);
     }
     setIsInitialized(true);
-  }, [currentSession?.id, sessions.length]);
+  }, [currentSession?.id]);
 
   // If an initialSessionId is provided and different, set it as the current session
   useEffect(() => {
@@ -486,6 +500,12 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
       }
 
       if (streamErr && !accumulated) throw new Error(streamErr);
+
+      // Empty-but-successful stream (no tokens, no error) — show a clear note
+      // rather than a blank bubble.
+      if (!accumulated) {
+        accumulated = "I couldn't generate a response just now. Please try again.";
+      }
 
       // Finalize the message
       setMessages(prev =>
