@@ -2,7 +2,7 @@ import React from 'react';
 import { Message } from '../../types/chat-feature/index';
 import type { EnhancedMessage } from '../../types/chat-feature/enhanced-message';
 import { Bot, Lightbulb, Sparkles, Loader2, ExternalLink, Route } from 'lucide-react';
-import MathRenderer from '@/components/MathRenderer';
+import ChatMarkdown from '@/components/chat-feature/ChatMarkdown';
 
 interface MessageBubbleProps {
   message: Message;
@@ -45,8 +45,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isCurrentUser, o
           </div>
           <div className="flex-1 max-w-3xl">
             <div className="bg-card rounded-2xl rounded-tl-md p-4 shadow-sm border border-border">
-              <div className="text-foreground leading-relaxed prose dark:prose-invert max-w-none">
-                <MathRenderer content={message.text} />
+              <div className="text-foreground leading-relaxed">
+                <ChatMarkdown content={message.text} />
                 {message.isTyping && (
                   <span className="inline-block w-2 h-5 bg-muted-foreground/60 ml-1 align-middle animate-pulse" />
                 )}

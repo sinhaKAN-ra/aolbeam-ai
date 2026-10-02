@@ -17,11 +17,9 @@ export const dynamic = 'force-dynamic';
  * chains, so a dead Gemini key doesn't break it.
  */
 export async function POST(request: Request) {
+  // Auth optional — guests can expand too (chat itself is guest-allowed).
   const supabase = createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  await supabase.auth.getUser().catch(() => null);
 
   const { topic } = await request.json().catch(() => ({ topic: '' }));
   if (!topic || typeof topic !== 'string') {
