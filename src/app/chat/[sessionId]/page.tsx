@@ -79,11 +79,11 @@ const ChatTeacherPage: React.FC<ChatPageProps> = () => {
   }
 
   return (
-    // Scoped fix for the double-scrollbar bug: the shared AppShell/body don't
-    // bound height (other pages need natural document scroll), so THIS route
-    // takes a fixed viewport height itself and clips overflow — ChatInterface
-    // becomes the only element that scrolls.
-    <div className="h-[calc(100vh-4rem)] md:h-screen overflow-hidden flex flex-col bg-background text-foreground">
+    // Double-scrollbar fix, part 2: the sibling layout.tsx pins `body` to
+    // `overflow: hidden; height: 100dvh` for this route, so body no longer
+    // competes for scroll. This div just claims that full viewport height —
+    // ChatInterface's own `overflow-y-auto` region is the only scrollbar.
+    <div className="h-dvh overflow-hidden flex flex-col bg-background text-foreground">
       <ChatInterface
         isNewSession={isNewSession}
         messages={messages}

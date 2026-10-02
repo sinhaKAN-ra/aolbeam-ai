@@ -11,9 +11,10 @@ interface MessageBubbleProps {
   onExpand?: () => void;
   isExpanding?: boolean;
   hasExtras?: boolean;
+  onTopicClick?: (topic: string) => void;
 }
 
-const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isCurrentUser, onRetry, onExpand, isExpanding, hasExtras }) => {
+const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isCurrentUser, onRetry, onExpand, isExpanding, hasExtras, onTopicClick }) => {
   const isUser = message.sender === 'user';
   const extras = (message as EnhancedMessage).enhancedContent;
   
@@ -114,10 +115,16 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isCurrentUser, o
                     </h4>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {extras.suggestions.map((s, i) => (
-                        <div key={i} className="p-3 rounded-lg border border-border bg-card">
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => onTopicClick?.(s.title)}
+                          disabled={!onTopicClick}
+                          className="p-3 rounded-lg border border-border bg-card text-left hover:border-primary/50 hover:shadow-sm transition-all disabled:cursor-default disabled:hover:border-border disabled:hover:shadow-none"
+                        >
                           <p className="text-sm font-medium text-foreground">{s.title}</p>
                           <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>

@@ -163,6 +163,7 @@ export const ChatInterface = ({
                     }
                     isExpanding={expandingIds.includes(message.id)}
                     hasExtras={!!(message as EnhancedMessage).enhancedContent?.suggestions}
+                    onTopicClick={(topic) => onSendMessage(`Tell me about ${topic}`)}
                   />
                 )}
               </div>
