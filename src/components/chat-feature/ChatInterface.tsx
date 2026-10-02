@@ -44,6 +44,8 @@ interface ChatInterfaceProps {
   selectedTags: string[];
   onTopicTagClick: (tag: TopicTag) => void;
   onCustomPathCreated: (pathId: string) => void;
+  onExpandMessage?: (messageId: string, topic: string) => void;
+  expandingIds?: string[];
 }
 
 interface TopicSuggestionCardProps {
@@ -91,6 +93,8 @@ export const ChatInterface = ({
   selectedTags,
   onTopicTagClick,
   onCustomPathCreated,
+  onExpandMessage,
+  expandingIds = [],
 }: ChatInterfaceProps) => {
   const [input, setInput] = useState('');
   const [showCustomPathModal, setShowCustomPathModal] = useState(false);
@@ -489,7 +493,24 @@ const sampleTopics = [
                     ) : (
                       <>
 
-                        <MessageBubble message={message} isCurrentUser={false} onRetry={onRetry} />
+                        <MessageBubble
+                          message={message}
+                          isCurrentUser={false}
+                          onRetry={onRetry}
+                          onExpand={
+                            message.sender === 'ai' && !message.isTyping && onExpandMessage
+                              ? () => {
+                                  // Topic = the user message immediately before this answer.
+                                  const prevUser = [...messages.slice(0, index)]
+                                    .reverse()
+                                    .find(m => m.sender === 'user');
+                                  onExpandMessage(message.id, prevUser?.text || message.text);
+                                }
+                              : undefined
+                          }
+                          isExpanding={expandingIds.includes(message.id)}
+                          hasExtras={'enhancedContent' in message && !!(message as EnhancedMessage).enhancedContent?.suggestions}
+                        />
                       </>
                     )}
                   </div>

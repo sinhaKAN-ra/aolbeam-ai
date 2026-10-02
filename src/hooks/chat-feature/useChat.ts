@@ -35,6 +35,7 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
   const [topicTags, setTopicTags] = useState<TopicTag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [expandingIds, setExpandingIds] = useState<string[]>([]);
 
   // Initialize chat history
   const {
@@ -490,6 +491,57 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
     return aiId;
   }, [messages, searchHistory, canUseFeature, currentSessionId, saveMessageToHistory]);
 
+  /**
+   * Phase B: lazily fetch "learning extras" (suggestions, path, resources,
+   * practice problems) for an AI answer and attach them as enhancedContent.
+   * This replaces the old blocking per-message dossier — the user opts in.
+   */
+  const expandMessage = useCallback(async (messageId: string, topic: string) => {
+    if (expandingIds.includes(messageId)) return;
+    setExpandingIds(prev => [...prev, messageId]);
+    try {
+      const res = await fetch('/api/chat/extras', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic }),
+      });
+      if (!res.ok) throw new Error(`Extras request failed (${res.status})`);
+      const data = await res.json();
+
+      const branchingPaths = (data.learningPath?.steps || []).map((step: any) => ({
+        id: String(step.id),
+        title: step.title,
+        description: step.description,
+        difficulty: step.difficulty,
+        estimatedTime: step.estimatedTime,
+        tags: [],
+      }));
+
+      setMessages(prev =>
+        prev.map(m => {
+          if (m.id !== messageId) return m;
+          const enhanced = m as EnhancedMessage;
+          return {
+            ...enhanced,
+            enhancedContent: {
+              ...(enhanced.enhancedContent || {}),
+              mainContent: enhanced.enhancedContent?.mainContent || m.text,
+              suggestions: data.suggestions || [],
+              branchingPaths,
+              resources: data.resources || [],
+              practiceProblems: data.practiceProblems || [],
+            },
+          } as Message;
+        })
+      );
+    } catch (err) {
+      console.error('Failed to expand message:', err);
+      toast.error('Could not load learning extras. Please try again.');
+    } finally {
+      setExpandingIds(prev => prev.filter(id => id !== messageId));
+    }
+  }, [expandingIds]);
+
   const handleTopicTagClick = useCallback((tag: TopicTag) => {
     const newSelectedTags = selectedTags.includes(tag.id)
       ? selectedTags.filter(id => id !== tag.id)
@@ -536,6 +588,8 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
     handleCustomPathCreated,
     startNewChat,
     isNewSession,
+    expandMessage,
+    expandingIds,
   };
 };
 

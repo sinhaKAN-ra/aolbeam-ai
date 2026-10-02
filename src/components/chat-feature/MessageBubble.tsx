@@ -1,16 +1,21 @@
 import React from 'react';
 import { Message } from '../../types/chat-feature/index';
-import { Bot, Lightbulb } from 'lucide-react';
+import type { EnhancedMessage } from '../../types/chat-feature/enhanced-message';
+import { Bot, Lightbulb, Sparkles, Loader2, ExternalLink, Route } from 'lucide-react';
 import MathRenderer from '@/components/MathRenderer';
 
 interface MessageBubbleProps {
   message: Message;
   isCurrentUser: boolean;
   onRetry?: () => void; // Make onRetry optional
+  onExpand?: () => void;
+  isExpanding?: boolean;
+  hasExtras?: boolean;
 }
 
-const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isCurrentUser, onRetry }) => {
+const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isCurrentUser, onRetry, onExpand, isExpanding, hasExtras }) => {
   const isUser = message.sender === 'user';
+  const extras = (message as EnhancedMessage).enhancedContent;
   
   // Debug log for practice problems if needed
   if (message.type === 'practice_problems_list') {
@@ -84,6 +89,90 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isCurrentUser, o
               </div>
               )}
             </div>
+
+            {/* Phase B: on-demand learning extras */}
+            {onExpand && !hasExtras && (
+              <button
+                onClick={onExpand}
+                disabled={isExpanding}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 disabled:opacity-50 transition-colors"
+              >
+                {isExpanding ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading learning extras…</>
+                ) : (
+                  <><Sparkles className="w-3.5 h-3.5" /> Expand with suggestions, path &amp; resources</>
+                )}
+              </button>
+            )}
+
+            {hasExtras && extras && (
+              <div className="mt-3 space-y-4">
+                {extras.suggestions && extras.suggestions.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                      <Lightbulb className="w-3.5 h-3.5" /> Related topics
+                    </h4>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {extras.suggestions.map((s, i) => (
+                        <div key={i} className="p-3 rounded-lg border border-border bg-card">
+                          <p className="text-sm font-medium text-foreground">{s.title}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {extras.branchingPaths && extras.branchingPaths.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                      <Route className="w-3.5 h-3.5" /> Learning path
+                    </h4>
+                    <ol className="space-y-1.5">
+                      {extras.branchingPaths.map((step, i) => (
+                        <li key={step.id} className="flex gap-2 text-sm">
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary text-xs flex items-center justify-center">{i + 1}</span>
+                          <span className="text-foreground">{step.title}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+
+                {extras.resources && extras.resources.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                      <ExternalLink className="w-3.5 h-3.5" /> Resources
+                    </h4>
+                    <ul className="space-y-1">
+                      {extras.resources.map((r) => (
+                        <li key={r.id}>
+                          <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">
+                            {r.title}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {extras.practiceProblems && extras.practiceProblems.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                      <Lightbulb className="w-3.5 h-3.5 text-yellow-500" /> Practice problems
+                    </h4>
+                    <ul className="space-y-1.5">
+                      {extras.practiceProblems.map((p, i) => (
+                        <li key={i} className="flex gap-2 text-sm">
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-yellow-100 text-yellow-700 text-xs flex items-center justify-center">{i + 1}</span>
+                          <span className="text-foreground">{p.question}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="text-xs text-muted-foreground mt-1">
               {message.timestamp && new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}            
             </div>
