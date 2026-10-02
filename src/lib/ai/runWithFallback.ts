@@ -19,9 +19,9 @@ import { groqProvider } from './providers/groq';
  */
 export function getAiProviders(): AiProvider[] {
   return [
-    geminiProvider, // primary
-    openaiProvider, // fallback 1
-    groqProvider, // fallback 2 (free/cheap last resort)
+    groqProvider, // primary — free tier
+    geminiProvider, // fallback 1
+    openaiProvider, // fallback 2
     // nextProvider,  <-- append new providers here
   ];
 }
