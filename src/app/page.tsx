@@ -48,7 +48,7 @@ import { InteractionType, InteractionLimitResult } from '@/types/interaction';
 // Server-side data fetching should be moved to a Server Component
 // and passed as props to this component
 
-const FREE_INTERACTION_LIMIT = 10;
+const FREE_INTERACTION_LIMIT = 100; // raised for dev/testing — lower before shipping
 const CONCRETE_AI_PROBLEM_TYPES: AIGeneratedProblemType[] = ['theory', 'practical', 'practical_mcq', 'conceptual', 'numerical', 'diagram_based'];
 
 

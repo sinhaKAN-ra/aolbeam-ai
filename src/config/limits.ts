@@ -27,8 +27,11 @@ export const CHAT_LIMITS: Record<PlanId, number> = {
  * Guest (not logged-in) free-trial allowance. A small taste before the login
  * prompt. Tracked client-side in localStorage — NOT a security boundary, just
  * a funnel nudge (a determined user can clear storage; that's acceptable).
+ *
+ * Bumped to 100 for development/testing. Lower this (e.g. 3-5) before shipping
+ * so the login funnel actually kicks in for real guests.
  */
-export const GUEST_CHAT_TRIAL_LIMIT = 3;
+export const GUEST_CHAT_TRIAL_LIMIT = 100;
 
 /** AI problem/insight generation limits by plan (logged-in users). */
 export const AI_GENERATION_LIMITS: Record<PlanId, number> = {
