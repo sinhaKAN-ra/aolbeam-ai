@@ -211,10 +211,9 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
    */
   const callBraveSearch = useCallback(async (query: string) => {
     try {
-      const response = await fetch('/api/brave-search', {
-        method: 'POST',
+      const response = await fetch(`/api/brave?q=${encodeURIComponent(query)}`, {
+        method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
       });
 
       if (!response.ok) {
@@ -222,7 +221,7 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
       }
 
       const data = await response.json();
-      return data.results;
+      return data?.web?.results ?? [];
     } catch (error) {
       console.error('Error calling Brave Search API:', error);
       throw error;

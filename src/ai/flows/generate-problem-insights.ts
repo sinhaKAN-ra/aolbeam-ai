@@ -10,7 +10,8 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'zod';
+import {z} from 'genkit';
+import { runGenkitWithFallback } from '@/ai/runGenkitWithFallback';
 
 const GenerateProblemInsightsInputSchema = z.object({
   problemStatement: z.string().describe('The specific problem statement for which to generate insights. This may contain LaTeX, Markdown, or Mermaid diagrams.'),
@@ -81,7 +82,20 @@ const generateProblemInsightsFlow = ai.defineFlow({
     examContext: input.examContext ?? true,
     difficultyLevel: input.difficultyLevel ?? 'intermediate' as const
   };
-  
-  const {output} = await prompt(enhancedInput);
-  return output!;
+
+  return runGenkitWithFallback({
+    genkit: () => prompt(enhancedInput),
+    schema: GenerateProblemInsightsOutputSchema,
+    system:
+      'You are an exam-prep coach creating memorable problem-solving patterns. Use LaTeX for math, Markdown for code, Mermaid for diagrams.',
+    buildPrompt: () =>
+      `Create a memorable, recognizable pattern for this problem so a student can identify and apply it fast under exam pressure.
+
+Problem Statement: ${enhancedInput.problemStatement}
+Topic: ${enhancedInput.topic}
+Difficulty: ${enhancedInput.difficultyLevel}
+Exam Context: ${enhancedInput.examContext}
+
+Return JSON with: patternSignature, quickRecognitionTriggers (3-5), corePattern, memoryAnchors {formula?, mnemonic?, visualPattern?}, commonMistakes (3), speedTips, practiceCheckpoints.`,
+  });
 });

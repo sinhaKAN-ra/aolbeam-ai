@@ -58,6 +58,7 @@ import { useSidebar } from '@/components/ui/sidebar';
 import Image from 'next/image';
 import ChatHistorySidebar from '@/components/chat-feature/ChatHistorySidebar';
 import { useChatHistory } from '@/hooks/useChatHistory';
+import { FEATURES, isFeatureEnabled, type FeatureKey } from '@/config/features';
 
 const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
 
@@ -93,6 +94,7 @@ interface NavItem {
   isPro?: boolean;
   description?: string;
   onClick?: (e: React.MouseEvent) => void;
+  featureKey?: FeatureKey;
 }
 
 interface UserMenuItem {
@@ -227,13 +229,15 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
           href: "/tests", 
           label: "Practice Tests", 
           icon: <NotepadTextDashed className="h-4 w-4" />,
-          description: "Full-length practice exams"
+          description: "Full-length practice exams",
+          featureKey: "tests",
         },
         { 
           href: "/study-resources", 
           label: "Study Resources", 
           icon: <BookOpen className="h-4 w-4" />,
-          description: "Curated study materials"
+          description: "Curated study materials",
+          featureKey: "studyResources",
         },
         { 
           href: "/learning-paths", 
@@ -595,7 +599,15 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
         {/* Main Navigation - Scrollable */}
         <div className="flex-1 min-h-0">
           <nav className="h-full overflow-y-auto p-4 space-y-6 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent hover:scrollbar-thumb-gray-400 dark:hover:scrollbar-thumb-gray-500">
-            {navSections.map((section, sectionIndex) => (
+            {navSections
+              .map((section) => ({
+                ...section,
+                items: section.items.filter(
+                  (item) => !item.featureKey || isFeatureEnabled(item.featureKey)
+                ),
+              }))
+              .filter((section) => section.items.length > 0)
+              .map((section, sectionIndex) => (
               <div key={sectionIndex} className="space-y-1">
                 {section.title && !isCollapsed && (
                   <h3 className="px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 sticky top-0 bg-background/95 backdrop-blur py-1 z-10">

@@ -1,15 +1,13 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
+import { runWithFallback, AllProvidersFailedError } from '@/lib/ai/runWithFallback';
+import { extractJsonString } from '@/lib/ai/providers/types';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-if (!GEMINI_API_KEY) {
-  throw new Error('GEMINI_API_KEY is not set in environment variables');
-}
-
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
-
+/**
+ * AI endpoint. Route path kept as /api/gemini for backward compatibility, but
+ * internally it now runs through the multi-provider fallback chain
+ * (Gemini -> OpenAI -> Groq -> ...). If one provider's key is expired or over
+ * quota, the next provider answers automatically. See src/lib/ai/.
+ */
 export async function POST(req: Request) {
   try {
     const { action, params } = await req.json();
@@ -19,153 +17,71 @@ export async function POST(req: Request) {
         const { topic } = params;
         const prompt = `Provide a concise learning context about ${topic} for a student. Include key concepts and why they're important.`;
         try {
-          const result = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.2 }
-          });
-          const response = await result.response;
-          return NextResponse.json({ text: response.text() });
+          const { text } = await runWithFallback({ prompt, temperature: 0.2 });
+          return NextResponse.json({ text });
         } catch (error: any) {
-          console.error(`Error in generateLearningContext: ${error}`);
-          return NextResponse.json({ 
-            text: `I'd be happy to teach you about ${topic}. Could you ask me again? I'm having trouble connecting to my knowledge base at the moment.`,
-            error: `Failed to generate learning context: ${error?.message || 'Unknown error'}`
-          }, { status: 200 }); // Send 200 with error message in payload to maintain UI flow
+          console.error('generateLearningContext failed on all providers:', error);
+          // Keep UI flow: 200 with a friendly message + machine-readable error.
+          return NextResponse.json(
+            {
+              text: `I'd be happy to teach you about ${topic}. Could you ask me again? I'm having trouble reaching the AI service right now.`,
+              error: errMessage(error),
+            },
+            { status: 200 }
+          );
         }
       }
+
       case 'generateTopicSuggestions': {
         const { topic, count = 3 } = params;
         const prompt = `
         Generate exactly ${count} related learning topics about ${topic}.
-        
+
         For each topic, include:
         - title: Short descriptive name
         - description: 1-2 sentence explanation
         - difficulty: One of exactly 'beginner', 'intermediate', or 'advanced'
-        
+
         Format your response as a clean JSON array with no additional text, markdown, or comments.
         Example format: [{"title": "Topic 1", "description": "Description 1", "difficulty": "beginner"}, ...]
         `;
-        
         try {
-          const result = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.2 }
-          });
-          
-          const response = await result.response;
-          const raw = response.text();
-          console.log('Raw Gemini response:', raw);
-          
-          // Clean up the JSON string
-          let jsonString = raw;
-          
-          // Try to find JSON array with regex
-          const arrayMatch = raw.match(/\[\s*\{[\s\S]*\}\s*\]/);
-          if (arrayMatch) {
-            jsonString = arrayMatch[0];
-          } else {
-            // Remove markdown code fences if present
-            const fenceMatch = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
-            if (fenceMatch && fenceMatch[1]) {
-              jsonString = fenceMatch[1].trim();
-            }
-          }
-          
-          // Remove any comments or text outside the array
-          jsonString = jsonString.replace(/\/\/.*/g, '');
-          jsonString = jsonString.trim();
-          
-          console.log('Cleaned JSON string:', jsonString);
-          
-          try {
-            const suggestions = JSON.parse(jsonString);
-            return NextResponse.json({ suggestions });
-          } catch (innerError) {
-            console.error('Inner JSON parse error:', innerError);
-            throw innerError; // Let outer catch handle the fallback
-          }
-        } catch (parseError) {
-          console.error('Failed to parse topic suggestions JSON:', parseError);
-          
-          // Return fallback suggestions rather than failing
-          const fallbackSuggestions = [
-            {
-              title: `${topic} Fundamentals`,
-              description: `Learn the basic principles and concepts of ${topic}.`,
-              difficulty: 'beginner'
-            },
-            {
-              title: `Intermediate ${topic} Concepts`,
-              description: `Dive deeper into more complex aspects of ${topic}.`,
-              difficulty: 'intermediate'
-            },
-            {
-              title: `Advanced ${topic} Applications`,
-              description: `Explore cutting-edge applications and advanced techniques in ${topic}.`,
-              difficulty: 'advanced'
-            }
-          ];
-          
-          return NextResponse.json({ suggestions: fallbackSuggestions });
+          const { text } = await runWithFallback({ prompt, temperature: 0.2, json: true });
+          const suggestions = JSON.parse(extractJsonString(text));
+          return NextResponse.json({ suggestions });
+        } catch (error) {
+          console.error('generateTopicSuggestions failed/unparseable:', error);
+          return NextResponse.json({ suggestions: fallbackSuggestions(topic) });
         }
       }
+
       case 'generatePracticeProblems': {
         const { topic, count = 3 } = params;
         const prompt = `Generate a list of ${count} concise practice problems about ${topic}. Return only a JSON array of problem statements, no explanations or answers needed. Format example: ["Problem 1", "Problem 2"]`;
-        
         try {
-          const result = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 500 }
+          const { text } = await runWithFallback({
+            prompt,
+            temperature: 0.7,
+            maxOutputTokens: 500,
           });
-          const response = await result.response;
-          const raw = response.text();
-          
-          // Clean up the JSON string
-          let jsonString = raw;
-          
-          // Remove markdown code fences if present
-          const fenceMatch = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
-          if (fenceMatch && fenceMatch[1]) {
-            jsonString = fenceMatch[1].trim();
-          } else {
-            // Try to find JSON array with regex
-            const arrayMatch = raw.match(/\[[\s\S]*\]/);
-            if (arrayMatch) {
-              jsonString = arrayMatch[0];
-            } else {
-              // Just clean up markdown and try to parse as JSON array
-              jsonString = raw.replace(/```/g, '').trim();
-              // If it's not a JSON array, split by newlines and quote each line
-              if (!jsonString.startsWith('[')) {
-                const problems = jsonString.split('\n')
-                  .map(line => line.trim())
-                  .filter(line => line.length > 0 && !line.startsWith('1.') && !line.startsWith('-') && !line.startsWith('*'));
-                jsonString = JSON.stringify(problems);
-              }
-            }
-          }
-          
-          // Parse the JSON and ensure it's in the correct format
-          let problems = JSON.parse(jsonString);
-          // Ensure we have an array of strings
-          if (!Array.isArray(problems)) {
-            problems = Object.values(problems).flat();
-          }
-          problems = problems.map((p: any) => typeof p === 'string' ? p : JSON.stringify(p));
-          
+          let problems = JSON.parse(extractJsonString(text));
+          if (!Array.isArray(problems)) problems = Object.values(problems).flat();
+          problems = problems.map((p: any) => (typeof p === 'string' ? p : JSON.stringify(p)));
           return NextResponse.json({ practiceProblem: problems });
-        } catch (parseError) {
-          console.error('Failed to parse practice problem JSON:', parseError);
-          return NextResponse.json({ error: 'Failed to parse AI response for practice problem' }, { status: 500 });
+        } catch (error) {
+          console.error('generatePracticeProblems failed/unparseable:', error);
+          return NextResponse.json(
+            { error: 'Failed to generate practice problems' },
+            { status: 500 }
+          );
         }
       }
+
       case 'generateLearningPath': {
-        const { topic, userId } = params;
+        const { topic } = params;
         const prompt = `
-        Generate a 4 detailed learning path for learning about ${topic} suitable for a student.
-        
+        Generate a detailed learning path for learning about ${topic} suitable for a student.
+
         Create the response as a valid JSON object with these properties:
         - title: A descriptive title for the learning path
         - steps: An array of step objects where each step has:
@@ -174,77 +90,52 @@ export async function POST(req: Request) {
           - description: Detailed explanation (2-3 sentences)
           - difficulty: One of 'beginner', 'intermediate', or 'advanced'
           - estimatedTime: String like '1-2 weeks'
-        
+
         Format as CLEAN JSON only with no explanations, markdown, or code blocks.
         `;
-        
         try {
-          const result = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.2 }
-          });
-          
-          const response = await result.response;
-          const raw = response.text();
-          
-          // Clean up the response - look for JSON object
-          let jsonStr = raw;
-          
-          // Remove markdown code fences if present
-          const fenceMatch = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
-          if (fenceMatch && fenceMatch[1]) {
-            jsonStr = fenceMatch[1].trim();
-          } else {
-            // Otherwise try to extract just the JSON part
-            const jsonStartPos = raw.indexOf('{');
-            const jsonEndPos = raw.lastIndexOf('}');
-            
-            if (jsonStartPos >= 0 && jsonEndPos > jsonStartPos) {
-              jsonStr = raw.substring(jsonStartPos, jsonEndPos + 1);
-            }
-          }
-          
-          // Parse the JSON
-          const pathData = JSON.parse(jsonStr);
+          const { text } = await runWithFallback({ prompt, temperature: 0.2, json: true });
+          const pathData = JSON.parse(extractJsonString(text));
           return NextResponse.json(pathData);
-        } catch (parseError) {
-          console.error('Failed to parse learning path JSON:', parseError);
-          // Return a fallback learning path so the UI doesn't break
-          return NextResponse.json({ 
-            title: `Learning Path for ${topic}`,
-            steps: [
-              { 
-                id: 1, 
-                title: 'Getting Started', 
-                description: `Begin your ${topic} journey with the fundamentals.`,
-                difficulty: 'beginner',
-                estimatedTime: '1-2 weeks'
-              },
-              { 
-                id: 2, 
-                title: 'Core Concepts', 
-                description: `Explore essential ${topic} concepts in depth.`,
-                difficulty: 'intermediate',
-                estimatedTime: '2-3 weeks'
-              },
-              { 
-                id: 3, 
-                title: 'Advanced Applications', 
-                description: `Apply your ${topic} knowledge to solve complex problems.`,
-                difficulty: 'advanced',
-                estimatedTime: '3-4 weeks'
-              }
-            ]
-          });
+        } catch (error) {
+          console.error('generateLearningPath failed/unparseable:', error);
+          return NextResponse.json(fallbackLearningPath(topic));
         }
       }
+
       default:
         return NextResponse.json({ error: 'Invalid API request type' }, { status: 400 });
     }
   } catch (error: any) {
-    console.error('Unhandled API error:', error);
-    return NextResponse.json({ 
-      error: `API Error: ${error?.message || 'Unknown error'}`
-    }, { status: 500 });
+    console.error('Unhandled AI route error:', error);
+    return NextResponse.json({ error: `API Error: ${errMessage(error)}` }, { status: 500 });
   }
+}
+
+function errMessage(error: unknown): string {
+  if (error instanceof AllProvidersFailedError) {
+    return `All AI providers unavailable: ${error.attempts
+      .map((a) => `${a.provider} (${a.error})`)
+      .join('; ')}`;
+  }
+  return (error as Error)?.message || 'Unknown error';
+}
+
+function fallbackSuggestions(topic: string) {
+  return [
+    { title: `${topic} Fundamentals`, description: `Learn the basic principles and concepts of ${topic}.`, difficulty: 'beginner' },
+    { title: `Intermediate ${topic} Concepts`, description: `Dive deeper into more complex aspects of ${topic}.`, difficulty: 'intermediate' },
+    { title: `Advanced ${topic} Applications`, description: `Explore cutting-edge applications and advanced techniques in ${topic}.`, difficulty: 'advanced' },
+  ];
+}
+
+function fallbackLearningPath(topic: string) {
+  return {
+    title: `Learning Path for ${topic}`,
+    steps: [
+      { id: 1, title: 'Getting Started', description: `Begin your ${topic} journey with the fundamentals.`, difficulty: 'beginner', estimatedTime: '1-2 weeks' },
+      { id: 2, title: 'Core Concepts', description: `Explore essential ${topic} concepts in depth.`, difficulty: 'intermediate', estimatedTime: '2-3 weeks' },
+      { id: 3, title: 'Advanced Applications', description: `Apply your ${topic} knowledge to solve complex problems.`, difficulty: 'advanced', estimatedTime: '3-4 weeks' },
+    ],
+  };
 }

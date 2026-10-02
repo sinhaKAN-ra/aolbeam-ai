@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import type { InteractionCheckResponse } from '@/types/interaction';
+import { CHAT_LIMITS } from '@/config/limits';
 
 export async function POST(request: Request) {
   try {
@@ -83,8 +84,9 @@ export async function POST(request: Request) {
 
     const profile = profileData; // Now profile is guaranteed to be non-null
 
-    // Determine limit based on subscription plan
-    let limit = 15; // Default for logged-in users without subscription
+    // Determine limit based on subscription plan and interaction type.
+    // Free/non-subscribed defaults come from the shared src/config/limits.ts.
+    let limit = CHAT_LIMITS.free; // Default for logged-in users without subscription
     let isPaidPlan = false;
     let isDaily = false;
 
@@ -113,7 +115,7 @@ export async function POST(request: Request) {
           break;
         default:
           // Basic plan or unknown plan
-          limit = 25; // Default for non-subscribed or basic
+          limit = CHAT_LIMITS.free; // Default for non-subscribed or basic
           isPaidPlan = false;
           isDaily = false; // Basic plan has total limit, not daily
           break;
@@ -121,20 +123,27 @@ export async function POST(request: Request) {
     } else {
       // Handle non-subscribed users (free/basic)
       // For logged-in users who are not subscribed, provide a higher free limit
-      limit = 15; // Free interactions for logged-in users without subscription
+      limit = CHAT_LIMITS.free; // Free interactions for logged-in users without subscription
       isPaidPlan = false;
       isDaily = false;
     }
 
-    // Get the interaction count
+    // For problem_generation, enforce daily reset regardless of plan
+    if (interactionType === 'problem_generation') {
+      isDaily = true;
+    }
+
+    // Get the interaction count for the requested interaction type
     let queryBuilder = supabase
       .from('user_interactions')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .eq('interaction_type', interactionType);
     
     // For paid plans with daily limits, only count today's interactions
     if (isDaily) {
-      queryBuilder = queryBuilder.eq('created_at', new Date().toISOString().split('T')[0]);
+      const today = new Date().toISOString().split('T')[0];
+      queryBuilder = queryBuilder.eq('created_date', today);
     }
     
     const { count, error: countError } = await queryBuilder;

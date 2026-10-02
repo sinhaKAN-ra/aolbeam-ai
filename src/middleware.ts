@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { isHiddenRoute } from '@/config/features';
 
 // Public paths that don't require authentication
 const publicPaths = [
@@ -24,6 +25,12 @@ const publicPaths = [
 ];
 
 export function middleware(req: NextRequest) {
+  // Redirect deep links to hidden (not-yet-launched) features back home.
+  const pathname = req.nextUrl.pathname;
+  if (!pathname.startsWith('/api/') && isHiddenRoute(pathname)) {
+    return NextResponse.redirect(new URL('/', req.nextUrl.origin));
+  }
+
   // Skip middleware for public paths
   const path = req.nextUrl.pathname;
   if (publicPaths.some(p => 

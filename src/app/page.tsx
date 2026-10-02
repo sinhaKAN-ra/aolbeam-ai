@@ -388,7 +388,7 @@ export default function AOLBEAMPage() {
         };
         try {
           // console.log("Page: Attempting to save new problem to Supabase:", dbRecord);
-          const { data: dbData, error: dbError } = await supabase.from('user_interactions').insert(dbRecord).select('id').single();
+          const { data: dbData, error: dbError } = await supabase.from('user_interactions').insert({ ...dbRecord, interaction_type: 'problem_generation' }).select('id').single();
           if (dbError) {
               console.error("Page: Error saving history to Supabase:", dbError);
               toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account. " + dbError.message });
