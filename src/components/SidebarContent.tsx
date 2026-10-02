@@ -204,7 +204,7 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
         {
           href: "/learning-paths",
           label: "Learning Paths",
-          icon: <Route className="h-4 w-4" />,
+          icon: <Zap className="h-4 w-4" />,
           description: "Create and manage learning paths",
           featureKey: "learningPaths",
         },
