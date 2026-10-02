@@ -17,6 +17,20 @@ export interface AiRequest {
   json?: boolean;
 }
 
+/** One turn in a multi-message conversation. */
+export interface ChatTurn {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+/** A conversational request carrying full history for context. */
+export interface ChatRequest {
+  messages: ChatTurn[];
+  system?: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+}
+
 export interface AiResult {
   text: string;
   /** Which provider actually answered. */
@@ -29,6 +43,11 @@ export interface AiProvider {
   isConfigured: () => boolean;
   /** Throws on failure; the runner classifies the error. */
   generate: (req: AiRequest) => Promise<string>;
+  /**
+   * Optional streaming conversational call. Yields text chunks as they arrive.
+   * Providers that don't implement this are skipped by the streaming runner.
+   */
+  stream?: (req: ChatRequest) => AsyncIterable<string>;
 }
 
 /**

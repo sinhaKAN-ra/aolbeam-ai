@@ -102,3 +102,56 @@ export class AllProvidersFailedError extends Error {
     this.attempts = attempts;
   }
 }
+
+/**
+ * Streaming variant of the fallback runner. Yields { chunk } objects as text
+ * arrives. Falls through to the next provider ONLY if the failure happens
+ * before any chunk was emitted — once the client has seen tokens we can't
+ * silently switch providers mid-answer. Providers without a `stream` method
+ * are skipped.
+ */
+export async function* streamWithFallback(
+  req: import('./providers/types').ChatRequest,
+  opts: RunOptions = {}
+): AsyncGenerator<{ chunk: string; provider: string }> {
+  const all = (opts.providers ?? getAiProviders()).filter(
+    (p) => p.isConfigured() && typeof p.stream === 'function'
+  );
+
+  if (all.length === 0) {
+    throw new AllProvidersFailedError(
+      'No streaming AI provider is configured. Set GEMINI_API_KEY, OPENAI_API_KEY, or GROQ_API_KEY.',
+      []
+    );
+  }
+
+  const attempts: ProviderAttempt[] = [];
+
+  for (const provider of all) {
+    let emitted = false;
+    try {
+      for await (const chunk of provider.stream!(req)) {
+        emitted = true;
+        yield { chunk, provider: provider.name };
+      }
+      return; // completed successfully
+    } catch (error) {
+      attempts.push({
+        provider: provider.name,
+        error: (error as Error)?.message ?? String(error),
+      });
+      // If tokens already streamed to the client, we cannot switch providers.
+      if (emitted) throw error;
+      if (isFallbackError(error)) {
+        console.warn(
+          `[ai-stream] provider "${provider.name}" unavailable pre-stream, falling through:`,
+          (error as Error)?.message
+        );
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new AllProvidersFailedError('All configured streaming providers failed.', attempts);
+}

@@ -136,55 +136,19 @@ export const ChatInterface = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!input.trim() || isProcessingMessage) return;
-    
+
+    const text = input.trim();
     try {
       setIsProcessingMessage(true);
-      
-      // Feature limit checks are now handled directly in the useChat hook
-      
-      // Call the server-side API to validate and record the chat message
-      const response = await fetch('/api/chat/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: input.trim()
-        }),
-      });
-      
-      const data = await response.json();
-      
-      // if (!response.ok) {
-      //   // Handle API errors
-      //   if (data.code === 'CHAT_LIMIT_REACHED') {
-      //     toast.error(data.message || 'You have reached your chat message limit for today');
-      //   } else {
-      //     throw new Error(data.error || 'Failed to send message');
-      //   }
-      //   return;
-      // }
-      
-      // Send the message to the parent component
-      onSendMessage(input.trim());
+      // Limit enforcement + usage recording now happen server-side in
+      // /api/chat/stream (single source of truth). Just send the message.
+      onSendMessage(text);
       setInput('');
-      setForceScroll(true); // Trigger scroll after sending message
-      
-      // Log current usage before refetch
-      console.log('Chat usage before refetch:', usage);
-      console.log('Current chatUsage object:', chatUsage);
-      
-      // Refetch chat usage to update counts in UI
-      console.log('Calling refetchUsage() to get fresh chat data');
-      const { data: updatedUsage } = await refetchUsage();
-      console.log('Fresh chat usage data after refetch:', updatedUsage);
-      
-      // Show remaining messages in a toast if low
-      if (chatUsage.remaining <= Math.floor(chatUsage.limit * 0.2)) {
-        toast.info(`You have ${chatUsage.remaining} chat message${chatUsage.remaining === 1 ? '' : 's'} remaining today`);
-      }
+      setForceScroll(true);
+      // Refresh the usage counter shown in the UI.
+      refetchUsage().catch(() => {});
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message. Please try again.');
@@ -435,24 +399,23 @@ const sampleTopics = [
   console.log('isNewSession', isNewSession);
   return (
     <div className="flex h-screen bg-background">
-      <div className="flex-1 flex flex-col relative bg-gray-50">
+      <div className="flex-1 flex flex-col relative bg-background">
         <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto p-4 md:p-6 transition-all duration-300 ${isSidebarCollapsed ? 'pr-4 md:pr-6' : 'pr-4 md:pr-[calc(5rem+1.5rem)]'}`}>
-          {/* Welcome screen for new chat */}
-          {/* Welcome/Mission screen for brand new chat only (no messages, first session, or some isNewSession prop) */}
-          { !isNewSession && (
+          {/* Welcome screen: only on a brand-new session with no messages yet */}
+          { isNewSession && messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center space-y-8 py-12">
-              <div className="w-20 h-20 rounded-full bg-orange-100 flex items-center justify-center">
-                <Route className="w-10 h-10 text-orange-500" />
+              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+                <Route className="w-10 h-10 text-primary" />
               </div>
               <div className="space-y-4 max-w-md">
-                <h1 className="text-3xl font-bold text-gray-800">Start Learning With A</h1>
-                <p className="text-lg text-gray-600">
+                <h1 className="text-3xl font-bold text-foreground">Start Learning With A</h1>
+                <p className="text-lg text-muted-foreground">
                   Your intelligent learning companion
                 </p>
               </div>
             </div>
           )}
-          {messages.length === 0 && (
+          {isNewSession && messages.length === 0 && (
                         <div className="text-center mt-16">
                           <div className="relative inline-flex mb-8">
                             <div className="p-6 bg-gradient-to-r from-primary-100 to-secondary-100 rounded-3xl shadow-lg">
@@ -504,10 +467,10 @@ const sampleTopics = [
             <div key={index} className="mb-6">
               {message.sender === 'user' ? (
                 <div className="flex justify-end">
-                  <div className="max-w-[100%] bg-orange-50 rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
-                    <p className="text-gray-800">{message.text}</p>
+                  <div className="max-w-[100%] bg-primary/10 rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
+                    <p className="text-foreground whitespace-pre-wrap">{message.text}</p>
                     <div className="text-right mt-1">
-                      <span className="text-xs text-gray-400">{message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                      <span className="text-xs text-muted-foreground">{message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                     </div>
                   </div>
                 </div>

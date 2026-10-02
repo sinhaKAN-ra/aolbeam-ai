@@ -137,7 +137,39 @@ Order of work:
 6. Audit & fix bugs in problem generation, answer evaluation, math/diagram
    rendering (options 1, 2, 7) ✅ done 2026-10-02
 
-### Phase 6 — what was fixed (2026-10-02)
+### Phase A — chat rebuilt as a real streaming conversation (2026-10-02)
+The old chat sent each message in ISOLATION and fired 5 one-shot calls
+(context + suggestions + path + brave + problems) stitched into a "dossier" —
+so it had NO conversation memory, no streaming, and broke on follow-ups.
+
+- New `src/app/api/chat/stream/route.ts`: SSE endpoint that takes the FULL
+  message history, enforces the chat limit server-side (single authority),
+  records usage, and streams tokens through the provider chain.
+- Providers gained a `stream()` method (Gemini/OpenAI/Groq) +
+  `streamWithFallback()` in runWithFallback.ts — falls through to the next
+  provider only BEFORE any token is emitted.
+- `useChat.sendMessage` rewritten: appends to a running transcript, sends
+  history, renders streamed tokens live, persists both turns.
+- `MessageBubble` now renders AI text through `MathRenderer` (LaTeX/code/
+  Mermaid actually render) with a live cursor; removed the char-by-char
+  `StreamingText` double-animation and the dead `message.advice` branch.
+- Fixed: inverted welcome screen (`!isNewSession` -> `isNewSession && no msgs`),
+  the double limit gate (removed the extra /api/chat/messages call), and
+  hardcoded light-mode colors across the chat (now theme tokens).
+
+LangChain/LangGraph: deliberately NOT used yet. A single-model streaming chat
+doesn't need them and they'd fight the multi-provider fallback. Reserve
+LangGraph.js for Phase C (agentic tutor with tool-calling).
+
+### Phase B (next) — make the "learning extras" non-blocking
+Suggestions / learning path / resources / practice problems become an on-demand
+"Expand" action on an answer, not a blocking per-message dossier. The old
+dossier helpers still exist in useChat (callGeminiAPI, fetchBraveResources,
+updateAiMessage) — wire them to an Expand button rather than sendMessage.
+
+### Phase C (optional) — LangGraph agentic tutor
+Tools: generate_problem, fetch_resource, make_learning_path; model calls them
+when pedagogically useful.
 - **Genkit flows now have fallback.** `generate-practice-problem`,
   `evaluate-theory-answer`, `generate-problem-insights` were a SEPARATE
   single-provider path (Genkit -> googleai/gemini-2.0-flash only), NOT covered

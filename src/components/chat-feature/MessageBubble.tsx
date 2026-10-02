@@ -1,7 +1,7 @@
 import React from 'react';
 import { Message } from '../../types/chat-feature/index';
-import { User, Bot, Lightbulb, MessageSquare } from 'lucide-react';
-import StreamingText from './StreamingText';
+import { Bot, Lightbulb } from 'lucide-react';
+import MathRenderer from '@/components/MathRenderer';
 
 interface MessageBubbleProps {
   message: Message;
@@ -25,27 +25,30 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isCurrentUser, o
       {isUser ? (
         <div className="flex justify-end">
           <div className="max-w-3xl">
-            <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl rounded-tr-md px-4 py-3 shadow-sm">
+            <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-md px-4 py-3 shadow-sm">
               <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
             </div>
-            <div className="text-xs text-gray-500 mt-1 text-right">
+            <div className="text-xs text-muted-foreground mt-1 text-right">
               {message.timestamp && new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}            
             </div>
           </div>
         </div>
       ) : (
         <div className="flex gap-4">
-          <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
-            <Bot className="w-4 h-4 text-gray-600" />
+          <div className="flex-shrink-0 w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+            <Bot className="w-4 h-4 text-primary" />
           </div>
           <div className="flex-1 max-w-3xl">
-            <div className="bg-white rounded-2xl rounded-tl-md p-4 shadow-sm border border-gray-100">
-              <div className="text-gray-800 leading-relaxed">
-                <StreamingText text={message.text} isComplete={!message.isStreaming} />
+            <div className="bg-card rounded-2xl rounded-tl-md p-4 shadow-sm border border-border">
+              <div className="text-foreground leading-relaxed prose dark:prose-invert max-w-none">
+                <MathRenderer content={message.text} />
+                {message.isTyping && (
+                  <span className="inline-block w-2 h-5 bg-muted-foreground/60 ml-1 align-middle animate-pulse" />
+                )}
               </div>
               {message.type === 'practice_problems_list' && (
               <div className="mt-4 space-y-3">
-                <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
                   <Lightbulb className="w-4 h-4 text-yellow-500" />
                   Practice Problems
                 </h4>
@@ -59,57 +62,29 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isCurrentUser, o
                       return (
                         <div
                           key={index}
-                          onClick={() => {
-                            console.log('Problem selected:', problemText);
-                            // You can add state management here to track selected problem
-                          }}
-                          className="group flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:border-yellow-300 hover:shadow-md transition-all duration-200 text-left cursor-pointer"
+                          className="group flex items-center justify-between p-3 bg-card border border-border rounded-lg hover:border-yellow-300 hover:shadow-md transition-all duration-200 text-left cursor-pointer"
                         >
                           <div className="flex items-start gap-3">
                             <div className="flex-shrink-0 flex items-center justify-center w-6 h-6 mt-0.5 rounded-full bg-yellow-100 text-yellow-700 text-xs font-medium">
                               {problemNumber}
                             </div>
-                            <div className="text-sm text-gray-800 leading-relaxed">
+                            <div className="text-sm text-foreground leading-relaxed">
                               {problemText}
                             </div>
-                          </div>
-                          <div className="text-gray-400 group-hover:text-yellow-500 transition-colors">
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M9 5l7 7-7 7"
-                              />
-                            </svg>
                           </div>
                         </div>
                       );
                     })}
                   </div>
                 ) : (
-                  <div className="text-center py-4 px-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-400">No practice problems available at the moment.</p>
+                  <div className="text-center py-4 px-3 bg-muted rounded-lg">
+                    <p className="text-sm text-muted-foreground">No practice problems available at the moment.</p>
                   </div>
                 )}
-                <div className="text-xs text-gray-400 mt-2 text-center">
-                  Select a problem to get started
-                </div>
               </div>
               )}
-              {message.type === 'career_advice' && message.advice && (
-                <div className="mt-3 p-3 bg-blue-50 rounded-lg text-sm flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-blue-500" />
-                  <span className="font-medium">Advice:</span> {message.advice}
-                </div>
-              )}
             </div>
-            <div className="text-xs text-gray-500 mt-1">
+            <div className="text-xs text-muted-foreground mt-1">
               {message.timestamp && new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}            
             </div>
           </div>

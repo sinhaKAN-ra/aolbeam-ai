@@ -359,20 +359,18 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim()) return;
-    
+
     // Check if the user can use the chat feature
-    const { allowed, reason, remaining, limit } = canUseFeature('chat');
-    
+    const { allowed, reason, limit } = canUseFeature('chat');
     if (!allowed) {
-      // Show error toast with reason
       toast.error(reason || 'Feature limit reached', {
-        description: `You've used all ${limit} chat interactions available in your plan.`,
+        description: `You've used all ${limit ?? ''} chat interactions available in your plan.`,
         duration: 5000,
       });
       return;
     }
 
-    // Add user message to the chat
+    // Add user message
     const userMsg: Message = {
       id: uuidv4(),
       text: content,
@@ -380,162 +378,117 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
       sender: 'user',
       type: 'text',
       timestamp: new Date().toISOString(),
-    };
+    } as Message;
     setMessages(prev => [...prev, userMsg]);
-    
-    // Record feature usage
-    try {
-      await recordFeatureUsage('chat');
-    } catch (error) {
-      console.error('Failed to record chat usage:', error);
-      // Continue anyway since the message was already displayed
+
+    // Persist the user message
+    if (currentSessionId) {
+      saveMessageToHistory({ role: 'user', content, metadata: { type: 'text' } }).catch(err =>
+        console.error('Failed to save user message:', err)
+      );
     }
 
     // Update search history
-    const updatedHistory = [
-      content,
-      ...searchHistory.filter(q => q !== content),
-    ].slice(0, 10);
+    const updatedHistory = [content, ...searchHistory.filter(q => q !== content)].slice(0, 10);
     setSearchHistory(updatedHistory);
     localStorage.setItem('searchHistory', JSON.stringify(updatedHistory));
 
-    // Set loading state
     setIsLoading(true);
     setError(null);
 
+    // Build conversation history for the model (prior turns + this one).
+    const history = [...messages, userMsg].map(m => ({
+      role: (m.sender === 'ai' ? 'assistant' : 'user') as 'assistant' | 'user',
+      content: m.text,
+    }));
+
+    // Create the streaming AI shell
+    const aiId = uuidv4();
+    const aiShell: Message = {
+      id: aiId,
+      text: '',
+      sender: 'ai',
+      type: 'text',
+      timestamp: new Date().toISOString(),
+      isTyping: true,
+    } as Message;
+    setMessages(prev => [...prev, aiShell]);
+
+    let accumulated = '';
     try {
-      // Create an empty AI message shell
-      const aiId = uuidv4();
-      const aiShell: EnhancedMessage = {
-        id: aiId,
-        text: '…', 
-        sender: 'ai',
-        type: 'learning_context',
-        timestamp: new Date().toISOString(),
-        isStreaming: true,
-        enhancedContent: { mainContent: '' },
-      };
-      setMessages(prev => [...prev, aiShell]);
-
-      // Make all API calls in parallel
-      // console.log('Starting parallel API calls for:', content);
-      let currentEnhancedContent: EnhancedMessageContent = {
-        mainContent: '',
-      };
-
-      // 1. Generate Learning Context
-      const contextResult = await callGeminiAPI('generateLearningContext', { prompt: content, topic: content });
-      // console.log('contextResult (raw):', contextResult);
-      currentEnhancedContent = {
-        ...currentEnhancedContent,
-        mainContent: contextResult?.text || '',
-        detailedContent: null,
-      };
-      // console.log('mainContent assigned:', currentEnhancedContent.mainContent);
-      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
-
-      // 2. Generate Topic Suggestions
-      const suggestionsResult = await callGeminiAPI('generateTopicSuggestions', { topic: content, count: 4 });
-      // console.log('suggestionsResult:', suggestionsResult);
-      currentEnhancedContent = {
-        ...currentEnhancedContent,
-        suggestions: suggestionsResult?.suggestions || [],
-      };
-      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
-
-      // 3. Generate Learning Path
-      const learningPathResult = await callGeminiAPI('generateLearningPath', { topic: content, userId: 'guest' });
-      // console.log('learningPathResult (raw):', learningPathResult);
-      const branchingPaths = learningPathResult?.steps?.map((step: any) => ({
-        id: String(step.id),
-        title: step.title,
-        description: step.description,
-        difficulty: step.difficulty,
-        estimatedTime: step.estimatedTime,
-        tags: []
-      })) || [];
-      currentEnhancedContent = {
-        ...currentEnhancedContent,
-        branchingPaths: branchingPaths,
-      };
-      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
-      // console.log('learningPathResult (processed):', learningPathResult);
-      // console.log('Generated branchingPaths:', currentEnhancedContent.branchingPaths);
-
-      // 4. Fetch Brave Resources
-      const resourcesResult = await fetchBraveResources(content, { useCache: true });
-      const resources = resourcesResult?.map((r: any, i: number) => ({
-        id: `res-${i}`,
-        title: r.title,
-        url: r.url,
-        type: (r.type as any) || 'web_page',
-      })) || [];
-      currentEnhancedContent = {
-        ...currentEnhancedContent,
-        resources: resources,
-      };
-      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
-
-      // 5. Generate Practice Problems
-      const problemsResult = await callGeminiAPI('generatePracticeProblems', {
-        prompt: content,
-        count: 5,
+      const response = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history }),
       });
-      currentEnhancedContent = {
-        ...currentEnhancedContent,
-        practiceProblems: problemsResult?.practiceProblem?.map((problem: string) => ({ question: problem })) || [],
-      };
-      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
 
-      // Final update and save
-      const finalEnhancedContent = {
-        ...currentEnhancedContent,
-        mainContent: currentEnhancedContent.mainContent || 'No content generated.', // Ensure mainContent is not empty
-      };
-      
-      // Update the AI message with all content at once
-      // console.log('Updating AI message with complete enhanced content');
-      updateAiMessage(aiId, {
-        text: finalEnhancedContent.mainContent,
-        enhancedContent: finalEnhancedContent,
-        isStreaming: false
-      });
-      
-      // Save the AI message to history
-      if (currentSessionId) {
-        await saveMessageToHistory({
-          // id: aiId,
-          role: 'assistant',
-          content: finalEnhancedContent.mainContent,
-          // createdAt: new Date().toISOString(),
+      if (!response.ok) {
+        if (response.status === 403) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.message || 'You have reached your chat limit for today.');
+        }
+        throw new Error(`Chat request failed (${response.status})`);
+      }
+      if (!response.body) throw new Error('No response stream');
 
-          metadata: {
-            type: 'learning_context',
-            enhancedContent: finalEnhancedContent
+      // Parse the SSE stream and append tokens live.
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let streamErr: string | null = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() ?? '';
+        for (const evt of events) {
+          const lines = evt.split('\n');
+          const eventType = lines.find(l => l.startsWith('event:'))?.slice(6).trim();
+          const dataLine = lines.find(l => l.startsWith('data:'))?.slice(5).trim();
+          if (!dataLine) continue;
+          const data = JSON.parse(dataLine);
+          if (eventType === 'token' && data.t) {
+            accumulated += data.t;
+            setMessages(prev =>
+              prev.map(m => (m.id === aiId ? ({ ...m, text: accumulated, isTyping: true } as Message) : m))
+            );
+          } else if (eventType === 'error') {
+            streamErr = data.message;
           }
+        }
+      }
+
+      if (streamErr && !accumulated) throw new Error(streamErr);
+
+      // Finalize the message
+      setMessages(prev =>
+        prev.map(m => (m.id === aiId ? ({ ...m, text: accumulated, isTyping: false } as Message) : m))
+      );
+
+      // Persist the assistant message
+      if (currentSessionId && accumulated) {
+        await saveMessageToHistory({
+          role: 'assistant',
+          content: accumulated,
+          metadata: { type: 'text' },
         });
       }
-      
-      // console.log('AI response generation complete');
-      return aiId;
-    } catch (e) {
-      console.error('Error generating AI response:', e);
-      setError('Failed to get AI response.');
+    } catch (e: any) {
+      console.error('Error streaming AI response:', e);
+      setError(e?.message || 'Failed to get AI response.');
+      // Remove the empty shell if nothing streamed
+      setMessages(prev =>
+        accumulated
+          ? prev.map(m => (m.id === aiId ? ({ ...m, isTyping: false } as Message) : m))
+          : prev.filter(m => m.id !== aiId)
+      );
     } finally {
       setIsLoading(false);
     }
-  }, [
-    searchHistory,
-    setSearchHistory,
-    callGeminiAPI,
-    fetchBraveResources,
-    extractTagsFromSuggestions,
-    setTopicSuggestions,
-    setTopicTags,
-    updateAiMessage,
-    currentSessionId,
-    saveMessageToHistory
-  ]);
+    return aiId;
+  }, [messages, searchHistory, canUseFeature, currentSessionId, saveMessageToHistory]);
 
   const handleTopicTagClick = useCallback((tag: TopicTag) => {
     const newSelectedTags = selectedTags.includes(tag.id)
