@@ -66,6 +66,7 @@ export function isFallbackError(error: unknown): boolean {
     if (status === 429) return true;              // rate limit
     if (status === 401 || status === 403) return true; // expired / forbidden key
     if (status >= 500) return true;               // provider down
+    if (status === 404) return true;              // model/endpoint not available on this account
     if (status === 400) return false;             // bad request — do not retry
   }
 
@@ -80,6 +81,8 @@ export function isFallbackError(error: unknown): boolean {
     'expired',
     'invalid api key',
     'api key not valid',
+    'model_not_found',
+    'does not exist or you do not have access',
     'permission denied',
     'overloaded',
     'unavailable',

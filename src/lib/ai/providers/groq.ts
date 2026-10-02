@@ -5,7 +5,7 @@ import type { AiProvider, AiRequest, ChatRequest } from './types';
  * so we call it with fetch (no extra SDK needed). Active only if GROQ_API_KEY
  * is set; otherwise the runner skips it.
  */
-const MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+const MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
 const ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 
 export const groqProvider: AiProvider = {
