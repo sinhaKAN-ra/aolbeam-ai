@@ -405,66 +405,38 @@ const sampleTopics = [
   return (
     <div className="flex h-screen bg-background">
       <div className="flex-1 flex flex-col relative bg-background">
-        <div ref={scrollContainerRef} className={`flex-1 overflow-y-auto p-4 md:p-6 transition-all duration-300 ${isSidebarCollapsed ? 'pr-4 md:pr-6' : 'pr-4 md:pr-[calc(5rem+1.5rem)]'}`}>
-          {/* Welcome screen: only on a brand-new session with no messages yet */}
-          { isNewSession && messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-8 py-12">
-              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
-                <Route className="w-10 h-10 text-primary" />
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 md:p-6 transition-all duration-300">
+          <div className="max-w-3xl mx-auto w-full">
+          {/* Welcome + starter topics: only on a brand-new empty session */}
+          {isNewSession && messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
+                <Sparkles className="w-8 h-8 text-primary" />
               </div>
-              <div className="space-y-4 max-w-md">
-                <h1 className="text-3xl font-bold text-foreground">Start Learning With A</h1>
-                <p className="text-lg text-muted-foreground">
-                  Your intelligent learning companion
-                </p>
+              <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
+                What would you like to learn?
+              </h2>
+              <p className="text-muted-foreground mb-8 max-w-md">
+                Ask me anything — I remember the conversation, so you can go deeper with follow-ups.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-xl">
+                {sampleTopics.slice(0, 4).map((topic) => (
+                  <button
+                    key={topic.title}
+                    onClick={() => onSendMessage(`Tell me about ${topic.title}`)}
+                    className="group p-4 bg-card rounded-xl border border-border hover:border-primary/50 hover:shadow-md transition-all text-left"
+                  >
+                    <span className="font-medium text-foreground group-hover:text-primary transition-colors">
+                      {topic.title}
+                    </span>
+                    <p className="text-sm text-muted-foreground mt-1 leading-relaxed line-clamp-2">
+                      {topic.description}
+                    </p>
+                  </button>
+                ))}
               </div>
             </div>
           )}
-          {isNewSession && messages.length === 0 && (
-                        <div className="text-center mt-16">
-                          <div className="relative inline-flex mb-8">
-                            <div className="p-6 bg-gradient-to-r from-primary-100 to-secondary-100 rounded-3xl shadow-lg">
-                              <Lightbulb   className="w-12 h-12 text-primary-600" />
-                            </div>
-                            <div className="absolute -top-2 -right-2 w-6 h-6 bg-accent-400 rounded-full animate-bounce"></div>
-                          </div>
-                          
-                          <h2 className="text-3xl font-bold text-gray-800 mb-3">
-                            What would you like to 
-                            <span className="bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-orange-300"> learn </span>
-                            today?
-                          </h2>
-                          <p className="text-gray-600 mb-10 max-w-lg mx-auto text-lg leading-relaxed">
-                            Ask me about any topic, and I'll create a personalized learning journey with intelligent suggestions and related concepts.
-                          </p>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
-                            {sampleTopics.map((topic, index) => (
-                              <button
-                                key={topic.title}
-                                onClick={() => onSendMessage(`Tell me about ${topic.title}`)}
-                                className="group p-6 bg-white/80 backdrop-blur-sm rounded-2xl border border-orange-200/50 hover:border-primary-300 hover:shadow-xl transition-all duration-300 text-left transform hover:-translate-y-1"
-                              >
-                                <div className="flex items-center gap-3 mb-2">
-                                  <div className={`p-2 rounded-xl ${topic.color}`}>
-                                    {topic.icon}
-                                  </div>
-                                  <span className="font-semibold text-gray-800 group-hover:text-primary-600 transition-colors">
-                                    {topic.title}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-gray-600 leading-relaxed">{topic.description}</p>
-                                <div className="flex items-center gap-2 mt-3 text-xs text-gray-500">
-                                  <Zap className="w-3 h-3" />
-                                  <span>{topic.difficulty}</span>
-                                  <span>•</span>
-                                  <span>{topic.time}</span>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
           
 
           {/* Messages */}
@@ -481,9 +453,7 @@ const sampleTopics = [
                 </div>
               ) : (
                 <div className="flex w-full">
-
                   <div className="flex-1">
-                    <div className="flex items-center text-xs text-gray-500 mb-1 ml-1"><div className="mr-3 flex-shrink-0"><div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center"><Route className="w-4 h-4 text-orange-500" /></div></div><span className="text-gray-400">{message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span></div>
                     {('enhancedContent' in message && message.type !== 'practice_problems_list') ? (
                       <EnhancedMessageBubble
                         message={message}
@@ -492,27 +462,23 @@ const sampleTopics = [
                         onRetry={onRetry}
                       />
                     ) : (
-                      <>
-
-                        <MessageBubble
-                          message={message}
-                          isCurrentUser={false}
-                          onRetry={onRetry}
-                          onExpand={
-                            message.sender === 'ai' && !message.isTyping && onExpandMessage
-                              ? () => {
-                                  // Topic = the user message immediately before this answer.
-                                  const prevUser = [...messages.slice(0, index)]
-                                    .reverse()
-                                    .find(m => m.sender === 'user');
-                                  onExpandMessage(message.id, prevUser?.text || message.text);
-                                }
-                              : undefined
-                          }
-                          isExpanding={expandingIds.includes(message.id)}
-                          hasExtras={'enhancedContent' in message && !!(message as EnhancedMessage).enhancedContent?.suggestions}
-                        />
-                      </>
+                      <MessageBubble
+                        message={message}
+                        isCurrentUser={false}
+                        onRetry={onRetry}
+                        onExpand={
+                          message.sender === 'ai' && !message.isTyping && onExpandMessage
+                            ? () => {
+                                const prevUser = [...messages.slice(0, index)]
+                                  .reverse()
+                                  .find(m => m.sender === 'user');
+                                onExpandMessage(message.id, prevUser?.text || message.text);
+                              }
+                            : undefined
+                        }
+                        isExpanding={expandingIds.includes(message.id)}
+                        hasExtras={'enhancedContent' in message && !!(message as EnhancedMessage).enhancedContent?.suggestions}
+                      />
                     )}
                   </div>
                 </div>
@@ -521,20 +487,16 @@ const sampleTopics = [
           ))}
           {isLoading && (
             <div className="flex items-center justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           )}
           {error && (
-            <div className="flex flex-col items-center justify-center text-red-500 space-y-2">
+            <div className="flex flex-col items-center justify-center text-destructive space-y-2">
               <p>{error}</p>
               {onRetry && (
                 <button
-                  onClick={() => {
-                    if (onRetry) {
-                      onRetry();
-                    }
-                  }}
-                  className="flex items-center px-4 py-2 border border-gray-200 rounded-md hover:border-primary/50 text-gray-700 hover:text-primary transition-colors duration-200"
+                  onClick={() => { if (onRetry) onRetry(); }}
+                  className="flex items-center px-4 py-2 border border-border rounded-md hover:border-primary/50 text-foreground hover:text-primary transition-colors duration-200"
                 >
                   Retry
                 </button>
@@ -542,9 +504,11 @@ const sampleTopics = [
             </div>
           )}
           <div ref={messagesEndRef} />
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="border-t border-gray-200 p-4 bg-background/80 backdrop-blur-sm">
+        <form onSubmit={handleSubmit} className="border-t border-border p-4 bg-background/80 backdrop-blur-sm">
+          <div className="max-w-3xl mx-auto">
           <div className="flex items-end space-x-2 relative">
             {/* Usage indicator for chat messages */}
             {/* <div className="absolute -top-8 right-0 text-xs text-muted-foreground">
@@ -576,8 +540,8 @@ const sampleTopics = [
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyPress}
-              placeholder="Type your message..."
-              className="flex-1 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+              placeholder="Message A…"
+              className="flex-1 p-3 bg-background border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
               style={{ height: 'auto', maxHeight: '150px' }}
               rows={1}
               aria-multiline={true}
@@ -588,35 +552,20 @@ const sampleTopics = [
                 target.style.height = `${target.scrollHeight}px`;
               }}
             />
-            <div className="text-xs text-gray-500 ml-2">
-            {input.length}/{5000}
-            </div>
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
-              className="p-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-3 bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              aria-label="Send message"
             >
               <Send className="w-5 h-5" />
             </button>
-
-              
-      </div>
+          </div>
+          <div className="text-[11px] text-muted-foreground mt-1.5 text-right">
+            {input.length}/5000
+          </div>
+          </div>
       </form>
-        {/* <LearningSidebar
-          learningPath={learningPath || undefined}
-          latestSuggestions={topicSuggestions}
-          topicSuggestions={topicSuggestions}
-          topicTags={topicTags}
-          searchHistory={searchHistory}
-          selectedLearningMode={selectedLearningMode}
-          onLearningModeChange={setSelectedLearningMode}
-          onTopicTagClick={onTopicTagClick}
-          onCustomPathCreated={(pathOrId: any) => {
-            if (typeof pathOrId === 'string') {
-              onCustomPathCreated(pathOrId);
-            } else {
-              onCustomPathCreated(pathOrId.id);
-      )} */}
       </div>
       </div>
   );

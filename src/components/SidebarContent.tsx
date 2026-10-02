@@ -178,22 +178,15 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
     setIsHistoryOpen(!isHistoryOpen);
   }, [isHistoryOpen]);
 
-  // Navigation sections with grouped items
+  // Navigation sections — minimal, chat-app style.
   const navSections = useMemo<NavSection[]>(() => [
     {
       items: [
-        { 
-          href: "/", 
-          label: "Home", 
-          icon: <Home className="h-4 w-4" />,
-          description: "Dashboard and overview"
-        },
         {
           href: "/chat",
-          label: "New Chat with A",
-          icon: <MessageSquare className="h-4 w-4" />,
+          label: "New Chat",
+          icon: <Plus className="h-4 w-4" />,
           description: "Start a new AI chat session",
-          badge: "Beta",
           onClick: async () => {
             const newSessionId = await chatHistory.createNewSession('New Chat');
             if (newSessionId) {
@@ -201,107 +194,43 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
             }
           },
         },
-        // {
-        //   href: "#", 
-        //   label: "AI Chat", 
-        //   icon: <MessageSquare className="h-4 w-4" />, 
-        //   badge: "Beta",
-        //   description: "Chat with AI tutor"
-        // },
         {
-          label: "Chat History",
-          icon: <History className="h-4 w-4" />,
-          description: "View your chat history",
-          onClick: toggleHistory,
-        },
-      ]
-    },
-    {
-      title: "Practice & Learn",
-      items: [
-        { 
-          href: "/#generate", 
-          label: "Generate Problems", 
+          href: "/#generate",
+          label: "Practice Problems",
           icon: <Brain className="h-4 w-4" />,
-          description: "Create custom practice problems"
+          description: "Generate practice problems",
+          featureKey: "problemGenerator",
         },
-        { 
-          href: "/tests", 
-          label: "Practice Tests", 
+        {
+          href: "/learning-paths",
+          label: "Learning Paths",
+          icon: <Route className="h-4 w-4" />,
+          description: "Create and manage learning paths",
+          featureKey: "learningPaths",
+        },
+        {
+          href: "/history",
+          label: "History",
+          icon: <History className="h-4 w-4" />,
+          description: "Your activity history",
+        },
+        {
+          href: "/tests",
+          label: "Practice Tests",
           icon: <NotepadTextDashed className="h-4 w-4" />,
           description: "Full-length practice exams",
           featureKey: "tests",
         },
-        { 
-          href: "/study-resources", 
-          label: "Study Resources", 
+        {
+          href: "/study-resources",
+          label: "Study Resources",
           icon: <BookOpen className="h-4 w-4" />,
           description: "Curated study materials",
           featureKey: "studyResources",
         },
-        { 
-          href: "/learning-paths", 
-          label: "Learning Paths", 
-          icon: <Zap className="h-4 w-4" />, 
-          // isPro: true,
-          description: "Create and manage learning paths"
-        },
-      ]
+      ],
     },
-    {
-      title: "Your Progress",
-      items: [
-        { 
-          href: "/history", 
-          label: "Problem History", 
-          icon: <History className="h-4 w-4" />,
-          description: "View your learning history",
-        },
-        {
-          label: "Chat History",
-          icon: <History className="h-4 w-4" />,
-          description: "View your chat history",
-          onClick: toggleHistory,
-        },
-        // { 
-        //   href: "/analytics", 
-        //   label: "Analytics", 
-        //   icon: <TrendingUp className="h-4 w-4" />, 
-        //   isPro: true,
-        //   description: "Detailed performance insights"
-        // },
-        // { 
-        //   href: "/streak", 
-        //   label: "Study Streak", 
-        //   icon: <Clock className="h-4 w-4" />,
-        //   description: "Track your consistency"
-        // },
-      ]
-    },
-    {
-      title: "Resources",
-      items: [
-        { 
-          href: "/help", 
-          label: "Help Center", 
-          icon: <HelpCircle className="h-4 w-4" />,
-          description: "Get help and support"
-        },
-        { 
-          href: "/about", 
-          label: "About", 
-          icon: <AboutIcon className="h-4 w-4" />,
-          description: "Learn about AOL Beam"
-        },
-        { 
-          href: "/contact-us", 
-          label: "Contact", 
-          icon: <ContactIcon className="h-4 w-4" />,
-          description: "Get in touch with us"
-        },
-      ]
-    }
-  ], [toggleHistory]);
+  ], [toggleHistory, chatHistory, router]);
 
   // Public menu items (shown before login)
   const publicMenuItems = useMemo<UserMenuItem[]>(() => [
