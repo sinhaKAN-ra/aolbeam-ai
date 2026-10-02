@@ -79,29 +79,29 @@ const ChatTeacherPage: React.FC<ChatPageProps> = () => {
   }
 
   return (
-    <div className="flex flex-col h-auto bg-background text-foreground">
-      <div className="container mx-auto p-4 max-w-6xl flex-grow">
-        <div className="bg-card rounded-lg h-auto flex flex-col">
-          <ChatInterface
-            isNewSession={isNewSession}
-            messages={messages}
-            isLoading={isLoading}
-            error={error}
-            onSendMessage={sendMessage}
-            onNewChat={startNewChat}
-            learningPath={learningPath}
-            searchHistory={searchHistory}
-            topicSuggestions={topicSuggestions}
-            topicTags={topicTags}
-            selectedTags={selectedTags}
-            onTopicTagClick={handleTopicTagClick}
-            onCustomPathCreated={handleCustomPathCreated}
-            onRetry={retryLastMessage}
-            onExpandMessage={expandMessage}
-            expandingIds={expandingIds}
-          />
-        </div>
-      </div>
+    // Scoped fix for the double-scrollbar bug: the shared AppShell/body don't
+    // bound height (other pages need natural document scroll), so THIS route
+    // takes a fixed viewport height itself and clips overflow — ChatInterface
+    // becomes the only element that scrolls.
+    <div className="h-[calc(100vh-4rem)] md:h-screen overflow-hidden flex flex-col bg-background text-foreground">
+      <ChatInterface
+        isNewSession={isNewSession}
+        messages={messages}
+        isLoading={isLoading}
+        error={error}
+        onSendMessage={sendMessage}
+        onNewChat={startNewChat}
+        learningPath={learningPath}
+        searchHistory={searchHistory}
+        topicSuggestions={topicSuggestions}
+        topicTags={topicTags}
+        selectedTags={selectedTags}
+        onTopicTagClick={handleTopicTagClick}
+        onCustomPathCreated={handleCustomPathCreated}
+        onRetry={retryLastMessage}
+        onExpandMessage={expandMessage}
+        expandingIds={expandingIds}
+      />
     </div>
   );
 };

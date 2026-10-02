@@ -48,7 +48,8 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
     createNewSession,
     deleteSession,
     updateSessionTitle,
-    refreshChatHistory
+    refreshChatHistory,
+    isLoading: historyLoading,
   } = useChatHistory(userId, initialSessionId);
 
   // Load search history once on mount
@@ -65,10 +66,14 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
   // and blanking the chat. Keyed on currentSession?.id only now.)
   const loadedSessionRef = useRef<string | null>(null);
   useEffect(() => {
+    // Wait for history to finish loading before deciding "no session exists".
+    // Otherwise, a requested initialSessionId that hasn't resolved yet from
+    // localStorage/DB gets orphaned by an auto-created empty session —
+    // "the chat is gone, I have to start again".
+    if (historyLoading) return;
+
     const activeId = currentSession?.id ?? null;
 
-    // Don't reload the same session we already loaded (avoids clobbering live
-    // messages when `sessions` updates but the active session is unchanged).
     if (activeId && loadedSessionRef.current === activeId) {
       setIsInitialized(true);
       return;
@@ -92,16 +97,16 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
       } else {
         setIsNewSession(false);
       }
-    } else if (sessions.length === 0 && !isInitialized) {
-      // No sessions exist, create a new one (only on first load)
+    } else if (sessions.length === 0 && !isInitialized && !initialSessionId) {
+      // Only auto-create when NO specific session was requested via the URL.
       createNewSession('New Chat');
       setIsNewSession(true);
-    } else if (!activeId) {
+    } else if (!activeId && !initialSessionId) {
       setMessages([]);
       setIsNewSession(false);
     }
     setIsInitialized(true);
-  }, [currentSession?.id]);
+  }, [currentSession?.id, historyLoading, initialSessionId]);
 
   // If an initialSessionId is provided and different, set it as the current session
   useEffect(() => {
