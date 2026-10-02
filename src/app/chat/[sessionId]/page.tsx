@@ -26,18 +26,20 @@ const ChatTeacherPage: React.FC<ChatPageProps> = () => {
   }
 
   const [userId, setUserId] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const supabase = createSupabaseBrowserClient();
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (user) {
-        setUserId(user.id);
-      } else if (error) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) setUserId(user.id);
+      } catch (error) {
         console.error('Error getting user:', error);
+      } finally {
+        setAuthChecked(true);
       }
     };
-    getUser();
     getUser();
   }, [supabase]);
 
@@ -67,11 +69,11 @@ const ChatTeacherPage: React.FC<ChatPageProps> = () => {
     }
   };
 
-  if (userId === null) {
+  if (!authChecked) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-background text-foreground">
         <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
-        <p className="text-lg">Loading user session...</p>
+        <p className="text-lg">Loading…</p>
       </div>
     );
   }

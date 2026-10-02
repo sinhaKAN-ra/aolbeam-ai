@@ -17,6 +17,7 @@ const publicPaths = [
   '/refund-policy',
   '/blog',
   '/chat',
+  '/chat/*',
   '/api/auth/*',
   '/_next/static/*',
   '/_next/image/*',

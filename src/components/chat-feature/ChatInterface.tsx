@@ -11,6 +11,7 @@ import CustomLearningPathModal from './CustomLearningPathModal';
 import LearningSidebar from './LearningSidebar';
 import { Send, Loader2, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Route, BookOpen, Brain, Sparkles, Zap, RefreshCw, GraduationCap, XCircle, Plus, HelpCircle, Lightbulb, ArrowRight, Target } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { guestChatRemaining } from '@/lib/guestTrial';
 
 const iconMap: { [key: string]: React.ElementType } = {
   BookOpen,
@@ -550,7 +551,7 @@ const sampleTopics = [
               {chatUsage.used} / {chatUsage.limit} messages used
             </div> */}
             {!isFeatureCheckLoading && (
-              <div className="absolute -top-8 right-0 text-xs text-gray-500">
+              <div className="absolute -top-8 right-0 text-xs text-muted-foreground">
                 {(() => {
                   const { remaining, limit } = canUseFeature('chat');
                   if (typeof remaining === 'number' && typeof limit === 'number') {
@@ -560,7 +561,13 @@ const sampleTopics = [
                       </span>
                     );
                   }
-                  return null;
+                  // Guest (no plan): show the free-trial allowance.
+                  const guestLeft = guestChatRemaining();
+                  return (
+                    <span>
+                      {guestLeft} free message{guestLeft === 1 ? '' : 's'} left · sign in for more
+                    </span>
+                  );
                 })()}
               </div>
             )}

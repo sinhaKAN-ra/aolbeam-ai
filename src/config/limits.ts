@@ -23,6 +23,13 @@ export const CHAT_LIMITS: Record<PlanId, number> = {
   one_time_cashfree: 1000,
 };
 
+/**
+ * Guest (not logged-in) free-trial allowance. A small taste before the login
+ * prompt. Tracked client-side in localStorage — NOT a security boundary, just
+ * a funnel nudge (a determined user can clear storage; that's acceptable).
+ */
+export const GUEST_CHAT_TRIAL_LIMIT = 3;
+
 /** AI problem/insight generation limits by plan (logged-in users). */
 export const AI_GENERATION_LIMITS: Record<PlanId, number> = {
   free: 50,

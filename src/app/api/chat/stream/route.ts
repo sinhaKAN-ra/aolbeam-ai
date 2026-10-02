@@ -19,14 +19,11 @@ const supabaseAdmin = createClient(
 );
 
 export async function POST(request: Request) {
-  // --- Auth ---
+  // --- Auth (optional: guests get a client-tracked free trial) ---
   const supabase = createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  }
 
   // --- Parse ---
   let body: { messages?: ChatTurn[] };
@@ -42,45 +39,49 @@ export async function POST(request: Request) {
     return Response.json({ error: 'messages is required' }, { status: 400 });
   }
 
-  // --- Limit check (single server authority) ---
-  const { data: subscription } = await supabaseAdmin
-    .from('subscriptions')
-    .select('plan_id')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const planId = subscription?.plan_id || 'free';
-  const limit = chatLimitFor(planId);
+  // --- Limit check: server-authoritative for logged-in users only. ---
+  // Guests are limited client-side (localStorage); there is no user to key a
+  // server record on, so we simply allow the request and let the client gate.
+  if (user) {
+    const { data: subscription } = await supabaseAdmin
+      .from('subscriptions')
+      .select('plan_id')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const planId = subscription?.plan_id || 'free';
+    const limit = chatLimitFor(planId);
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const { count } = await supabaseAdmin
-    .from('user_interactions')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', user.id)
-    .eq('interaction_type', 'chat')
-    .gte('created_at', todayStart.toISOString());
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const { count } = await supabaseAdmin
+      .from('user_interactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('interaction_type', 'chat')
+      .gte('created_at', todayStart.toISOString());
 
-  if ((count ?? 0) >= limit) {
-    return Response.json(
-      { error: 'Chat limit reached', code: 'CHAT_LIMIT_REACHED', limit, remaining: 0 },
-      { status: 403 }
-    );
+    if ((count ?? 0) >= limit) {
+      return Response.json(
+        { error: 'Chat limit reached', code: 'CHAT_LIMIT_REACHED', limit, remaining: 0 },
+        { status: 403 }
+      );
+    }
+
+    // Record this interaction (best-effort; don't block the stream on it).
+    supabaseAdmin
+      .from('user_interactions')
+      .insert({
+        user_id: user.id,
+        interaction_type: 'chat',
+        created_at: new Date().toISOString(),
+        topic: messages[messages.length - 1].content.substring(0, 100),
+      })
+      .then(({ error }) => {
+        if (error) console.error('Failed to record chat usage:', error.message);
+      });
   }
-
-  // Record this interaction (best-effort; don't block the stream on it).
-  supabaseAdmin
-    .from('user_interactions')
-    .insert({
-      user_id: user.id,
-      interaction_type: 'chat',
-      created_at: new Date().toISOString(),
-      topic: messages[messages.length - 1].content.substring(0, 100),
-    })
-    .then(({ error }) => {
-      if (error) console.error('Failed to record chat usage:', error.message);
-    });
 
   // --- Stream ---
   const encoder = new TextEncoder();

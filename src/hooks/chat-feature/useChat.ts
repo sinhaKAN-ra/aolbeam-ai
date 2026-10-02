@@ -17,6 +17,7 @@ import {
 import { useChatHistory } from '../useChatHistory';
 import { useFeatureAccess } from '../useFeatureAccess';
 import { toast } from 'sonner';
+import { canGuestChat, incrementGuestChatCount, guestChatRemaining, GUEST_LIMIT } from '@/lib/guestTrial';
 
 interface AddMessageOptions {
   saveToHistory?: boolean;
@@ -361,14 +362,24 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim()) return;
 
-    // Check if the user can use the chat feature
-    const { allowed, reason, limit } = canUseFeature('chat');
-    if (!allowed) {
-      toast.error(reason || 'Feature limit reached', {
-        description: `You've used all ${limit ?? ''} chat interactions available in your plan.`,
-        duration: 5000,
-      });
-      return;
+    // Gate: guests use a localStorage trial; logged-in users use plan limits.
+    if (!userId) {
+      if (!canGuestChat()) {
+        toast.error('Free trial used up', {
+          description: `You've used your ${GUEST_LIMIT} free messages. Sign in with Google to keep chatting.`,
+          duration: 6000,
+        });
+        return;
+      }
+    } else {
+      const { allowed, reason, limit } = canUseFeature('chat');
+      if (!allowed) {
+        toast.error(reason || 'Feature limit reached', {
+          description: `You've used all ${limit ?? ''} chat interactions available in your plan.`,
+          duration: 5000,
+        });
+        return;
+      }
     }
 
     // Add user message
@@ -381,6 +392,19 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
       timestamp: new Date().toISOString(),
     } as Message;
     setMessages(prev => [...prev, userMsg]);
+
+    // Count the guest trial usage (logged-in usage is recorded server-side).
+    if (!userId) {
+      incrementGuestChatCount();
+      const left = guestChatRemaining();
+      if (left <= 1) {
+        toast.info(
+          left === 0
+            ? 'That was your last free message — sign in to continue.'
+            : `${left} free message left. Sign in for more.`
+        );
+      }
+    }
 
     // Persist the user message
     if (currentSessionId) {
@@ -489,8 +513,7 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
       setIsLoading(false);
     }
     return aiId;
-  }, [messages, searchHistory, canUseFeature, currentSessionId, saveMessageToHistory]);
-
+  }, [messages, searchHistory, canUseFeature, currentSessionId, saveMessageToHistory, userId]);
   /**
    * Phase B: lazily fetch "learning extras" (suggestions, path, resources,
    * practice problems) for an AI answer and attach them as enhancedContent.
