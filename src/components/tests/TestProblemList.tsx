@@ -169,11 +169,11 @@ const TestProblemList: React.FC<TestProblemListProps> = ({
                   {problem.problem_statement}
                 </p>
                 
-                {problem.problem_type === 'mcq' && problem.multiple_choice_options && (
+                {problem.problem_type === 'mcq' && problem.multipleChoiceOptions && (
                   <div className="mb-4">
                     <h4 className="text-sm font-medium text-gray-900 mb-2">Options:</h4>
                     <div className="space-y-1">
-                      {problem.multiple_choice_options.map((option, i) => (
+                      {problem.multipleChoiceOptions.map((option, i) => (
                         <div key={i} className="text-sm">
                           <span
                             className={`${

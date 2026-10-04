@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     difficulty: problemData.difficulty || 'medium', // Default to 'medium'
     answer_format: problemData.answerFormat,
     correct_answer: problemData.correctAnswer || null,
-    multiple_choice_options: (problemData.multipleChoiceOptions && problemData.multipleChoiceOptions.length > 0) ? problemData.multipleChoiceOptions : null,
+    multipleChoiceOptions: (problemData.multipleChoiceOptions && problemData.multipleChoiceOptions.length > 0) ? problemData.multipleChoiceOptions : null,
     explanation: problemData.explanation || null, // AI might not provide this directly
     topic: problemData.topic || 'General', // Default or infer from problemData
     order_index: 0, // This should ideally be determined based on existing problems in the series
