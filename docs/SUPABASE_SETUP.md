@@ -33,13 +33,11 @@ Dashboard → **Authentication → Providers → Google**:
   - your production URL's `/auth/callback` when you deploy
 - In Google Cloud Console, add the same redirect URIs to the OAuth client.
 
-## 5. ⚠️ Update the hardcoded project ref in middleware
-`src/middleware.ts` checks for the auth cookie by name, and the OLD project ref is hardcoded:
-```ts
-const cookieBaseName = 'sb-jfgaaboxjjkbxjnqtzln-auth-token';
-```
-Change `jfgaaboxjjkbxjnqtzln` to your **new** project ref, or the middleware won't detect logged-in users and will redirect everyone to /login.
-_(Better: make it env-driven from `NEXT_PUBLIC_SUPABASE_URL` — see RESUME.md open items.)_
+## 5. Middleware auth cookie (now automatic)
+`src/middleware.ts` derives the Supabase auth cookie name (`sb-<project-ref>-auth-token`)
+from `NEXT_PUBLIC_SUPABASE_URL` — no hardcoded project ref anymore. As long as
+`NEXT_PUBLIC_SUPABASE_URL` points at the new project, the middleware detects
+logged-in users correctly. Nothing to edit here.
 
 ## 6. Storage buckets (only if used)
 Migrations don't create storage buckets. If any feature uploads files, recreate the bucket(s) under Dashboard → Storage with the same names/policies.

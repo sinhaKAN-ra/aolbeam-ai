@@ -40,8 +40,14 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for Supabase auth session
-  const cookieBaseName = 'sb-jfgaaboxjjkbxjnqtzln-auth-token';
+  // Check for Supabase auth session.
+  // The auth cookie is named `sb-<project-ref>-auth-token`, where <project-ref>
+  // is the subdomain of NEXT_PUBLIC_SUPABASE_URL. Derive it from env so nothing
+  // is hardcoded (survives a Supabase project change). Falls back to a generic
+  // `sb-` prefix if the URL is missing/malformed.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const projectRef = supabaseUrl.match(/^https?:\/\/([^.]+)\./)?.[1];
+  const cookieBaseName = projectRef ? `sb-${projectRef}-auth-token` : 'sb-';
   const allCookies = req.cookies.getAll();
   
   // Check for any cookie that starts with the base name
