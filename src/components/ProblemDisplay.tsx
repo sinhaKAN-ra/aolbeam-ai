@@ -102,6 +102,7 @@ export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isCurrentProblemSubmitted) return; // guard against double-submit
     const finalTimeTaken = elapsedTimeInSeconds;
     const isMcqProblem = problem.multipleChoiceOptions && problem.multipleChoiceOptions.length > 0;
 
@@ -109,12 +110,18 @@ export const ProblemDisplay = forwardRef<ProblemDisplayRefs, ProblemDisplayProps
       onSubmitAnswer(selectedOption, finalTimeTaken);
     } else if (!isMcqProblem && userAnswer?.trim()) {
       onSubmitAnswer(userAnswer, finalTimeTaken);
+    } else {
+      return; // nothing to submit
     }
-    setIsCurrentProblemSubmitted(true); // Mark current problem as submitted
-    // Do not stop the timer here. The timer should only stop if the user explicitly pauses it
-    // or when a new problem is loaded (handled by useEffect cleanup).
-    // The time for this problem is captured by elapsedTimeInSeconds at the point of submission.
-    // The timer itself is handled by the parent component (TestAttemptPage) and ProblemDisplay's internal timer controls.
+
+    // STOP the timer on submit — the answer is locked in, so time must freeze.
+    // (Previously the timer kept running and the problem could be re-submitted.)
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setIsTimerActive(false);
+    setIsCurrentProblemSubmitted(true);
   };
 
   const handleInternalFeedbackSubmit = (e: React.FormEvent) => {
@@ -156,15 +163,23 @@ console.log('Problem type:', problemType);
         <div className="mb-4 flex flex-col sm:flex-row items-center justify-between gap-3 p-3 border rounded-lg bg-muted/50 overflow-hidden">
           <div className="w-full sm:w-auto mb-2 sm:mb-0">
             <p className="text-center sm:text-left text-xs sm:text-sm text-muted-foreground">
-              Start the timer when you're ready to solve the problem.
+              {isCurrentProblemSubmitted
+                ? 'Answer submitted — timer stopped.'
+                : "Start the timer when you're ready to solve the problem."}
             </p>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-            <Button onClick={handleStartTimer} variant="outline" size="sm" className="w-full sm:w-auto">
+            <Button
+              onClick={handleStartTimer}
+              variant="outline"
+              size="sm"
+              className="w-full sm:w-auto"
+              disabled={isCurrentProblemSubmitted}
+            >
               {isTimerActive && intervalRef.current ? <PauseCircle className="mr-1 h-4 w-4" /> : <PlayCircle className="mr-1 h-4 w-4" />}
               {isTimerActive && intervalRef.current ? 'Pause' : (elapsedTimeInSeconds > 0 ? 'Resume' : 'Start')}
             </Button>
-            <div ref={timerRef} className="flex items-center text-lg sm:text-xl font-mono font-semibold text-primary">
+            <div ref={timerRef} className={`flex items-center text-lg sm:text-xl font-mono font-semibold ${isCurrentProblemSubmitted ? 'text-muted-foreground' : 'text-primary'}`}>
               <TimerIcon className="mr-1 h-5 w-5" />
               <span>{formatDisplayTime(elapsedTimeInSeconds)}</span>
             </div>
@@ -223,7 +238,13 @@ console.log('Problem type:', problemType);
             disabled={isLoading || !canSubmitAnswer || isCurrentProblemSubmitted} 
             className="w-full text-base py-3"
           >
-            {isLoading ? <Loader2 className="animate-spin" /> : <><Send className="mr-2 h-4 w-4" /> Submit Answer</>}
+            {isLoading ? (
+              <Loader2 className="animate-spin" />
+            ) : isCurrentProblemSubmitted ? (
+              'Answer Submitted ✓'
+            ) : (
+              <><Send className="mr-2 h-4 w-4" /> Submit Answer</>
+            )}
           </Button>
         </form>
 

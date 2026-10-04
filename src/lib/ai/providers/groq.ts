@@ -17,28 +17,48 @@ export const groqProvider: AiProvider = {
     const key = process.env.GROQ_API_KEY;
     if (!key) throw new Error('GROQ_API_KEY not set');
 
-    const res = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        temperature: req.temperature ?? 0.2,
-        ...(req.maxOutputTokens ? { max_tokens: req.maxOutputTokens } : {}),
-        ...(req.json ? { response_format: { type: 'json_object' } } : {}),
-        messages: [
-          {
-            role: 'system',
-            content:
-              req.system ||
-              'You are an educational AI that provides concise, helpful content.',
-          },
-          { role: 'user', content: req.prompt },
-        ],
-      }),
-    });
+    const call = async (useJsonMode: boolean) => {
+      const sys =
+        req.system ||
+        'You are an educational AI that provides concise, helpful content.';
+      return fetch(ENDPOINT, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          temperature: req.temperature ?? 0.2,
+          ...(req.maxOutputTokens ? { max_tokens: req.maxOutputTokens } : {}),
+          ...(useJsonMode ? { response_format: { type: 'json_object' } } : {}),
+          messages: [
+            {
+              role: 'system',
+              // When we drop strict JSON mode on retry, instruct the model to
+              // still return raw JSON so our extractor can parse it.
+              content: useJsonMode
+                ? sys
+                : `${sys}\n\nReturn ONLY a single valid JSON object. No prose, no markdown fences.`,
+            },
+            { role: 'user', content: req.prompt },
+          ],
+        }),
+      });
+    };
+
+    let res = await call(Boolean(req.json));
+
+    // Groq's strict json_object mode sometimes rejects the model's OWN output
+    // with 400 json_validate_failed (empty failed_generation). That's not a bad
+    // request on our side — retry once WITHOUT the strict mode and let our own
+    // extractJsonString handle the parsing.
+    if (!res.ok && req.json && res.status === 400) {
+      const peek = await res.clone().text().catch(() => '');
+      if (peek.includes('json_validate_failed') || peek.includes('Failed to validate JSON')) {
+        res = await call(false);
+      }
+    }
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
