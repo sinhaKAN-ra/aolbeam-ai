@@ -301,17 +301,9 @@ table {
 
 /*
  * Chat route only (body.chat-route, toggled by src/app/chat/[sessionId]/layout.tsx).
- * The chat page is a full-screen experience with its own conversation rail, so
- * we suppress the shared AppShell chrome: the global app Sidebar (which would
- * otherwise show as a SECOND sidebar) and the fixed-header top padding (pt-16)
- * that was pushing the composer below the viewport. Scoped to this class so
- * every other route keeps the shell intact.
+ * The app menu sidebar (Home / Practice / Learning Paths / History) and the
+ * shell header stay. The chat PAGE sizes itself to the space left under the
+ * header (see page.tsx: h-[calc(100dvh-4rem)]) and owns its own scroll, so no
+ * shared chrome needs overriding here. This class only drives the body
+ * overflow/height lock in the layout effect (double-scrollbar fix).
  */
-body.chat-route [data-variant],
-body.chat-route [data-sidebar="sidebar"] {
-  display: none !important;
-}
-/* Remove the fixed-header offset the shell adds, and let the chat own 100dvh. */
-body.chat-route .pt-16 {
-  padding-top: 0 !important;
-}

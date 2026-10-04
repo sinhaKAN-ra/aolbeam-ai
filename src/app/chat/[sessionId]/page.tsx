@@ -79,11 +79,12 @@ const ChatTeacherPage: React.FC<ChatPageProps> = () => {
   }
 
   return (
-    // Double-scrollbar fix, part 2: the sibling layout.tsx pins `body` to
-    // `overflow: hidden; height: 100dvh` for this route, so body no longer
-    // competes for scroll. This div just claims that full viewport height —
-    // ChatInterface's own `overflow-y-auto` region is the only scrollbar.
-    <div className="h-dvh overflow-hidden flex flex-col bg-background text-foreground">
+    // The app shell adds a fixed header (pt-16 = 4rem) above this content and
+    // keeps its menu sidebar. The chat page sizes itself to the space left
+    // under that header and owns its own internal scroll (ChatInterface's
+    // overflow-y-auto region). The sibling layout.tsx locks body overflow so
+    // body never becomes a second scroll container.
+    <div className="h-[calc(100dvh-4rem)] overflow-hidden flex flex-col bg-background text-foreground">
       <ChatInterface
         isNewSession={isNewSession}
         messages={messages}
