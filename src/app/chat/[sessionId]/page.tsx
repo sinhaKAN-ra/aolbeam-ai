@@ -43,7 +43,7 @@ const ChatTeacherPage: React.FC<ChatPageProps> = () => {
     getUser();
   }, [supabase]);
 
-  const { messages, isLoading, error, sendMessage, learningPath, searchHistory, topicSuggestions, topicTags, selectedTags, startNewChat, isNewSession, expandMessage, expandingIds } = useChat(userId, sessionId); // Pass sessionId to useChat
+  const { messages, isLoading, error, sendMessage, learningPath, searchHistory, topicSuggestions, topicTags, selectedTags, startNewChat, isNewSession, expandMessage, expandingIds, sessions, currentSessionId, createNewSession, deleteSession, updateSessionTitle } = useChat(userId, sessionId); // Pass sessionId to useChat
 
   const handleTopicTagClick = (tag: TopicTag) => {
     // Logic for handling topic tag click
@@ -90,7 +90,7 @@ const ChatTeacherPage: React.FC<ChatPageProps> = () => {
         isLoading={isLoading}
         error={error}
         onSendMessage={sendMessage}
-        onNewChat={startNewChat}
+        onNewChat={createNewSession}
         learningPath={learningPath}
         searchHistory={searchHistory}
         topicSuggestions={topicSuggestions}
@@ -101,6 +101,10 @@ const ChatTeacherPage: React.FC<ChatPageProps> = () => {
         onRetry={retryLastMessage}
         onExpandMessage={expandMessage}
         expandingIds={expandingIds}
+        sessions={sessions}
+        currentSessionId={currentSessionId}
+        onDeleteSession={deleteSession}
+        onRenameSession={updateSessionTitle}
       />
     </div>
   );

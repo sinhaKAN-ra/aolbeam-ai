@@ -638,6 +638,13 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
     isNewSession,
     expandMessage,
     expandingIds,
+    // Chat-history passthroughs (sourced from useChatHistory above) so the
+    // page can drive the history rail from this single hook instance.
+    sessions,
+    currentSessionId,
+    createNewSession,
+    deleteSession,
+    updateSessionTitle,
   };
 };
 
