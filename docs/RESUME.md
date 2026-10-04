@@ -54,7 +54,10 @@ npm run dev            # port 9002
 - Login guards restored after guest-testing (middleware, learning-paths wall, service).
 
 ## Known issues / gotchas
-- **`src/types/supabase-schema.ts` is broken** — contains CLI text, not TypeScript. It throws ~10 `tsc` errors (pre-existing, unrelated). We filtered it in every typecheck. `npm run dev` tolerates it; **`npm run build` may not** — fix or delete this file before a production build.
+- **Pre-existing `tsc` errors: ~44 remain** (down from 63 this session). They are NOT from this session's features. Fixed the safe/mechanical ones (searchParams null-guards, TestProblem casing, LearningSidebar props, type re-exports). The REMAINING ~44 are higher-risk and were left deliberately:
+  - **Payment/subscription stack (~22):** `src/services/cashfree.ts`, `src/hooks/useSubscription.ts`, `src/components/SubscriptionPlans.tsx`, `CashfreePayment.tsx`, `PayPalButton.tsx`, `src/components/checkout/*`. Missing module exports (`loadCashfree`, `initializePayment`, `ConvertedPlan`, `useSubscriptionStatus`) + a conflicting global `Cashfree` type. Looks like a refactor where callers weren't updated — fix WITH a working payment test path, not blind, because wrong guesses silently break billing.
+  - **Type-model cleanup (rest):** `TestProblem` (src/types/testTypes.ts) has duplicate camel+snake fields and a second definition in `custom.d.ts`; `ProblemType` has `mcq`/`random`/`practical_mcq` mismatches across page.tsx / profile/history / HistoryView; `AuthContextType.session` missing; a few implicit-any params. Needs one deliberate pass.
+  - The app runs regardless — Next's dev build is more lenient than strict `tsc`. But `npm run build` may surface some of these.
 - **`useSearchParams` without Suspense**: the home page and chat page read `useSearchParams`. Works in dev; `npm run build` may require wrapping the page in `<Suspense>`. Fix if build complains.
 - **Nothing is runtime-tested by the agent** — host was memory-critical all session; all changes verified via `tsc --noEmit` only. The USER ran it live and confirmed chat / problems / learning paths work.
 - **New Supabase project needs**: `user_profiles` table has no migration (code reads it in `/api/interactions/check`); re-do Google OAuth; `supabase init && db push` for the 11 existing migrations.
