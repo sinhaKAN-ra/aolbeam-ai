@@ -29,10 +29,15 @@ export default function ChatSessionLayout({ children }: { children: React.ReactN
 
     body.style.overflow = 'hidden';
     body.style.height = '100dvh';
+    // Tag the route so globals.css can suppress the shared AppShell chrome
+    // (the app sidebar + the fixed-header top padding) ONLY while a chat page
+    // is mounted — the chat owns the full screen with its own history rail.
+    body.classList.add('chat-route');
 
     return () => {
       body.style.overflow = prevOverflow;
       body.style.height = prevHeight;
+      body.classList.remove('chat-route');
     };
   }, []);
 

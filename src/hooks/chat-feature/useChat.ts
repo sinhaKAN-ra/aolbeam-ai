@@ -430,6 +430,17 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
       saveMessageToHistory({ role: 'user', content, metadata: { type: 'text' } }).catch(err =>
         console.error('Failed to save user message:', err)
       );
+
+      // Auto-title the session from its FIRST user message, so history rows
+      // aren't all "New Chat". Only when this is the opening turn and the
+      // session still has the default/empty title.
+      const existingTitle = (currentSession?.title || '').trim().toLowerCase();
+      if (messages.length === 0 && (existingTitle === '' || existingTitle === 'new chat')) {
+        const title = content.trim().replace(/\s+/g, ' ').slice(0, 60);
+        updateSessionTitle(currentSessionId, title || 'New Chat').catch(err =>
+          console.error('Failed to auto-title session:', err)
+        );
+      }
     }
 
     // Update search history
@@ -538,7 +549,7 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
       setIsLoading(false);
     }
     return aiId;
-  }, [messages, searchHistory, canUseFeature, currentSessionId, saveMessageToHistory, userId]);
+  }, [messages, searchHistory, canUseFeature, currentSessionId, saveMessageToHistory, userId, currentSession, updateSessionTitle]);
   /**
    * Phase B: lazily fetch "learning extras" (suggestions, path, resources,
    * practice problems) for an AI answer and attach them as enhancedContent.
