@@ -4,6 +4,38 @@ import { CustomLearningGoal } from '@/types/chat-feature/chat-feature';
 import { LearningStep } from '@/types/chat-feature/chat-feature';
 import { LearningPath } from '@/types/chat-feature/chat-feature';
 
+// TEMP(guest-testing): local persistence so the Learning Paths flow is testable
+// while Supabase login is unavailable. When the API returns 401 (guest), paths
+// are read/written here instead. Remove this block + the `isGuest401` fallbacks
+// when login is restored.
+const GUEST_PATHS_KEY = 'guestLearningPaths';
+const guestStore = {
+  read(): LearningPath[] {
+    if (typeof window === 'undefined') return [];
+    try {
+      return JSON.parse(localStorage.getItem(GUEST_PATHS_KEY) || '[]');
+    } catch {
+      return [];
+    }
+  },
+  write(paths: LearningPath[]) {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(GUEST_PATHS_KEY, JSON.stringify(paths));
+  },
+  upsert(path: LearningPath): LearningPath {
+    const paths = guestStore.read();
+    const i = paths.findIndex((p) => p.id === path.id);
+    const withId = { ...path, id: path.id || `path_${Date.now()}` };
+    if (i >= 0) paths[i] = withId;
+    else paths.unshift(withId);
+    guestStore.write(paths);
+    return withId;
+  },
+  remove(id: string) {
+    guestStore.write(guestStore.read().filter((p) => p.id !== id));
+  },
+};
+
 export class LearningPathService {
   async saveLearningPath(learningPath: LearningPath): Promise<LearningPath> {
     try {
@@ -15,6 +47,10 @@ export class LearningPathService {
         body: JSON.stringify(learningPath),
       });
 
+      if (response.status === 401) {
+        // TEMP(guest-testing): no auth → persist locally.
+        return guestStore.upsert(learningPath);
+      }
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to save learning path');
@@ -29,6 +65,10 @@ export class LearningPathService {
   async getUserLearningPaths(): Promise<LearningPath[]> {
     try {
       const response = await fetch('/api/learning-paths');
+      if (response.status === 401) {
+        // TEMP(guest-testing): no auth → read locally.
+        return guestStore.read();
+      }
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to fetch learning paths');
@@ -37,7 +77,7 @@ export class LearningPathService {
       return data.map(this.mapFromDatabase);
     } catch (error) {
       console.error('Error fetching learning paths:', error);
-      return [];
+      return guestStore.read();
     }
   }
 
@@ -164,6 +204,10 @@ export class LearningPathService {
         body: JSON.stringify(newPath),
       });
   
+      if (response.status === 401) {
+        // TEMP(guest-testing): no auth → persist locally and return it.
+        return guestStore.upsert(newPath as LearningPath);
+      }
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to save learning path');
@@ -182,6 +226,11 @@ export class LearningPathService {
         method: 'DELETE',
       });
 
+      if (response.status === 401) {
+        // TEMP(guest-testing): no auth → delete locally.
+        guestStore.remove(pathId);
+        return;
+      }
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to delete learning path');
