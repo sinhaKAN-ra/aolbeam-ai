@@ -159,39 +159,70 @@ export class LearningPathService {
         updated_at: new Date().toISOString()
       };
       
-      // Generate steps from goals and topics
-      const steps: LearningStep[] = [];
-      
-      goals.forEach((goal, goalIndex) => {
-        // Create a main step for the goal itself
-        steps.push({
-          id: `step_${Date.now()}_${goalIndex}`,
-          title: goal.title,
-          description: goal.description || `Learn about ${goal.title}`,
-          completed: false,
-          estimatedTime: `${goal.estimatedHours || 5} hours`,
-          category: goal.difficulty || 'beginner',
-          resources: []
+      // Generate steps: try AI first (robust fallback chain via /api/gemini),
+      // then fall back to a local template if the AI call fails or returns
+      // nothing. This makes the menu "Generate" produce a real, topic-specific
+      // path instead of the generic placeholder steps.
+      let steps: LearningStep[] = [];
+
+      try {
+        const aiRes = await fetch('/api/gemini', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'generateLearningPath', params: { topic: mainGoal.title } }),
         });
-        
-        // Create steps for each topic
-        if (goal.topics && goal.topics.length > 0) {
-          goal.topics.forEach((topic, topicIndex) => {
-            if (topic.toLowerCase() !== goal.title.toLowerCase()) {
-              steps.push({
-                id: `step_${Date.now()}_${goalIndex}_${topicIndex}`,
-                title: topic,
-                description: `Explore ${topic} as part of ${goal.title}`,
-                completed: false,
-                estimatedTime: `${Math.round((goal.estimatedHours || 5) / goal.topics.length)} hours`,
-                category: goal.difficulty || 'beginner',
-                resources: []
-              });
-            }
-          });
+        if (aiRes.ok) {
+          const aiPath = await aiRes.json();
+          if (Array.isArray(aiPath?.steps) && aiPath.steps.length > 0) {
+            steps = aiPath.steps.map((s: any, i: number) => ({
+              id: `step_${Date.now()}_${i}`,
+              title: String(s.title ?? `Step ${i + 1}`),
+              description: String(s.description ?? ''),
+              completed: false,
+              estimatedTime: String(s.estimatedTime ?? '1-2 weeks'),
+              category: ['beginner', 'intermediate', 'advanced'].includes(s.difficulty)
+                ? s.difficulty
+                : 'beginner',
+              resources: [],
+            }));
+            if (aiPath.title) newPath.title = String(aiPath.title);
+          }
         }
-      });
-      
+      } catch (aiErr) {
+        console.warn('AI learning-path generation failed, using local template:', aiErr);
+      }
+
+      // Local fallback: build steps from goals + topics (original behaviour).
+      if (steps.length === 0) {
+        goals.forEach((goal, goalIndex) => {
+          steps.push({
+            id: `step_${Date.now()}_${goalIndex}`,
+            title: goal.title,
+            description: goal.description || `Learn about ${goal.title}`,
+            completed: false,
+            estimatedTime: `${goal.estimatedHours || 5} hours`,
+            category: goal.difficulty || 'beginner',
+            resources: []
+          });
+
+          if (goal.topics && goal.topics.length > 0) {
+            goal.topics.forEach((topic, topicIndex) => {
+              if (topic.toLowerCase() !== goal.title.toLowerCase()) {
+                steps.push({
+                  id: `step_${Date.now()}_${goalIndex}_${topicIndex}`,
+                  title: topic,
+                  description: `Explore ${topic} as part of ${goal.title}`,
+                  completed: false,
+                  estimatedTime: `${Math.round((goal.estimatedHours || 5) / goal.topics.length)} hours`,
+                  category: goal.difficulty || 'beginner',
+                  resources: []
+                });
+              }
+            });
+          }
+        });
+      }
+
       newPath.steps = steps;
       newPath.total_steps = steps.length;
       
