@@ -42,6 +42,7 @@ export async function POST(request: Request) {
     id: uuidv4(),
     test_series_id: testSeriesId,
     problem_statement: problemData.problemStatement,
+    problemStatement: problemData.problemStatement,
     problem_type: problemData.problemType || 'theory', // Default to 'theory'
     difficulty: problemData.difficulty || 'medium', // Default to 'medium'
     answer_format: problemData.answerFormat,
