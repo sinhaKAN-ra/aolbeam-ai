@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import type { InteractionCheckResponse } from '@/types/interaction';
-import { CHAT_LIMITS } from '@/config/limits';
+import { CHAT_LIMITS, chatLimitFor } from '@/config/limits';
 
 export async function POST(request: Request) {
   try {
@@ -85,39 +85,32 @@ export async function POST(request: Request) {
     const profile = profileData; // Now profile is guaranteed to be non-null
 
     // Determine limit based on subscription plan and interaction type.
-    // Free/non-subscribed defaults come from the shared src/config/limits.ts.
+    // ALL numbers come from the shared src/config/limits.ts (single source of
+    // truth) — this route previously hardcoded its own plan numbers, which
+    // silently overrode the config. Now it reads chatLimitFor(plan).
     let limit = CHAT_LIMITS.free; // Default for logged-in users without subscription
     let isPaidPlan = false;
     let isDaily = false;
 
     if (profile.is_subscribed && profile.subscription_plan) {
-      // Set limits based on plan
-      switch (profile.subscription_plan) {
+      const plan = profile.subscription_plan as string;
+      limit = chatLimitFor(plan);
+      switch (plan) {
         case 'one_time_cashfree':
-          limit = 1000; // Total limit for one-time purchase
           isPaidPlan = true;
-          isDaily = false;
+          isDaily = false; // one-time purchase = total allowance, not daily
           break;
         case 'weekly': // Genius Plan
-          limit = 100;
-          isPaidPlan = true;
-          isDaily = true; // Paid plans have daily limits
-          break;
         case 'monthly': // Power User
-          limit = 500;
-          isPaidPlan = true;
-          isDaily = true;
-          break;
         case 'quarterly': // AI Master
-          limit = 1500;
           isPaidPlan = true;
-          isDaily = true;
+          isDaily = true; // subscription plans have daily limits
           break;
         default:
-          // Basic plan or unknown plan
-          limit = CHAT_LIMITS.free; // Default for non-subscribed or basic
+          // Basic / unknown plan
+          limit = CHAT_LIMITS.free;
           isPaidPlan = false;
-          isDaily = false; // Basic plan has total limit, not daily
+          isDaily = false;
           break;
       }
     } else {

@@ -16,11 +16,11 @@ export type PlanId = 'free' | 'weekly' | 'monthly' | 'quarterly' | 'one_time_cas
 /** Daily chat message limits by plan (logged-in users). */
 export const CHAT_LIMITS: Record<PlanId, number> = {
   // Generous free tier so users get real value before paying.
-  free: 75,
-  weekly: 150,
-  monthly: 400,
-  quarterly: 800,
-  one_time_cashfree: 1200,
+  free: 100,
+  weekly: 300,
+  monthly: 800,
+  quarterly: 1500,
+  one_time_cashfree: 2000,
 };
 
 /**
@@ -29,15 +29,15 @@ export const CHAT_LIMITS: Record<PlanId, number> = {
  * security boundary, just a funnel nudge (a determined user can clear storage;
  * that's acceptable).
  */
-export const GUEST_CHAT_TRIAL_LIMIT = 15;
+export const GUEST_CHAT_TRIAL_LIMIT = 50;
 
 /** AI problem/insight generation limits by plan (logged-in users). */
 export const AI_GENERATION_LIMITS: Record<PlanId, number> = {
-  free: 75,
-  weekly: 250,
-  monthly: 600,
-  quarterly: 1200,
-  one_time_cashfree: 1500,
+  free: 100,
+  weekly: 400,
+  monthly: 1000,
+  quarterly: 2000,
+  one_time_cashfree: 2500,
 };
 
 /** Test creation limits by plan (feature currently hidden, kept for later). */
