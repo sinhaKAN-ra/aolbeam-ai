@@ -18,7 +18,6 @@ const publicPaths = [
   '/blog',
   '/chat',
   '/chat/*',
-  '/learning-paths', // TEMP(guest-testing): reachable without login while Supabase auth is down
   '/api/auth/*',
   '/_next/static/*',
   '/_next/image/*',

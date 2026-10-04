@@ -47,10 +47,10 @@ export default function LearningPathsPage() {
   const [editingPath, setEditingPath] = useState<LearningPath | null>(null);
 
   useEffect(() => {
-    // TEMP(guest-testing): load for guests as well (service falls back to
-    // localStorage when the API is unauthenticated).
-    loadPaths();
-    loadSearchHistory();
+    if (user?.id) {
+      loadPaths();
+      loadSearchHistory();
+    }
   }, [user?.id]);
 
   const loadPaths = async () => {
@@ -380,21 +380,22 @@ export default function LearningPathsPage() {
   
   // This function is already defined above
 
-  // TEMP(guest-testing): the hard sign-in wall is disabled so the Learning
-  // Paths flow can be tested while Supabase login is unavailable. Paths persist
-  // to localStorage for guests (see learningPathService fallback). RESTORE the
-  // block below to re-require login.
-  // if (!user) {
-  //   return (
-  //     <div className="flex h-[calc(100vh-64px)] items-center justify-center">
-  //       <div className="text-center">
-  //         <h2 className="text-2xl font-semibold mb-4">Please Sign In</h2>
-  //         <p className="text-muted-foreground mb-6">You need to sign in to view your learning paths.</p>
-  //         <Link href="/auth/signin" className="px-4 py-2 bg-primary text-primary-foreground rounded-md shadow hover:bg-primary/90">Sign In</Link>
-  //       </div>
-  //     </div>
-  //   );
-  // }
+  if (!user) {
+    return (
+      <div className="flex h-[calc(100vh-64px)] items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold mb-4">Please Sign In</h2>
+          <p className="text-muted-foreground mb-6">You need to sign in to view your learning paths.</p>
+          <Link
+            href="/auth/signin"
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md shadow hover:bg-primary/90"
+          >
+            Sign In
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const selectedPath = paths.find(p => p.id === selectedId);
   

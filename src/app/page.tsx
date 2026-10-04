@@ -48,7 +48,7 @@ import { InteractionType, InteractionLimitResult } from '@/types/interaction';
 // Server-side data fetching should be moved to a Server Component
 // and passed as props to this component
 
-const FREE_INTERACTION_LIMIT = 9999; // TEMP(guest-testing): effectively unlimited while Supabase login is down — lower before shipping
+const FREE_INTERACTION_LIMIT = 15; // guest problem generations before the login prompt
 const CONCRETE_AI_PROBLEM_TYPES: AIGeneratedProblemType[] = ['theory', 'practical', 'practical_mcq', 'conceptual', 'numerical', 'diagram_based'];
 
 

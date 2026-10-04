@@ -15,31 +15,29 @@ export type PlanId = 'free' | 'weekly' | 'monthly' | 'quarterly' | 'one_time_cas
 
 /** Daily chat message limits by plan (logged-in users). */
 export const CHAT_LIMITS: Record<PlanId, number> = {
-  // Loosened from 15 -> 50 for logged-in free users.
-  free: 50,
-  weekly: 100,
-  monthly: 300,
-  quarterly: 600,
-  one_time_cashfree: 1000,
+  // Generous free tier so users get real value before paying.
+  free: 75,
+  weekly: 150,
+  monthly: 400,
+  quarterly: 800,
+  one_time_cashfree: 1200,
 };
 
 /**
- * Guest (not logged-in) free-trial allowance. A small taste before the login
- * prompt. Tracked client-side in localStorage — NOT a security boundary, just
- * a funnel nudge (a determined user can clear storage; that's acceptable).
- *
- * Bumped to 100 for development/testing. Lower this (e.g. 3-5) before shipping
- * so the login funnel actually kicks in for real guests.
+ * Guest (not logged-in) free-trial allowance. A real taste of the product
+ * before the login prompt. Tracked client-side in localStorage — NOT a
+ * security boundary, just a funnel nudge (a determined user can clear storage;
+ * that's acceptable).
  */
-export const GUEST_CHAT_TRIAL_LIMIT = 100;
+export const GUEST_CHAT_TRIAL_LIMIT = 15;
 
 /** AI problem/insight generation limits by plan (logged-in users). */
 export const AI_GENERATION_LIMITS: Record<PlanId, number> = {
-  free: 50,
-  weekly: 200,
-  monthly: 500,
-  quarterly: 1000,
-  one_time_cashfree: 1000,
+  free: 75,
+  weekly: 250,
+  monthly: 600,
+  quarterly: 1200,
+  one_time_cashfree: 1500,
 };
 
 /** Test creation limits by plan (feature currently hidden, kept for later). */
