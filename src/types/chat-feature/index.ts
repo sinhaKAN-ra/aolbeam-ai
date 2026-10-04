@@ -2,6 +2,10 @@ import React from 'react';
 import { Json } from '../supabase';
 import { LearningPath } from './chat-feature';
 
+// Re-export shared learning-path types so consumers can import them from the
+// package index (several components do: `import { LearningPath } from '@/types/chat-feature'`).
+export type { LearningPath, LearningStep } from './chat-feature';
+
 // Message types
 export type MessageSender = 'user' | 'ai';
 export type MessageType = 'text' | 'learning_context' | 'practice_problem' | 'practice_problems_list' | 'error' | 'career_advice';
