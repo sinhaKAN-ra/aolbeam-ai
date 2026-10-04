@@ -13,7 +13,7 @@ import type {
 } from '../../types/chat-feature';
 import ChatMessage from './ChatMessage';
 import ChatHistoryRail from './ChatHistoryRail';
-import { Send, Loader2, Sparkles, Brain, Zap, BookOpen, Target, PanelLeft, X } from 'lucide-react';
+import { Send, Loader2, Sparkles, Brain, Zap, BookOpen, Target, PanelLeft, X, ArrowDown } from 'lucide-react';
 import { guestChatRemaining } from '@/lib/guestTrial';
 
 interface ChatInterfaceProps {
@@ -64,16 +64,51 @@ export const ChatInterface = ({
 }: ChatInterfaceProps) => {
   const [input, setInput] = useState('');
   const [railOpen, setRailOpen] = useState(false); // mobile drawer
+  const [showJump, setShowJump] = useState(false); // "scroll to bottom" pill
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Whether the view is pinned to the bottom. While true, new tokens keep the
+  // view at the bottom; once the user scrolls up to read, this flips false and
+  // streaming NO LONGER yanks them down (modern chat behaviour).
+  const stickToBottom = useRef(true);
+  const prevMsgCount = useRef(0);
 
   const { canUseFeature, isLoading: isFeatureCheckLoading, refetchUsage } = useFeatureAccess();
 
-  // Auto-scroll to the bottom on new turn / streamed token.
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' });
+    stickToBottom.current = true;
+    setShowJump(false);
+  };
+
+  // Track whether the user is near the bottom. ~80px tolerance so a tiny gap
+  // still counts as "at the bottom".
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottom = distanceFromBottom < 80;
+    stickToBottom.current = atBottom;
+    setShowJump(!atBottom);
+  };
+
+  // On message change: if a NEW message was added (user sent, or a new AI turn
+  // began) force a scroll; otherwise (streaming tokens into the same message)
+  // only follow if the user is still pinned to the bottom.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const isNewMessage = messages.length > prevMsgCount.current;
+    prevMsgCount.current = messages.length;
+
+    const lastIsUser = messages[messages.length - 1]?.sender === 'user';
+    if (isNewMessage && lastIsUser) {
+      // User just sent — always jump so they see their message + the reply form.
+      scrollToBottom('smooth');
+    } else if (stickToBottom.current) {
+      // Streaming or new AI turn while pinned — keep following, no animation jank.
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+    }
   }, [messages]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -180,9 +215,10 @@ export const ChatInterface = ({
           <span className="text-sm font-medium text-foreground">Chat</span>
         </div>
 
-        <div ref={scrollRef} className="chat-scroll min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-6">
-            {showWelcome ? (
+        <div className="relative min-h-0 flex-1">
+          <div ref={scrollRef} onScroll={handleScroll} className="chat-scroll h-full overflow-y-auto">
+            <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-6">
+              {showWelcome ? (
               <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
                 <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
                   <Sparkles className="h-8 w-8 text-primary" />
@@ -272,7 +308,19 @@ export const ChatInterface = ({
               </div>
             )}
             <div ref={messagesEndRef} />
+            </div>
           </div>
+
+          {/* Floating "jump to latest" — shows only when scrolled up */}
+          {showJump && (
+            <button
+              onClick={() => scrollToBottom('smooth')}
+              aria-label="Scroll to latest"
+              className="absolute bottom-4 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-lg transition-colors hover:bg-muted"
+            >
+              <ArrowDown className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         {/* ── Composer (fixed to this column, not the page) ── */}
