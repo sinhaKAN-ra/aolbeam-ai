@@ -96,11 +96,46 @@ export function isFallbackError(error: unknown): boolean {
 
 /** Strip ```json ... ``` fences and surrounding prose from a model reply. */
 export function extractJsonString(raw: string): string {
-  const arrayMatch = raw.match(/\[\s*[\s\S]*\]/);
-  const objectMatch = raw.match(/\{[\s\S]*\}/);
-  const fenceMatch = raw.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
+  const trimmed = raw.trim();
+
+  // 1) Prefer a fenced block if present (```json ... ``` or ``` ... ```).
+  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (fenceMatch?.[1]) return fenceMatch[1].trim();
-  if (arrayMatch) return arrayMatch[0];
-  if (objectMatch) return objectMatch[0];
-  return raw.trim();
+
+  // 2) Otherwise, extract the OUTERMOST JSON value by scanning for the first
+  //    opening bracket and matching its true close via depth counting (string-
+  //    aware). This is critical: a naive /\[.*\]/ would grab the inner array of
+  //    an object like {"options":[...]} and drop the rest, producing a parse
+  //    error ("unexpected non-whitespace after JSON"). Objects win ties.
+  const firstObj = trimmed.indexOf('{');
+  const firstArr = trimmed.indexOf('[');
+  let start = -1;
+  if (firstObj === -1) start = firstArr;
+  else if (firstArr === -1) start = firstObj;
+  else start = Math.min(firstObj, firstArr);
+  if (start === -1) return trimmed;
+
+  const open = trimmed[start];
+  const close = open === '{' ? '}' : ']';
+  let depth = 0;
+  let inStr = false;
+  let escaped = false;
+  for (let i = start; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (inStr) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === open) depth++;
+    else if (ch === close) {
+      depth--;
+      if (depth === 0) return trimmed.slice(start, i + 1);
+    }
+  }
+  // Unbalanced — return from the first bracket onward and let the caller fail
+  // loudly rather than silently truncating.
+  return trimmed.slice(start);
 }

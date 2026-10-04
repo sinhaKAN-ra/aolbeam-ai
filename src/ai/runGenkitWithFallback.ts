@@ -60,7 +60,19 @@ export async function runGenkitWithFallback<T>(args: GenkitFallbackArgs<T>): Pro
       json: true,
     });
 
-    const parsed = JSON.parse(extractJsonString(text));
+    const jsonStr = extractJsonString(text);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (parseErr) {
+      console.error(
+        '[genkit-fallback] JSON parse failed. Extracted string was:',
+        jsonStr.slice(0, 500)
+      );
+      throw new Error(
+        `AI returned malformed JSON that could not be parsed: ${(parseErr as Error).message}`
+      );
+    }
     // Validate/coerce against the flow's own schema so callers get a real T.
     return schema.parse(parsed);
   }
