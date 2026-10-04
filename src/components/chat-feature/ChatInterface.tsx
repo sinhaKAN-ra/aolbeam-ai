@@ -233,7 +233,18 @@ export const ChatInterface = ({
                         : undefined
                     }
                     isExpanding={expandingIds.includes(message.id)}
-                    hasExtras={!!(message as EnhancedMessage).enhancedContent?.suggestions}
+                    hasExtras={(() => {
+                      const ec = (message as EnhancedMessage).enhancedContent;
+                      // Only "has extras" when there is actually something to
+                      // show — an empty suggestions:[] from a failed/empty
+                      // fetch must NOT hide the Expand button or render a blank panel.
+                      return !!(
+                        (ec?.suggestions && ec.suggestions.length) ||
+                        (ec?.branchingPaths && ec.branchingPaths.length) ||
+                        (ec?.resources && ec.resources.length) ||
+                        (ec?.practiceProblems && ec.practiceProblems.length)
+                      );
+                    })()}
                     onTopicClick={(topic) => onSendMessage(`Tell me about ${topic}`)}
                   />
                 ))}

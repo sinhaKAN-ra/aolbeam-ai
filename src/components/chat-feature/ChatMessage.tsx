@@ -3,8 +3,9 @@
 import React, { useState } from 'react';
 import { Message } from '../../types/chat-feature/index';
 import type { EnhancedMessage } from '../../types/chat-feature/enhanced-message';
-import { Sparkles, Lightbulb, ExternalLink, Route, Loader2, Copy, Check } from 'lucide-react';
+import { Sparkles, Lightbulb, ExternalLink, Route, Loader2, Copy, Check, FileDown, Printer } from 'lucide-react';
 import ChatMarkdown from '@/components/chat-feature/ChatMarkdown';
+import { downloadMarkdown, printAsPdf } from '@/lib/downloadResponse';
 
 interface ChatMessageProps {
   message: Message;
@@ -109,6 +110,24 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               {copied ? 'Copied' : 'Copy'}
+            </button>
+
+            <button
+              onClick={() => downloadMarkdown(message.text || '', message.text?.slice(0, 40))}
+              aria-label="Download as Markdown"
+              title="Download as Markdown (.md)"
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+            >
+              <FileDown className="h-3.5 w-3.5" /> MD
+            </button>
+
+            <button
+              onClick={() => printAsPdf(message.text || '')}
+              aria-label="Save as PDF"
+              title="Save as PDF (opens print dialog)"
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+            >
+              <Printer className="h-3.5 w-3.5" /> PDF
             </button>
 
             {onExpand && !hasExtras && (

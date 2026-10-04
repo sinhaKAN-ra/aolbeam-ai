@@ -18,6 +18,7 @@ import { useChatHistory } from '../useChatHistory';
 import { useFeatureAccess } from '../useFeatureAccess';
 import { toast } from 'sonner';
 import { canGuestChat, incrementGuestChatCount, guestChatRemaining, GUEST_LIMIT } from '@/lib/guestTrial';
+import { windowedHistory } from '@/lib/ai/contextWindow';
 
 interface AddMessageOptions {
   saveToHistory?: boolean;
@@ -451,11 +452,15 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
     setIsLoading(true);
     setError(null);
 
-    // Build conversation history for the model (prior turns + this one).
-    const history = [...messages, userMsg].map(m => ({
+    // Build conversation history for the model (prior turns + this one), then
+    // apply context-window management: recent turns verbatim + a running
+    // summary of older turns once the chat gets long. Keeps follow-ups and
+    // "summarise everything" working without blowing the token budget.
+    const fullHistory = [...messages, userMsg].map(m => ({
       role: (m.sender === 'ai' ? 'assistant' : 'user') as 'assistant' | 'user',
       content: m.text,
     }));
+    const history = windowedHistory(fullHistory);
 
     // Create the streaming AI shell
     const aiId = uuidv4();
