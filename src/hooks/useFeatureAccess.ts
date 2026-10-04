@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createSupabaseBrowserClient } from '@/lib/supabase';
 import { plans } from '@/app/pricing/page';
 import { SubscriptionPlan } from '@/types';
+import { CHAT_LIMITS, AI_GENERATION_LIMITS, TEST_CREATION_LIMITS } from '@/config/limits';
 
 // Define the structure of the usage data from the API
 export type UsageData = {
@@ -47,19 +48,21 @@ type FeatureLimits = {
   };
 };
 
-// Define the limits for each feature by plan
+// Define the limits for each feature by plan.
+// Numeric chat/ai_generation/test_creation limits come from the shared
+// src/config/limits.ts source of truth so the three limit systems can't drift.
 const featureLimits: FeatureLimits = {
   chat: {
-    free: 15, // 15 messages/day for free users
-    weekly: 50,
-    monthly: 100,
-    quarterly: 200,
+    free: CHAT_LIMITS.free,
+    weekly: CHAT_LIMITS.weekly,
+    monthly: CHAT_LIMITS.monthly,
+    quarterly: CHAT_LIMITS.quarterly,
   },
   test_creation: {
-    free: 5, // 5 tests total for free users
-    weekly: 10,
-    monthly: 20,
-    quarterly: 30,
+    free: TEST_CREATION_LIMITS.free,
+    weekly: TEST_CREATION_LIMITS.weekly,
+    monthly: TEST_CREATION_LIMITS.monthly,
+    quarterly: TEST_CREATION_LIMITS.quarterly,
   },
   advanced_analytics: {
     free: false,
@@ -74,7 +77,7 @@ const featureLimits: FeatureLimits = {
     quarterly: true,
   },
   ai_generation: {
-    free: 20, // 20 interactions for free users
+    free: AI_GENERATION_LIMITS.free,
     weekly: true,
     monthly: true,
     quarterly: true,
@@ -105,23 +108,23 @@ const fetchUsage = async (userId: string): Promise<UsageData> => {
     throw new Error(`Failed to fetch user interactions: ${interactionsError.message}`);
   }
 
-  const testCreationInteractions = interactions?.filter(i => i.interaction_type === 'test_creation') || [];
-  
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   let chatInteractionsToday = 0;
+  let testsCreatedToday = 0;
   interactions?.forEach(interaction => {
-    if (interaction.interaction_type === 'chat') {
-      const interactionDate = new Date(interaction.created_at);
-      interactionDate.setHours(0, 0, 0, 0);
-      if (interactionDate.getTime() === today.getTime()) {
+    const interactionDate = new Date(interaction.created_at);
+    interactionDate.setHours(0, 0, 0, 0);
+    const isToday = interactionDate.getTime() === today.getTime();
+    if (isToday) {
+      if (interaction.interaction_type === 'chat') {
         chatInteractionsToday++;
+      } else if (interaction.interaction_type === 'test_creation') {
+        testsCreatedToday++;
       }
     }
   });
-
-  const testsCreated = testCreationInteractions.length;
 
   // Get user's subscription plan
   const { data: subscription } = await supabase
@@ -144,10 +147,10 @@ const fetchUsage = async (userId: string): Promise<UsageData> => {
     plan_id: planId,
     chat_interactions_today: chatInteractionsToday,
     chat_limit: chatLimit,
-    tests_created: testsCreated,
+    tests_created: testsCreatedToday,
     test_creation_limit: testCreationLimit,
     remaining_chats: Math.max(0, chatLimit - chatInteractionsToday),
-    remaining_tests: Math.max(0, testCreationLimit - testsCreated),
+    remaining_tests: Math.max(0, testCreationLimit - testsCreatedToday),
     updated_at: new Date().toISOString(),
   };
 };

@@ -40,7 +40,7 @@ import { Label } from '@/components/ui/label';
 import MainLayoutContainer from '@/components/MainLayoutContainer';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSupabase } from '@/hooks/useSupabase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useInteractionLimit } from '@/hooks/useInteractionLimit';
 import { InteractionType, InteractionLimitResult } from '@/types/interaction';
 
@@ -48,7 +48,7 @@ import { InteractionType, InteractionLimitResult } from '@/types/interaction';
 // Server-side data fetching should be moved to a Server Component
 // and passed as props to this component
 
-const FREE_INTERACTION_LIMIT = 10;
+const FREE_INTERACTION_LIMIT = 9999; // TEMP(guest-testing): effectively unlimited while Supabase login is down — lower before shipping
 const CONCRETE_AI_PROBLEM_TYPES: AIGeneratedProblemType[] = ['theory', 'practical', 'practical_mcq', 'conceptual', 'numerical', 'diagram_based'];
 
 
@@ -388,7 +388,7 @@ export default function AOLBEAMPage() {
         };
         try {
           // console.log("Page: Attempting to save new problem to Supabase:", dbRecord);
-          const { data: dbData, error: dbError } = await supabase.from('user_interactions').insert(dbRecord).select('id').single();
+          const { data: dbData, error: dbError } = await supabase.from('user_interactions').insert({ ...dbRecord, interaction_type: 'problem_generation' }).select('id').single();
           if (dbError) {
               console.error("Page: Error saving history to Supabase:", dbError);
               toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account. " + dbError.message });
@@ -597,6 +597,27 @@ const handleGenerateProblem = useCallback(async (topic: string, type: AIGenerate
   }
   await refreshInteractionStatus();
 }, [currentUser, isLoadingPageProfile]);
+
+// Deep-link from the Learning Paths "Practice" button: /?topic=X&generate=1.
+// Fill the topic and auto-generate once (after auth is settled). Query params
+// are reliable on cross-route navigation where a hash fragment was flaky.
+const searchParams = useSearchParams();
+const practiceSeededRef = useRef(false);
+useEffect(() => {
+  if (practiceSeededRef.current) return;
+  const topicParam = searchParams?.get('topic');
+  if (!topicParam) return;
+  // Wait for auth to settle so the interaction gate reads correctly.
+  if (currentUser && isLoadingPageProfile) return;
+  practiceSeededRef.current = true;
+  const decoded = decodeURIComponent(topicParam);
+  setCurrentTopic(decoded);
+  setTimeout(scrollToProblemGenerator, 150);
+  if (searchParams?.get('generate') === '1') {
+    // Auto-generate with current defaults so the user lands on a ready problem.
+    handleGenerateProblem(decoded, currentProblemType as AIGeneratedProblemType, currentDifficulty);
+  }
+}, [searchParams, currentUser, isLoadingPageProfile, handleGenerateProblem, scrollToProblemGenerator, currentProblemType, currentDifficulty]);
 
 const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) => {
   if (!currentProblem || !currentTopic || (currentUser && isLoadingPageProfile)) return;

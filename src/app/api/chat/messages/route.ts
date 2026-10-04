@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
+import { chatLimitFor } from '@/config/limits';
 
 // Create a server-side Supabase client for admin operations
 const supabaseAdmin = createClient(
@@ -84,15 +85,8 @@ export async function POST(request: Request) {
     // Ensure we have a number, not null
     const chatInteractionsToday = count || 0;
     
-    // Check if user has reached their chat limit
-    const planLimits = {
-      free: 15,
-      weekly: 50,
-      monthly: 100,
-      quarterly: 200
-    };
-
-    const limit = planLimits[planId as keyof typeof planLimits] || 0;
+    // Check if user has reached their chat limit (shared source of truth)
+    const limit = chatLimitFor(planId);
     const remaining = limit - chatInteractionsToday; // chatInteractionsToday is guaranteed to be a number now
     
     if (remaining <= 0) {

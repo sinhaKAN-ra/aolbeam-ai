@@ -47,10 +47,10 @@ export default function LearningPathsPage() {
   const [editingPath, setEditingPath] = useState<LearningPath | null>(null);
 
   useEffect(() => {
-    if (user?.id) {
-      loadPaths();
-      loadSearchHistory();
-    }
+    // TEMP(guest-testing): load for guests as well (service falls back to
+    // localStorage when the API is unauthenticated).
+    loadPaths();
+    loadSearchHistory();
   }, [user?.id]);
 
   const loadPaths = async () => {
@@ -140,12 +140,12 @@ export default function LearningPathsPage() {
   
   // Handle toggle step completion
   const handleToggleStep = async (stepId: string) => {
-    // Extract path ID from the element ID format: "path-{pathId}-step-{stepId}"
-    const parts = stepId.split('-');
-    if (parts.length < 4) return;
-    
-    const pathId = parts[1];
-    const actualStepId = parts[3];
+    // Parse the composite id "path-{pathId}-step-{stepId}" robustly — a naive
+    // split('-') breaks when pathId/stepId themselves contain hyphens (UUIDs).
+    const match = stepId.match(/^path-(.+)-step-(.+)$/);
+    if (!match) return;
+    const pathId = match[1];
+    const actualStepId = match[2];
     
     // Find path and step
     const pathIndex = paths.findIndex(p => p.id === pathId);
@@ -379,23 +379,22 @@ export default function LearningPathsPage() {
   };
   
   // This function is already defined above
-  
-  if (!user) {
-    return (
-      <div className="flex h-[calc(100vh-64px)] items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-semibold mb-4">Please Sign In</h2>
-          <p className="text-muted-foreground mb-6">You need to sign in to view your learning paths.</p>
-          <Link 
-            href="/auth/signin" 
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md shadow hover:bg-primary/90"
-          >
-            Sign In
-          </Link>
-        </div>
-      </div>
-    );
-  }
+
+  // TEMP(guest-testing): the hard sign-in wall is disabled so the Learning
+  // Paths flow can be tested while Supabase login is unavailable. Paths persist
+  // to localStorage for guests (see learningPathService fallback). RESTORE the
+  // block below to re-require login.
+  // if (!user) {
+  //   return (
+  //     <div className="flex h-[calc(100vh-64px)] items-center justify-center">
+  //       <div className="text-center">
+  //         <h2 className="text-2xl font-semibold mb-4">Please Sign In</h2>
+  //         <p className="text-muted-foreground mb-6">You need to sign in to view your learning paths.</p>
+  //         <Link href="/auth/signin" className="px-4 py-2 bg-primary text-primary-foreground rounded-md shadow hover:bg-primary/90">Sign In</Link>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   const selectedPath = paths.find(p => p.id === selectedId);
   

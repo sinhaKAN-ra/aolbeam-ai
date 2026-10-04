@@ -12,6 +12,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { runGenkitWithFallback } from '@/ai/runGenkitWithFallback';
 
 // Helper function for delays
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -206,21 +207,25 @@ const generatePracticeProblemFlow = ai.defineFlow(
     outputSchema: GeneratePracticeProblemOutputSchema.omit({ difficulty: true }),
   },
   async (input) => {
-    // Use the retry helper for the prompt call
-    const result = await retryWithExponentialBackoff(async () => {
-      const { output } = await prompt(input);
-      console.log('Server Action: Prompt output received:', output);
-      if (!output) {
-        // This case might happen if the prompt itself fails in a non-exception way
-        // or if the model returns an empty/invalid response that Genkit handles by returning null/undefined output
-        console.error("Server Action: AI prompt returned no output or an invalid structure.");
-        throw new Error("AI model did not return a valid output.");
-      }
-      return output;
+    const PromptOutputSchema = GeneratePracticeProblemOutputSchema.omit({
+      difficulty: true,
+      problemType: true,
     });
-    // The prompt doesn't return problemType, so we add it back here from the input
-    // to satisfy the flow's output schema.
-    return { ...result!, problemType: input.problemType };
+    // Primary = Genkit (with its own 503 backoff); on quota/expiry fall through
+    // to the multi-provider chain (OpenAI -> Groq -> ...).
+    const result = await runGenkitWithFallback({
+      genkit: () => retryWithExponentialBackoff(() => prompt(input)),
+      schema: PromptOutputSchema,
+      system:
+        'You generate exam practice problems. Use LaTeX for math, Markdown for code, Mermaid for diagrams. Avoid semicolons in Mermaid.',
+      buildPrompt: () =>
+        `Generate a ${input.difficulty} ${input.problemType} practice problem on "${input.topic}". ` +
+        `Return JSON with: problemStatement, answerFormat, multipleChoiceOptions (empty array unless MCQ), correctAnswer (include step-by-step solution). ` +
+        `For practical_mcq: exactly 4 options and correctAnswer must match one exactly. For theory/practical/diagram_based: multipleChoiceOptions must be [].`,
+      temperature: 0.4,
+    });
+    // The prompt doesn't return problemType; add it back from the input.
+    return { ...result, problemType: input.problemType };
   }
 );
 

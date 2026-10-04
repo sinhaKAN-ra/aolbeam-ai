@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ChatInterface from '../../../components/chat-feature/ChatInterface';
 import useChat from '../../../hooks/chat-feature/useChat';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '../../../lib/supabase';
 import { TopicTag } from '@/types/chat-feature';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 
 interface ChatPageProps {
   searchParams?: { [key: string]: string | string[] | undefined };
@@ -26,22 +26,38 @@ const ChatTeacherPage: React.FC<ChatPageProps> = () => {
   }
 
   const [userId, setUserId] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const supabase = createSupabaseBrowserClient();
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (user) {
-        setUserId(user.id);
-      } else if (error) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) setUserId(user.id);
+      } catch (error) {
         console.error('Error getting user:', error);
+      } finally {
+        setAuthChecked(true);
       }
     };
     getUser();
-    getUser();
   }, [supabase]);
 
-  const { messages, isLoading, error, sendMessage, learningPath, searchHistory, topicSuggestions, topicTags, selectedTags, startNewChat, isNewSession } = useChat(userId, sessionId); // Pass sessionId to useChat
+  const { messages, isLoading, error, sendMessage, learningPath, searchHistory, topicSuggestions, topicTags, selectedTags, startNewChat, isNewSession, expandMessage, expandingIds, sessions, currentSessionId, createNewSession, deleteSession, updateSessionTitle } = useChat(userId, sessionId); // Pass sessionId to useChat
+
+  // Seed an opening message from a ?q= query param (used by the Learning Paths
+  // "Learn" button, which deep-links here with the step topic). Send it exactly
+  // once, after auth is resolved and the chat is initialised on an empty session.
+  const searchParams = useSearchParams();
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current || !authChecked) return;
+    const q = searchParams?.get('q');
+    if (q && messages.length === 0 && currentSessionId) {
+      seededRef.current = true;
+      sendMessage(q);
+    }
+  }, [authChecked, searchParams, messages.length, currentSessionId, sendMessage]);
 
   const handleTopicTagClick = (tag: TopicTag) => {
     // Logic for handling topic tag click
@@ -67,37 +83,44 @@ const ChatTeacherPage: React.FC<ChatPageProps> = () => {
     }
   };
 
-  if (userId === null) {
+  if (!authChecked) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-background text-foreground">
         <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
-        <p className="text-lg">Loading user session...</p>
+        <p className="text-lg">Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-auto bg-background text-foreground">
-      <div className="container mx-auto p-4 max-w-6xl flex-grow">
-        <div className="bg-card rounded-lg h-auto flex flex-col">
-          <ChatInterface
-            isNewSession={isNewSession}
-            messages={messages}
-            isLoading={isLoading}
-            error={error}
-            onSendMessage={sendMessage}
-            onNewChat={startNewChat}
-            learningPath={learningPath}
-            searchHistory={searchHistory}
-            topicSuggestions={topicSuggestions}
-            topicTags={topicTags}
-            selectedTags={selectedTags}
-            onTopicTagClick={handleTopicTagClick}
-            onCustomPathCreated={handleCustomPathCreated}
-            onRetry={retryLastMessage}
-          />
-        </div>
-      </div>
+    // The app shell adds a fixed header (pt-16 = 4rem) above this content and
+    // keeps its menu sidebar. The chat page sizes itself to the space left
+    // under that header and owns its own internal scroll (ChatInterface's
+    // overflow-y-auto region). The sibling layout.tsx locks body overflow so
+    // body never becomes a second scroll container.
+    <div className="h-[calc(100dvh-4rem)] overflow-hidden flex flex-col bg-background text-foreground">
+      <ChatInterface
+        isNewSession={isNewSession}
+        messages={messages}
+        isLoading={isLoading}
+        error={error}
+        onSendMessage={sendMessage}
+        onNewChat={createNewSession}
+        learningPath={learningPath}
+        searchHistory={searchHistory}
+        topicSuggestions={topicSuggestions}
+        topicTags={topicTags}
+        selectedTags={selectedTags}
+        onTopicTagClick={handleTopicTagClick}
+        onCustomPathCreated={handleCustomPathCreated}
+        onRetry={retryLastMessage}
+        onExpandMessage={expandMessage}
+        expandingIds={expandingIds}
+        sessions={sessions}
+        currentSessionId={currentSessionId}
+        onDeleteSession={deleteSession}
+        onRenameSession={updateSessionTitle}
+      />
     </div>
   );
 };

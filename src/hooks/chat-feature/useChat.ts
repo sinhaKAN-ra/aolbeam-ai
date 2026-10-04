@@ -17,6 +17,8 @@ import {
 import { useChatHistory } from '../useChatHistory';
 import { useFeatureAccess } from '../useFeatureAccess';
 import { toast } from 'sonner';
+import { canGuestChat, incrementGuestChatCount, guestChatRemaining, GUEST_LIMIT } from '@/lib/guestTrial';
+import { windowedHistory } from '@/lib/ai/contextWindow';
 
 interface AddMessageOptions {
   saveToHistory?: boolean;
@@ -35,6 +37,7 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
   const [topicTags, setTopicTags] = useState<TopicTag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [expandingIds, setExpandingIds] = useState<string[]>([]);
 
   // Initialize chat history
   const {
@@ -46,7 +49,8 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
     createNewSession,
     deleteSession,
     updateSessionTitle,
-    refreshChatHistory
+    refreshChatHistory,
+    isLoading: historyLoading,
   } = useChatHistory(userId, initialSessionId);
 
   // Load search history once on mount
@@ -57,8 +61,25 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
     }
   }, []);
 
-  // Reload messages every time the current session changes
+  // Reload messages only when the ACTIVE SESSION actually changes.
+  // (Previously this also fired on sessions.length changes — which happen when
+  // we persist a message mid-stream — overwriting the live streamed messages
+  // and blanking the chat. Keyed on currentSession?.id only now.)
+  const loadedSessionRef = useRef<string | null>(null);
   useEffect(() => {
+    // Wait for history to finish loading before deciding "no session exists".
+    // Otherwise, a requested initialSessionId that hasn't resolved yet from
+    // localStorage/DB gets orphaned by an auto-created empty session —
+    // "the chat is gone, I have to start again".
+    if (historyLoading) return;
+
+    const activeId = currentSession?.id ?? null;
+
+    if (activeId && loadedSessionRef.current === activeId) {
+      setIsInitialized(true);
+      return;
+    }
+
     if (currentSession?.messages) {
       const formattedMessages = currentSession.messages.map(msg => ({
         id: msg.id,
@@ -69,6 +90,7 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
         timestamp: msg.createdAt,
         ...(msg.metadata || {})
       }));
+      loadedSessionRef.current = activeId;
       setMessages(formattedMessages);
       if (formattedMessages.length === 0) {
         setLearningPath(null);
@@ -76,16 +98,16 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
       } else {
         setIsNewSession(false);
       }
-    } else if (sessions.length === 0 && !isInitialized) {
-      // No sessions exist, create a new one (only on first load)
+    } else if (sessions.length === 0 && !isInitialized && !initialSessionId) {
+      // Only auto-create when NO specific session was requested via the URL.
       createNewSession('New Chat');
       setIsNewSession(true);
-    } else {
+    } else if (!activeId && !initialSessionId) {
       setMessages([]);
       setIsNewSession(false);
     }
     setIsInitialized(true);
-  }, [currentSession?.id, sessions.length]);
+  }, [currentSession?.id, historyLoading, initialSessionId]);
 
   // If an initialSessionId is provided and different, set it as the current session
   useEffect(() => {
@@ -211,10 +233,9 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
    */
   const callBraveSearch = useCallback(async (query: string) => {
     try {
-      const response = await fetch('/api/brave-search', {
-        method: 'POST',
+      const response = await fetch(`/api/brave?q=${encodeURIComponent(query)}`, {
+        method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
       });
 
       if (!response.ok) {
@@ -222,7 +243,7 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
       }
 
       const data = await response.json();
-      return data.results;
+      return data?.web?.results ?? [];
     } catch (error) {
       console.error('Error calling Brave Search API:', error);
       throw error;
@@ -360,20 +381,28 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim()) return;
-    
-    // Check if the user can use the chat feature
-    const { allowed, reason, remaining, limit } = canUseFeature('chat');
-    
-    if (!allowed) {
-      // Show error toast with reason
-      toast.error(reason || 'Feature limit reached', {
-        description: `You've used all ${limit} chat interactions available in your plan.`,
-        duration: 5000,
-      });
-      return;
+
+    // Gate: guests use a localStorage trial; logged-in users use plan limits.
+    if (!userId) {
+      if (!canGuestChat()) {
+        toast.error('Free trial used up', {
+          description: `You've used your ${GUEST_LIMIT} free messages. Sign in with Google to keep chatting.`,
+          duration: 6000,
+        });
+        return;
+      }
+    } else {
+      const { allowed, reason, limit } = canUseFeature('chat');
+      if (!allowed) {
+        toast.error(reason || 'Feature limit reached', {
+          description: `You've used all ${limit ?? ''} chat interactions available in your plan.`,
+          duration: 5000,
+        });
+        return;
+      }
     }
 
-    // Add user message to the chat
+    // Add user message
     const userMsg: Message = {
       id: uuidv4(),
       text: content,
@@ -381,162 +410,201 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
       sender: 'user',
       type: 'text',
       timestamp: new Date().toISOString(),
-    };
+    } as Message;
     setMessages(prev => [...prev, userMsg]);
-    
-    // Record feature usage
-    try {
-      await recordFeatureUsage('chat');
-    } catch (error) {
-      console.error('Failed to record chat usage:', error);
-      // Continue anyway since the message was already displayed
+
+    // Count the guest trial usage (logged-in usage is recorded server-side).
+    if (!userId) {
+      incrementGuestChatCount();
+      const left = guestChatRemaining();
+      if (left <= 1) {
+        toast.info(
+          left === 0
+            ? 'That was your last free message — sign in to continue.'
+            : `${left} free message left. Sign in for more.`
+        );
+      }
+    }
+
+    // Persist the user message
+    if (currentSessionId) {
+      saveMessageToHistory({ role: 'user', content, metadata: { type: 'text' } }).catch(err =>
+        console.error('Failed to save user message:', err)
+      );
+
+      // Auto-title the session from its FIRST user message, so history rows
+      // aren't all "New Chat". Only when this is the opening turn and the
+      // session still has the default/empty title.
+      const existingTitle = (currentSession?.title || '').trim().toLowerCase();
+      if (messages.length === 0 && (existingTitle === '' || existingTitle === 'new chat')) {
+        const title = content.trim().replace(/\s+/g, ' ').slice(0, 60);
+        updateSessionTitle(currentSessionId, title || 'New Chat').catch(err =>
+          console.error('Failed to auto-title session:', err)
+        );
+      }
     }
 
     // Update search history
-    const updatedHistory = [
-      content,
-      ...searchHistory.filter(q => q !== content),
-    ].slice(0, 10);
+    const updatedHistory = [content, ...searchHistory.filter(q => q !== content)].slice(0, 10);
     setSearchHistory(updatedHistory);
     localStorage.setItem('searchHistory', JSON.stringify(updatedHistory));
 
-    // Set loading state
     setIsLoading(true);
     setError(null);
 
+    // Build conversation history for the model (prior turns + this one), then
+    // apply context-window management: recent turns verbatim + a running
+    // summary of older turns once the chat gets long. Keeps follow-ups and
+    // "summarise everything" working without blowing the token budget.
+    const fullHistory = [...messages, userMsg].map(m => ({
+      role: (m.sender === 'ai' ? 'assistant' : 'user') as 'assistant' | 'user',
+      content: m.text,
+    }));
+    const history = windowedHistory(fullHistory);
+
+    // Create the streaming AI shell
+    const aiId = uuidv4();
+    const aiShell: Message = {
+      id: aiId,
+      text: '',
+      sender: 'ai',
+      type: 'text',
+      timestamp: new Date().toISOString(),
+      isTyping: true,
+    } as Message;
+    setMessages(prev => [...prev, aiShell]);
+
+    let accumulated = '';
     try {
-      // Create an empty AI message shell
-      const aiId = uuidv4();
-      const aiShell: EnhancedMessage = {
-        id: aiId,
-        text: '…', 
-        sender: 'ai',
-        type: 'learning_context',
-        timestamp: new Date().toISOString(),
-        isStreaming: true,
-        enhancedContent: { mainContent: '' },
-      };
-      setMessages(prev => [...prev, aiShell]);
+      const response = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history }),
+      });
 
-      // Make all API calls in parallel
-      // console.log('Starting parallel API calls for:', content);
-      let currentEnhancedContent: EnhancedMessageContent = {
-        mainContent: '',
-      };
+      if (!response.ok) {
+        if (response.status === 403) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.message || 'You have reached your chat limit for today.');
+        }
+        throw new Error(`Chat request failed (${response.status})`);
+      }
+      if (!response.body) throw new Error('No response stream');
 
-      // 1. Generate Learning Context
-      const contextResult = await callGeminiAPI('generateLearningContext', { prompt: content, topic: content });
-      // console.log('contextResult (raw):', contextResult);
-      currentEnhancedContent = {
-        ...currentEnhancedContent,
-        mainContent: contextResult?.text || '',
-        detailedContent: null,
-      };
-      // console.log('mainContent assigned:', currentEnhancedContent.mainContent);
-      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
+      // Parse the SSE stream and append tokens live.
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let streamErr: string | null = null;
 
-      // 2. Generate Topic Suggestions
-      const suggestionsResult = await callGeminiAPI('generateTopicSuggestions', { topic: content, count: 4 });
-      // console.log('suggestionsResult:', suggestionsResult);
-      currentEnhancedContent = {
-        ...currentEnhancedContent,
-        suggestions: suggestionsResult?.suggestions || [],
-      };
-      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() ?? '';
+        for (const evt of events) {
+          const lines = evt.split('\n');
+          const eventType = lines.find(l => l.startsWith('event:'))?.slice(6).trim();
+          const dataLine = lines.find(l => l.startsWith('data:'))?.slice(5).trim();
+          if (!dataLine) continue;
+          const data = JSON.parse(dataLine);
+          if (eventType === 'token' && data.t) {
+            accumulated += data.t;
+            setMessages(prev =>
+              prev.map(m => (m.id === aiId ? ({ ...m, text: accumulated, isTyping: true } as Message) : m))
+            );
+          } else if (eventType === 'error') {
+            streamErr = data.message;
+          }
+        }
+      }
 
-      // 3. Generate Learning Path
-      const learningPathResult = await callGeminiAPI('generateLearningPath', { topic: content, userId: 'guest' });
-      // console.log('learningPathResult (raw):', learningPathResult);
-      const branchingPaths = learningPathResult?.steps?.map((step: any) => ({
+      if (streamErr && !accumulated) throw new Error(streamErr);
+
+      // Empty-but-successful stream (no tokens, no error) — show a clear note
+      // rather than a blank bubble.
+      if (!accumulated) {
+        accumulated = "I couldn't generate a response just now. Please try again.";
+      }
+
+      // Finalize the message
+      setMessages(prev =>
+        prev.map(m => (m.id === aiId ? ({ ...m, text: accumulated, isTyping: false } as Message) : m))
+      );
+
+      // Persist the assistant message
+      if (currentSessionId && accumulated) {
+        await saveMessageToHistory({
+          role: 'assistant',
+          content: accumulated,
+          metadata: { type: 'text' },
+        });
+      }
+    } catch (e: any) {
+      console.error('Error streaming AI response:', e);
+      setError(e?.message || 'Failed to get AI response.');
+      // Remove the empty shell if nothing streamed
+      setMessages(prev =>
+        accumulated
+          ? prev.map(m => (m.id === aiId ? ({ ...m, isTyping: false } as Message) : m))
+          : prev.filter(m => m.id !== aiId)
+      );
+    } finally {
+      setIsLoading(false);
+    }
+    return aiId;
+  }, [messages, searchHistory, canUseFeature, currentSessionId, saveMessageToHistory, userId, currentSession, updateSessionTitle]);
+  /**
+   * Phase B: lazily fetch "learning extras" (suggestions, path, resources,
+   * practice problems) for an AI answer and attach them as enhancedContent.
+   * This replaces the old blocking per-message dossier — the user opts in.
+   */
+  const expandMessage = useCallback(async (messageId: string, topic: string) => {
+    if (expandingIds.includes(messageId)) return;
+    setExpandingIds(prev => [...prev, messageId]);
+    try {
+      const res = await fetch('/api/chat/extras', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic }),
+      });
+      if (!res.ok) throw new Error(`Extras request failed (${res.status})`);
+      const data = await res.json();
+
+      const branchingPaths = (data.learningPath?.steps || []).map((step: any) => ({
         id: String(step.id),
         title: step.title,
         description: step.description,
         difficulty: step.difficulty,
         estimatedTime: step.estimatedTime,
-        tags: []
-      })) || [];
-      currentEnhancedContent = {
-        ...currentEnhancedContent,
-        branchingPaths: branchingPaths,
-      };
-      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
-      // console.log('learningPathResult (processed):', learningPathResult);
-      // console.log('Generated branchingPaths:', currentEnhancedContent.branchingPaths);
+        tags: [],
+      }));
 
-      // 4. Fetch Brave Resources
-      const resourcesResult = await fetchBraveResources(content, { useCache: true });
-      const resources = resourcesResult?.map((r: any, i: number) => ({
-        id: `res-${i}`,
-        title: r.title,
-        url: r.url,
-        type: (r.type as any) || 'web_page',
-      })) || [];
-      currentEnhancedContent = {
-        ...currentEnhancedContent,
-        resources: resources,
-      };
-      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
-
-      // 5. Generate Practice Problems
-      const problemsResult = await callGeminiAPI('generatePracticeProblems', {
-        prompt: content,
-        count: 5,
-      });
-      currentEnhancedContent = {
-        ...currentEnhancedContent,
-        practiceProblems: problemsResult?.practiceProblem?.map((problem: string) => ({ question: problem })) || [],
-      };
-      updateAiMessage(aiId, { enhancedContent: currentEnhancedContent });
-
-      // Final update and save
-      const finalEnhancedContent = {
-        ...currentEnhancedContent,
-        mainContent: currentEnhancedContent.mainContent || 'No content generated.', // Ensure mainContent is not empty
-      };
-      
-      // Update the AI message with all content at once
-      // console.log('Updating AI message with complete enhanced content');
-      updateAiMessage(aiId, {
-        text: finalEnhancedContent.mainContent,
-        enhancedContent: finalEnhancedContent,
-        isStreaming: false
-      });
-      
-      // Save the AI message to history
-      if (currentSessionId) {
-        await saveMessageToHistory({
-          // id: aiId,
-          role: 'assistant',
-          content: finalEnhancedContent.mainContent,
-          // createdAt: new Date().toISOString(),
-
-          metadata: {
-            type: 'learning_context',
-            enhancedContent: finalEnhancedContent
-          }
-        });
-      }
-      
-      // console.log('AI response generation complete');
-      return aiId;
-    } catch (e) {
-      console.error('Error generating AI response:', e);
-      setError('Failed to get AI response.');
+      setMessages(prev =>
+        prev.map(m => {
+          if (m.id !== messageId) return m;
+          const enhanced = m as EnhancedMessage;
+          return {
+            ...enhanced,
+            enhancedContent: {
+              ...(enhanced.enhancedContent || {}),
+              mainContent: enhanced.enhancedContent?.mainContent || m.text,
+              suggestions: data.suggestions || [],
+              branchingPaths,
+              resources: data.resources || [],
+              practiceProblems: data.practiceProblems || [],
+            },
+          } as Message;
+        })
+      );
+    } catch (err) {
+      console.error('Failed to expand message:', err);
+      toast.error('Could not load learning extras. Please try again.');
     } finally {
-      setIsLoading(false);
+      setExpandingIds(prev => prev.filter(id => id !== messageId));
     }
-  }, [
-    searchHistory,
-    setSearchHistory,
-    callGeminiAPI,
-    fetchBraveResources,
-    extractTagsFromSuggestions,
-    setTopicSuggestions,
-    setTopicTags,
-    updateAiMessage,
-    currentSessionId,
-    saveMessageToHistory
-  ]);
+  }, [expandingIds]);
 
   const handleTopicTagClick = useCallback((tag: TopicTag) => {
     const newSelectedTags = selectedTags.includes(tag.id)
@@ -584,6 +652,15 @@ const useChat = (userId: string | null, initialSessionId?: string | null) => {
     handleCustomPathCreated,
     startNewChat,
     isNewSession,
+    expandMessage,
+    expandingIds,
+    // Chat-history passthroughs (sourced from useChatHistory above) so the
+    // page can drive the history rail from this single hook instance.
+    sessions,
+    currentSessionId,
+    createNewSession,
+    deleteSession,
+    updateSessionTitle,
   };
 };
 

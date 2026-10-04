@@ -4,6 +4,38 @@ import { CustomLearningGoal } from '@/types/chat-feature/chat-feature';
 import { LearningStep } from '@/types/chat-feature/chat-feature';
 import { LearningPath } from '@/types/chat-feature/chat-feature';
 
+// TEMP(guest-testing): local persistence so the Learning Paths flow is testable
+// while Supabase login is unavailable. When the API returns 401 (guest), paths
+// are read/written here instead. Remove this block + the `isGuest401` fallbacks
+// when login is restored.
+const GUEST_PATHS_KEY = 'guestLearningPaths';
+const guestStore = {
+  read(): LearningPath[] {
+    if (typeof window === 'undefined') return [];
+    try {
+      return JSON.parse(localStorage.getItem(GUEST_PATHS_KEY) || '[]');
+    } catch {
+      return [];
+    }
+  },
+  write(paths: LearningPath[]) {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(GUEST_PATHS_KEY, JSON.stringify(paths));
+  },
+  upsert(path: LearningPath): LearningPath {
+    const paths = guestStore.read();
+    const i = paths.findIndex((p) => p.id === path.id);
+    const withId = { ...path, id: path.id || `path_${Date.now()}` };
+    if (i >= 0) paths[i] = withId;
+    else paths.unshift(withId);
+    guestStore.write(paths);
+    return withId;
+  },
+  remove(id: string) {
+    guestStore.write(guestStore.read().filter((p) => p.id !== id));
+  },
+};
+
 export class LearningPathService {
   async saveLearningPath(learningPath: LearningPath): Promise<LearningPath> {
     try {
@@ -15,6 +47,10 @@ export class LearningPathService {
         body: JSON.stringify(learningPath),
       });
 
+      if (response.status === 401) {
+        // TEMP(guest-testing): no auth → persist locally.
+        return guestStore.upsert(learningPath);
+      }
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to save learning path');
@@ -29,6 +65,10 @@ export class LearningPathService {
   async getUserLearningPaths(): Promise<LearningPath[]> {
     try {
       const response = await fetch('/api/learning-paths');
+      if (response.status === 401) {
+        // TEMP(guest-testing): no auth → read locally.
+        return guestStore.read();
+      }
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to fetch learning paths');
@@ -37,7 +77,7 @@ export class LearningPathService {
       return data.map(this.mapFromDatabase);
     } catch (error) {
       console.error('Error fetching learning paths:', error);
-      return [];
+      return guestStore.read();
     }
   }
 
@@ -119,39 +159,70 @@ export class LearningPathService {
         updated_at: new Date().toISOString()
       };
       
-      // Generate steps from goals and topics
-      const steps: LearningStep[] = [];
-      
-      goals.forEach((goal, goalIndex) => {
-        // Create a main step for the goal itself
-        steps.push({
-          id: `step_${Date.now()}_${goalIndex}`,
-          title: goal.title,
-          description: goal.description || `Learn about ${goal.title}`,
-          completed: false,
-          estimatedTime: `${goal.estimatedHours || 5} hours`,
-          category: goal.difficulty || 'beginner',
-          resources: []
+      // Generate steps: try AI first (robust fallback chain via /api/gemini),
+      // then fall back to a local template if the AI call fails or returns
+      // nothing. This makes the menu "Generate" produce a real, topic-specific
+      // path instead of the generic placeholder steps.
+      let steps: LearningStep[] = [];
+
+      try {
+        const aiRes = await fetch('/api/gemini', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'generateLearningPath', params: { topic: mainGoal.title } }),
         });
-        
-        // Create steps for each topic
-        if (goal.topics && goal.topics.length > 0) {
-          goal.topics.forEach((topic, topicIndex) => {
-            if (topic.toLowerCase() !== goal.title.toLowerCase()) {
-              steps.push({
-                id: `step_${Date.now()}_${goalIndex}_${topicIndex}`,
-                title: topic,
-                description: `Explore ${topic} as part of ${goal.title}`,
-                completed: false,
-                estimatedTime: `${Math.round((goal.estimatedHours || 5) / goal.topics.length)} hours`,
-                category: goal.difficulty || 'beginner',
-                resources: []
-              });
-            }
-          });
+        if (aiRes.ok) {
+          const aiPath = await aiRes.json();
+          if (Array.isArray(aiPath?.steps) && aiPath.steps.length > 0) {
+            steps = aiPath.steps.map((s: any, i: number) => ({
+              id: `step_${Date.now()}_${i}`,
+              title: String(s.title ?? `Step ${i + 1}`),
+              description: String(s.description ?? ''),
+              completed: false,
+              estimatedTime: String(s.estimatedTime ?? '1-2 weeks'),
+              category: ['beginner', 'intermediate', 'advanced'].includes(s.difficulty)
+                ? s.difficulty
+                : 'beginner',
+              resources: [],
+            }));
+            if (aiPath.title) newPath.title = String(aiPath.title);
+          }
         }
-      });
-      
+      } catch (aiErr) {
+        console.warn('AI learning-path generation failed, using local template:', aiErr);
+      }
+
+      // Local fallback: build steps from goals + topics (original behaviour).
+      if (steps.length === 0) {
+        goals.forEach((goal, goalIndex) => {
+          steps.push({
+            id: `step_${Date.now()}_${goalIndex}`,
+            title: goal.title,
+            description: goal.description || `Learn about ${goal.title}`,
+            completed: false,
+            estimatedTime: `${goal.estimatedHours || 5} hours`,
+            category: goal.difficulty || 'beginner',
+            resources: []
+          });
+
+          if (goal.topics && goal.topics.length > 0) {
+            goal.topics.forEach((topic, topicIndex) => {
+              if (topic.toLowerCase() !== goal.title.toLowerCase()) {
+                steps.push({
+                  id: `step_${Date.now()}_${goalIndex}_${topicIndex}`,
+                  title: topic,
+                  description: `Explore ${topic} as part of ${goal.title}`,
+                  completed: false,
+                  estimatedTime: `${Math.round((goal.estimatedHours || 5) / goal.topics.length)} hours`,
+                  category: goal.difficulty || 'beginner',
+                  resources: []
+                });
+              }
+            });
+          }
+        });
+      }
+
       newPath.steps = steps;
       newPath.total_steps = steps.length;
       
@@ -164,6 +235,10 @@ export class LearningPathService {
         body: JSON.stringify(newPath),
       });
   
+      if (response.status === 401) {
+        // TEMP(guest-testing): no auth → persist locally and return it.
+        return guestStore.upsert(newPath as LearningPath);
+      }
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to save learning path');
@@ -182,6 +257,11 @@ export class LearningPathService {
         method: 'DELETE',
       });
 
+      if (response.status === 401) {
+        // TEMP(guest-testing): no auth → delete locally.
+        guestStore.remove(pathId);
+        return;
+      }
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to delete learning path');

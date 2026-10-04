@@ -12,6 +12,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { runGenkitWithFallback } from '@/ai/runGenkitWithFallback';
 
 const EvaluateTheoryAnswerInputSchema = z.object({
   question: z.string().describe('The theory question asked to the student.'),
@@ -97,8 +98,27 @@ const evaluateTheoryAnswerFlow = ai.defineFlow(
     outputSchema: EvaluateTheoryAnswerOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    return output!;
+    return runGenkitWithFallback({
+      genkit: () => prompt(input),
+      schema: EvaluateTheoryAnswerOutputSchema,
+      system:
+        'You are an expert educator evaluating a student answer. Use LaTeX for math, Markdown for code, and Mermaid for diagrams.',
+      buildPrompt: () => `Evaluate the student's answer to this question.
+
+Question:
+${input.question}
+
+Student's Answer:
+${input.studentAnswer}
+
+Expected Answer Guidelines/Format:
+${input.answerFormat}
+
+Topic Details (context):
+${input.topicDetails}
+
+Set isCorrect to true ONLY if the student's answer is functionally equivalent to the correct answer. Provide: feedback, explanation, a full step-by-step correctAnswer, and solutionSteps (array of {stepNumber, stepDescription, stepExplanation}).`,
+    });
   }
 );
 

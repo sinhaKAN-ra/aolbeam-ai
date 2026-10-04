@@ -298,3 +298,12 @@ table {
     }
   }
 }
+
+/*
+ * Chat route only (body.chat-route, toggled by src/app/chat/[sessionId]/layout.tsx).
+ * The app menu sidebar (Home / Practice / Learning Paths / History) and the
+ * shell header stay. The chat PAGE sizes itself to the space left under the
+ * header (see page.tsx: h-[calc(100dvh-4rem)]) and owns its own scroll, so no
+ * shared chrome needs overriding here. This class only drives the body
+ * overflow/height lock in the layout effect (double-scrollbar fix).
+ */

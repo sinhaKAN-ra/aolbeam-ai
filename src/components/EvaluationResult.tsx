@@ -6,7 +6,7 @@ import { forwardRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle, XCircle, Info, ChevronDown, ChevronUp, Lightbulb } from 'lucide-react';
 import type { EvaluateTheoryAnswerOutput } from '@/ai/flows/evaluate-theory-answer';
-import MathRenderer from './MathRenderer';
+import ChatMarkdown from '@/components/chat-feature/ChatMarkdown';
 import { Button } from '@/components/ui/button';
 
 interface EvaluationResultProps {
@@ -53,56 +53,74 @@ const formatStepByStepSolution = (content: string): string => {
 };
 
 export const EvaluationResult = forwardRef<HTMLDivElement, EvaluationResultProps>(({ evaluation }, ref) => {
-  const [showSolution, setShowSolution] = useState(false);
-  
+  const [showSolution, setShowSolution] = useState(true); // open by default — it's the point
+
   if (!evaluation) return null;
 
   const { isCorrect, feedback, correctAnswer } = evaluation;
 
   return (
-    <Card ref={ref} className={`shadow-lg ${isCorrect ? 'border-green-500' : 'border-red-500'} bg-opacity-10`}>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-xl font-semibold">
-          {isCorrect ? <CheckCircle className="text-green-500" /> : <XCircle className="text-red-500" />}
-          Evaluation Result
+    <Card
+      ref={ref}
+      className={`overflow-hidden shadow-lg ${isCorrect ? 'border-green-500/60' : 'border-amber-500/60'}`}
+    >
+      <CardHeader
+        className={isCorrect ? 'bg-green-500/10' : 'bg-amber-500/10'}
+      >
+        <CardTitle className="flex items-center gap-2 text-xl font-semibold text-foreground">
+          {isCorrect ? (
+            <CheckCircle className="h-5 w-5 text-green-500" />
+          ) : (
+            <XCircle className="h-5 w-5 text-amber-500" />
+          )}
+          {isCorrect ? 'Correct!' : 'Needs Improvement'}
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <p className={`text-lg font-medium mb-2 ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
-          {isCorrect ? "Correct!" : "Needs Improvement"}
-        </p>
-        <div className="prose prose-sm max-w-none text-base bg-muted/50 p-3 rounded-md dark:prose-invert mb-4">
-          <h4 className="font-semibold flex items-center gap-1"><Info size={18}/>Feedback:</h4>
-          <MathRenderer content={feedback} />
+      <CardContent className="pt-5">
+        {/* Feedback */}
+        <div className="mb-5">
+          <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <Info className="h-3.5 w-3.5" /> Feedback
+          </h4>
+          <div className="rounded-lg border border-border bg-muted/40 p-4 text-foreground">
+            <ChatMarkdown content={feedback} />
+          </div>
         </div>
-        
+
+        {/* Model solution */}
         {correctAnswer && (
-          <div className="mt-4">
-            <Button 
-              variant="outline" 
-              className="w-full flex justify-between items-center mb-2"
+          <div>
+            <Button
+              variant="ghost"
+              className="mb-2 flex w-full items-center justify-between px-0 hover:bg-transparent"
               onClick={() => setShowSolution(!showSolution)}
             >
-              <div className="flex items-center gap-2">
-                <Lightbulb size={18} className="text-amber-500" />
-                <span>Step-by-Step Solution</span>
-              </div>
-              {showSolution ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+              <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <Lightbulb className="h-3.5 w-3.5 text-amber-500" /> Model answer &amp; steps
+              </span>
+              {showSolution ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
             </Button>
-            
+
             {showSolution && (
-              <div className="prose prose-sm max-w-none text-base bg-muted/50 p-3 rounded-md dark:prose-invert mt-2 border-l-4 border-amber-500 overflow-x-auto">
+              <div className="rounded-lg border-l-2 border-amber-500/70 bg-muted/40 p-4 text-foreground">
                 {evaluation.solutionSteps && evaluation.solutionSteps.length > 0 ? (
-                  <ol className="list-decimal list-inside space-y-4">
+                  <ol className="space-y-4">
                     {evaluation.solutionSteps.map((step, index) => (
                       <li key={index}>
-                        <h5 className="font-semibold text-lg mb-1">Step {step.stepNumber}: {step.stepDescription}</h5>
-                        <MathRenderer content={step.stepExplanation} />
+                        <div className="mb-1 flex items-start gap-2">
+                          <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-medium text-primary">
+                            {step.stepNumber}
+                          </span>
+                          <h5 className="font-semibold text-foreground">{step.stepDescription}</h5>
+                        </div>
+                        <div className="pl-7">
+                          <ChatMarkdown content={step.stepExplanation} />
+                        </div>
                       </li>
                     ))}
                   </ol>
                 ) : (
-                  <MathRenderer content={formatStepByStepSolution(correctAnswer)} />
+                  <ChatMarkdown content={formatStepByStepSolution(correctAnswer)} />
                 )}
               </div>
             )}
