@@ -54,7 +54,10 @@ export async function runGenkitWithFallback<T>(args: GenkitFallbackArgs<T>): Pro
     // Gemini provider will fail the same way. runWithFallback skips to the next
     // configured provider automatically on a fallback error.
     const { text } = await runWithFallback({
-      prompt: `${buildPrompt()}\n\nRespond with ONLY a valid JSON object matching the required schema. No prose, no markdown fences.`,
+      prompt:
+        `${buildPrompt()}\n\n` +
+        `Respond with ONLY a single valid JSON object matching the required schema — no prose, no markdown fences around the JSON. ` +
+        `If a field's value contains code or math, put it INSIDE the JSON string with newlines escaped as \\n and quotes as \\" (do NOT emit raw line breaks or an unescaped \`\`\` fence inside a string). The entire response must be parseable by JSON.parse.`,
       system,
       temperature: temperature ?? 0.2,
       json: true,

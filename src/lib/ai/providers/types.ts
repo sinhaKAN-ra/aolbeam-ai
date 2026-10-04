@@ -98,9 +98,17 @@ export function isFallbackError(error: unknown): boolean {
 export function extractJsonString(raw: string): string {
   const trimmed = raw.trim();
 
-  // 1) Prefer a fenced block if present (```json ... ``` or ``` ... ```).
-  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (fenceMatch?.[1]) return fenceMatch[1].trim();
+  // 1) Prefer a fenced block ONLY when it actually contains JSON. The model may
+  //    legitimately return a ```json { ... } ``` block, but it may ALSO embed a
+  //    ```python ...``` code fence INSIDE a JSON string value — matching the
+  //    first fence blindly would extract that code and fail to parse. So accept
+  //    a fence only if its body starts with { or [; otherwise fall through to
+  //    the depth-scanner below, which finds the real JSON object around it.
+  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/i);
+  if (fenceMatch?.[1]) {
+    const body = fenceMatch[1].trim();
+    if (body.startsWith('{') || body.startsWith('[')) return body;
+  }
 
   // 2) Otherwise, extract the OUTERMOST JSON value by scanning for the first
   //    opening bracket and matching its true close via depth counting (string-
