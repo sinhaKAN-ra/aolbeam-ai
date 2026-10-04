@@ -172,7 +172,7 @@ const PathDetailView: React.FC<PathDetailViewProps> = ({
                 {!step.completed && (
                   <div className="mt-3 ml-10 flex gap-2">
                     <Link
-                      href={`/#generate?topic=${encodeURIComponent(step.title)}`}
+                      href={`/?topic=${encodeURIComponent(step.title)}&generate=1`}
                       className="text-sm bg-secondary text-secondary-foreground px-3 py-1 rounded-md hover:bg-secondary/90"
                     >
                       Practice
