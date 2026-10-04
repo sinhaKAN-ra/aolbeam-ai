@@ -81,21 +81,23 @@ export async function POST(req: Request) {
       case 'generateLearningPath': {
         const { topic } = params;
         const prompt = `
-        Generate a detailed learning path for learning about ${topic} suitable for a student.
+        Design a complete, course-like learning path for mastering "${topic}", suitable for a motivated student going from beginner to advanced.
 
-        Create the response as a valid JSON object with these properties:
-        - title: A descriptive title for the learning path
-        - steps: An array of step objects where each step has:
-          - id: A numeric ID (1, 2, 3, etc.)
-          - title: Short, descriptive title
-          - description: Detailed explanation (2-3 sentences)
-          - difficulty: One of 'beginner', 'intermediate', or 'advanced'
-          - estimatedTime: String like '1-2 weeks'
+        Produce 6 to 9 sequential steps (modules) that build on each other — like the modules of a real online course. Order them from fundamentals to advanced application. Avoid vague placeholders; each step must be concrete and specific to "${topic}".
 
-        Format as CLEAN JSON only with no explanations, markdown, or code blocks.
+        Return a valid JSON object with:
+        - title: A clear course title for the path
+        - steps: An array of 6-9 step objects, each with:
+          - id: numeric (1, 2, 3, ...)
+          - title: a specific module title (not generic)
+          - description: 2-3 sentences stating what the learner will understand or be able to do after this step (concrete learning objectives)
+          - difficulty: one of 'beginner', 'intermediate', or 'advanced' (progress from beginner to advanced across the steps)
+          - estimatedTime: a realistic string like '3-5 hours' or '1 week'
+
+        Format as CLEAN JSON only — no explanations, markdown, or code fences.
         `;
         try {
-          const { text } = await runWithFallback({ prompt, temperature: 0.2, json: true });
+          const { text } = await runWithFallback({ prompt, temperature: 0.3, json: true });
           const pathData = JSON.parse(extractJsonString(text));
           return NextResponse.json(pathData);
         } catch (error) {

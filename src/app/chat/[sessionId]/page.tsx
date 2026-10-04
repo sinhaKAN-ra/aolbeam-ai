@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ChatInterface from '../../../components/chat-feature/ChatInterface';
 import useChat from '../../../hooks/chat-feature/useChat';
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { createSupabaseBrowserClient } from '../../../lib/supabase';
 import { TopicTag } from '@/types/chat-feature';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 
 interface ChatPageProps {
   searchParams?: { [key: string]: string | string[] | undefined };
@@ -44,6 +44,20 @@ const ChatTeacherPage: React.FC<ChatPageProps> = () => {
   }, [supabase]);
 
   const { messages, isLoading, error, sendMessage, learningPath, searchHistory, topicSuggestions, topicTags, selectedTags, startNewChat, isNewSession, expandMessage, expandingIds, sessions, currentSessionId, createNewSession, deleteSession, updateSessionTitle } = useChat(userId, sessionId); // Pass sessionId to useChat
+
+  // Seed an opening message from a ?q= query param (used by the Learning Paths
+  // "Learn" button, which deep-links here with the step topic). Send it exactly
+  // once, after auth is resolved and the chat is initialised on an empty session.
+  const searchParams = useSearchParams();
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current || !authChecked) return;
+    const q = searchParams?.get('q');
+    if (q && messages.length === 0 && currentSessionId) {
+      seededRef.current = true;
+      sendMessage(q);
+    }
+  }, [authChecked, searchParams, messages.length, currentSessionId, sendMessage]);
 
   const handleTopicTagClick = (tag: TopicTag) => {
     // Logic for handling topic tag click

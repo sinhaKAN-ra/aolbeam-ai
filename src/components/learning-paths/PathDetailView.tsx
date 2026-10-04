@@ -145,8 +145,9 @@ const PathDetailView: React.FC<PathDetailViewProps> = ({
               >
                 <div className="flex gap-4">
                   <button
-                    onClick={() => onUpdateProgress(step.id)}
-                    className={`rounded-full w-6 h-6 flex-shrink-0 mt-1 ${step.completed ? 'bg-primary text-primary-foreground' : 'border border-muted-foreground'}`}
+                    onClick={() => onUpdateProgress(`path-${path.id}-step-${step.id}`)}
+                    aria-label={step.completed ? 'Mark step incomplete' : 'Mark step complete'}
+                    className={`rounded-full w-6 h-6 flex-shrink-0 mt-1 ${step.completed ? 'bg-primary text-primary-foreground' : 'border border-muted-foreground hover:border-primary'}`}
                   >
                     {step.completed && <CheckCircle2 className="w-4 h-4 m-auto" />}
                   </button>
@@ -154,7 +155,7 @@ const PathDetailView: React.FC<PathDetailViewProps> = ({
                   <div className="flex-1">
                     <div className="flex items-start justify-between">
                       <div>
-                        <h3 className={`font-medium ${step.completed ? 'text-muted-foreground' : ''}`}>
+                        <h3 className={`font-medium ${step.completed ? 'text-muted-foreground line-through' : ''}`}>
                           {step.title}
                         </h3>
                         <p className="text-sm text-muted-foreground mt-1">{step.description}</p>
@@ -171,13 +172,13 @@ const PathDetailView: React.FC<PathDetailViewProps> = ({
                 {!step.completed && (
                   <div className="mt-3 ml-10 flex gap-2">
                     <Link
-                      href={`/tests/new?topic=${encodeURIComponent(step.title)}`}
+                      href={`/#generate?topic=${encodeURIComponent(step.title)}`}
                       className="text-sm bg-secondary text-secondary-foreground px-3 py-1 rounded-md hover:bg-secondary/90"
                     >
                       Practice
                     </Link>
                     <Link
-                      href={`/chat/new?topic=${encodeURIComponent(step.title)}`}
+                      href={`/chat/${crypto.randomUUID()}?q=${encodeURIComponent(`Teach me about ${step.title}`)}`}
                       className="text-sm bg-primary text-primary-foreground px-3 py-1 rounded-md hover:bg-primary/90 flex items-center gap-1"
                     >
                       <MessageSquare className="w-3 h-3" /> Learn

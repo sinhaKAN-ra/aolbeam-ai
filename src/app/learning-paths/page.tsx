@@ -140,12 +140,12 @@ export default function LearningPathsPage() {
   
   // Handle toggle step completion
   const handleToggleStep = async (stepId: string) => {
-    // Extract path ID from the element ID format: "path-{pathId}-step-{stepId}"
-    const parts = stepId.split('-');
-    if (parts.length < 4) return;
-    
-    const pathId = parts[1];
-    const actualStepId = parts[3];
+    // Parse the composite id "path-{pathId}-step-{stepId}" robustly — a naive
+    // split('-') breaks when pathId/stepId themselves contain hyphens (UUIDs).
+    const match = stepId.match(/^path-(.+)-step-(.+)$/);
+    if (!match) return;
+    const pathId = match[1];
+    const actualStepId = match[2];
     
     // Find path and step
     const pathIndex = paths.findIndex(p => p.id === pathId);
