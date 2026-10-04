@@ -63,6 +63,7 @@ export async function POST(req: Request) {
             prompt,
             temperature: 0.7,
             maxOutputTokens: 500,
+            json: true,
           });
           let problems = JSON.parse(extractJsonString(text));
           if (!Array.isArray(problems)) problems = Object.values(problems).flat();
