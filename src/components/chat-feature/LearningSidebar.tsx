@@ -180,12 +180,12 @@ export default function LearningSidebar({
               <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-1">
                 <div 
                   className="h-full bg-gradient-to-r from-orange-400 to-orange-500" 
-                  style={{ width: `${(learningPath.currentStep / learningPath.totalSteps) * 100}%` }}
+                  style={{ width: `${(learningPath.current_step / learningPath.total_steps) * 100}%` }}
                 ></div>
               </div>
               <div className="flex items-center justify-between text-xs text-gray-500">
-                <span>Step {learningPath.currentStep} of {learningPath.totalSteps}</span>
-                <span>{Math.round((learningPath.currentStep / learningPath.totalSteps) * 100)}% Complete</span>
+                <span>Step {learningPath.current_step} of {learningPath.total_steps}</span>
+                <span>{Math.round((learningPath.current_step / learningPath.total_steps) * 100)}% Complete</span>
               </div>
             </div>
 
@@ -196,7 +196,7 @@ export default function LearningSidebar({
                 <div className="flex items-center gap-2 mb-1">
                   <BookOpen className="w-4 h-4 text-orange-500" />
                   <h5 className="font-medium text-gray-800">
-                    {learningPath.steps[learningPath.currentStep - 1]?.title || learningPath.title}
+                    {learningPath.steps[learningPath.current_step - 1]?.title || learningPath.title}
                   </h5>
                 </div>
                 <p className="text-xs text-gray-600 ml-6">Active learning session</p>

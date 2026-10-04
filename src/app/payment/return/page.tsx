@@ -9,8 +9,8 @@ import Link from 'next/link';
 
 function PaymentReturnContent() {
   const searchParams = useSearchParams();
-  const orderId = searchParams.get('order_id');
-  const status = searchParams.get('status');
+  const orderId = searchParams?.get('order_id');
+  const status = searchParams?.get('status');
 
   if (!orderId || !status) {
     return (

@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 function ErrorContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const error = searchParams.get('error');
+  const error = searchParams?.get('error');
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
