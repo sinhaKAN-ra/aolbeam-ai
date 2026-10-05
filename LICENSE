@@ -1,0 +1,48 @@
+Aolbeam AI — Proprietary Software License
+Copyright (c) 2026 Karan Sinha. All Rights Reserved.
+
+1. OWNERSHIP
+   This software, including all source code, documentation, designs, assets,
+   and associated materials (collectively, the "Software"), is the exclusive
+   property of Karan Sinha (the "Owner"). The Software is protected by
+   copyright law and international treaties. All rights not expressly granted
+   herein are reserved by the Owner.
+
+2. NO LICENSE GRANTED
+   No license, right, or permission of any kind is granted to any person or
+   entity by the mere availability of this Software (including via a public
+   source-code repository). Public visibility of the source code does NOT
+   place it in the public domain and does NOT grant any usage rights.
+
+3. PROHIBITED WITHOUT PRIOR WRITTEN PERMISSION
+   You may NOT, without the Owner's prior express written permission:
+     (a) copy, clone, download, or reproduce the Software in whole or in part;
+     (b) use, run, deploy, or host the Software for any purpose;
+     (c) modify, adapt, translate, or create derivative works from it;
+     (d) distribute, publish, sublicense, sell, rent, lease, or transfer it;
+     (e) remove or alter this license or any copyright/ownership notice;
+     (f) use the Software's code, structure, or design to train, fine-tune,
+         or build any machine-learning model or competing product.
+
+4. VIEWING
+   Viewing the source code where the Owner has chosen to make the repository
+   publicly readable is permitted solely for reference and evaluation. This
+   permission to view confers none of the rights withheld in Section 3.
+
+5. REQUESTING PERMISSION
+   To obtain permission for any use, contact the Owner in writing. Any grant
+   must be explicit, in writing, and signed by the Owner; silence or inaction
+   is not consent. Permissions granted are limited to their written scope and
+   are revocable.
+
+6. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   OWNER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM,
+   OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+7. TERMINATION
+   Any use in breach of this license automatically and immediately terminates
+   any permission the Owner may have granted, without notice, and the Owner
+   reserves all legal and equitable remedies.

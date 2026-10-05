@@ -87,3 +87,11 @@ Deeper notes live in [`docs/`](./docs):
 See `docs/RESUME.md` → Known Issues. In short: a batch of pre-existing `tsc` errors
 remain in the payment/subscription stack (documented, not regressions from recent work);
 the app runs on the dev server, which is more lenient than strict `tsc`.
+
+## License
+
+**Proprietary — All Rights Reserved.** Copyright © 2026 Karan Sinha.
+
+This is **not** open-source software. The repository is public for reference only.
+You may **not** copy, use, deploy, modify, or redistribute any part of it without
+the owner's prior written permission. See [`LICENSE`](./LICENSE) for the full terms.

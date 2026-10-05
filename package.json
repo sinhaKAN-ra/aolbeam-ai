@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "description": "Aolbeam AI — an AI-powered learning platform with a tutor chat, AI problem generation and evaluation, and AI-generated learning paths. Built on Next.js 15, Supabase, and a multi-provider AI fallback chain (Groq → Gemini → OpenAI).",
+  "author": "Karan Sinha",
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "dev": "next dev --turbopack -p 9002",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
