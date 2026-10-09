@@ -12,8 +12,9 @@ export async function GET(request: Request) {
     const code = requestUrl.searchParams.get('code');
     const error = requestUrl.searchParams.get('error');
     const errorDescription = requestUrl.searchParams.get('error_description');
-    const state = requestUrl.searchParams.get('state');
-    const redirectTo = requestUrl.searchParams.get('redirectTo') || '/';
+    const cookieStore = await cookies();
+    const storedReturnPath = cookieStore.get('aolbeam-auth-next')?.value;
+    const redirectTo = requestUrl.searchParams.get('redirectTo') || (storedReturnPath ? decodeURIComponent(storedReturnPath) : '/');
 
     // Handle OAuth errors
     if (error) {
@@ -30,7 +31,6 @@ export async function GET(request: Request) {
       );
     }
 
-    const cookieStore = cookies();
     const supabase = await createSupabaseServerClient();
 
     // Exchange the code for a session
@@ -50,29 +50,17 @@ export async function GET(request: Request) {
       );
     }
 
-    // Handle localhost redirects in development
-    let redirectUrl = redirectTo;
-    const isLocalhost = requestUrl.hostname === 'localhost' || requestUrl.hostname === '127.0.0.1';
-    
-    if (isLocalhost && redirectTo.startsWith('http')) {
-      const url = new URL(redirectTo);
-      url.hostname = 'localhost';
-      url.port = requestUrl.port;
-      redirectUrl = url.toString();
-    } else if (!redirectTo.startsWith('http')) {
-      redirectUrl = `${requestUrl.origin}${redirectTo}`;
+    // Keep the post-login redirect on the same origin as the completed login.
+    const destination = new URL(redirectTo, requestUrl.origin);
+    const safeDestination = destination.origin === requestUrl.origin ? destination : new URL('/', requestUrl.origin);
+    // Returning to login/signup would immediately redirect again; go home instead.
+    if (['/login', '/signup', '/auth/callback'].includes(safeDestination.pathname)) {
+      safeDestination.pathname = '/';
+      safeDestination.search = '';
     }
-    
-    // Create a response that will redirect the user
-    const response = NextResponse.redirect(redirectUrl);
-    
-    // Set the session cookie
-    response.cookies.set('sb-auth-token', session.access_token, {
-      path: '/',
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 24 * 7, // 1 week
-    });
+    const response = NextResponse.redirect(safeDestination);
+    response.cookies.delete('aolbeam-auth-next');
+    // The Supabase SSR client sets its project-specific session cookies during exchange.
 
     return response;
   } catch (error) {

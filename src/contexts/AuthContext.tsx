@@ -105,31 +105,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithGoogle = useCallback(async () => {
     try {
       setIsLoading(true);
-      // Always use localhost for development
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const origin = isLocalhost 
-        ? `http://localhost:${window.location.port || 9002}`
-        : window.location.origin;
-      const redirectTo = `${origin}/auth/callback`;
-      
-      // Generate a random state parameter for security
-      const state = Math.random().toString(36).substring(7);
-      
-      // Store the state in sessionStorage before the OAuth flow starts
-      sessionStorage.setItem('oauth_state', state);
-      
-      // Get the current path to redirect back after sign in
-      const redirectAfterSignIn = window.location.pathname + window.location.search;
-      
-      // Create a URLSearchParams object to handle the state parameter
-      const searchParams = new URLSearchParams();
-      searchParams.set('state', state);
-      searchParams.set('redirectTo', redirectAfterSignIn);
-      
+      // Keep this URL identical to the Supabase redirect allow-list entry.
+      const redirectTo = `${window.location.origin}/auth/callback`;
+      const returnPath = window.location.pathname + window.location.search;
+      document.cookie = `aolbeam-auth-next=${encodeURIComponent(returnPath)}; Path=/; Max-Age=600; SameSite=Lax${window.location.protocol === 'https:' ? '; Secure' : ''}`;
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${redirectTo}?${searchParams.toString()}`,
+          redirectTo,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -141,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         console.error('AuthProvider: Google sign in error:', error);
         // Clean up the state on error
-        sessionStorage.removeItem('oauth_state');
+        document.cookie = 'aolbeam-auth-next=; Path=/; Max-Age=0; SameSite=Lax';
         toast({
           title: 'Sign in failed',
           description: error.message,
