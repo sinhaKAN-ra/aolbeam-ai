@@ -1,48 +1,29 @@
-Aolbeam AI — Proprietary Software License
-Copyright (c) 2026 Karan Sinha. All Rights Reserved.
+BSD 3-Clause License
 
-1. OWNERSHIP
-   This software, including all source code, documentation, designs, assets,
-   and associated materials (collectively, the "Software"), is the exclusive
-   property of Karan Sinha (the "Owner"). The Software is protected by
-   copyright law and international treaties. All rights not expressly granted
-   herein are reserved by the Owner.
+Copyright (c) 2026, Karan Sinha
+All rights reserved.
 
-2. NO LICENSE GRANTED
-   No license, right, or permission of any kind is granted to any person or
-   entity by the mere availability of this Software (including via a public
-   source-code repository). Public visibility of the source code does NOT
-   place it in the public domain and does NOT grant any usage rights.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
 
-3. PROHIBITED WITHOUT PRIOR WRITTEN PERMISSION
-   You may NOT, without the Owner's prior express written permission:
-     (a) copy, clone, download, or reproduce the Software in whole or in part;
-     (b) use, run, deploy, or host the Software for any purpose;
-     (c) modify, adapt, translate, or create derivative works from it;
-     (d) distribute, publish, sublicense, sell, rent, lease, or transfer it;
-     (e) remove or alter this license or any copyright/ownership notice;
-     (f) use the Software's code, structure, or design to train, fine-tune,
-         or build any machine-learning model or competing product.
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
 
-4. VIEWING
-   Viewing the source code where the Owner has chosen to make the repository
-   publicly readable is permitted solely for reference and evaluation. This
-   permission to view confers none of the rights withheld in Section 3.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
 
-5. REQUESTING PERMISSION
-   To obtain permission for any use, contact the Owner in writing. Any grant
-   must be explicit, in writing, and signed by the Owner; silence or inaction
-   is not consent. Permissions granted are limited to their written scope and
-   are revocable.
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
 
-6. NO WARRANTY
-   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-   OWNER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM,
-   OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
-
-7. TERMINATION
-   Any use in breach of this license automatically and immediately terminates
-   any permission the Owner may have granted, without notice, and the Owner
-   reserves all legal and equitable remedies.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

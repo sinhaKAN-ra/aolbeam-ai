@@ -1,5 +1,13 @@
 # Resume / Handoff — aolbeam-ai chat & learning rebuild
 
+## Profile update — 2026-10-09
+
+- Rebuilt `src/app/profile/dashboard.tsx` around saved practice, evaluated-answer accuracy, tutor messages and links to the three active features. Removed its dependency on subscription/payment UI and unavailable profile-stat columns.
+- Replaced the missing-hook import in `components/usage/SubscriptionStatus.tsx` with the existing `useFeatureAccess` API. Usage limits come from `config/limits.ts`; hidden test usage is gated by feature flags. Removed the pricing-page dependency from the hook.
+- Profile settings now edit the supported `full_name` field and support sign-out. Removed unimplemented notifications/account deletion and billing controls from settings. Saving invalidates dashboard data.
+- Profile practice history counts the correct table, filters saved practice problems, handles failures with retry, labels unevaluated problems correctly, and reviews answers/feedback inline instead of linking to nonexistent `/practice/:id` pages.
+- Verified signed-in dashboard and saved problem in Brave, settings save using the existing name, and history/inline review. Strict typecheck now has 42 remaining pre-existing errors, none in these changed files. No payment-service code changed.
+
 ## Supabase setup update — 2026-10-09
 
 - New project: **aolbeam2026**, ref `ooymzqrqlovuhdsghqyq` (Singapore). CLI linked; `.env.local` now uses its URL, project ID, anon key and server-only service-role key. No secrets are stored here.
