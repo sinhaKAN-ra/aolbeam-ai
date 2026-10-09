@@ -20,7 +20,7 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: Request) {
   // --- Auth (optional: guests get a client-tracked free trial) ---
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

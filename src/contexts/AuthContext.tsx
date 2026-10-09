@@ -28,42 +28,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log('AuthProvider: Initializing auth state');
     let mounted = true;
 
-    const getInitialSession = async () => {
-      try {
-        console.log('AuthProvider: Getting initial session');
-        const { data: { user: initialUser }, error } = await supabase.auth.getUser();
-        
-        if (error) {
-          console.error('AuthProvider: Error getting initial session:', error);
-          throw error;
-        }
-        
-        console.log('AuthProvider: Initial session:', initialUser ? {
-          user: initialUser?.email,
-        } : 'Not found');
-
-        if (mounted) {
-          if (initialUser) {
-            setUser(initialUser);
-          } else {
-            setUser(null);
-          }
-          setIsLoading(false);
-        }
-      } catch (error) {
-        console.error('AuthProvider: Error getting initial session:', error);
-        if (mounted) {
-          setUser(null);
-          setIsLoading(false);
-        }
-      }
-    };
-
-    getInitialSession();
-
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session: Session | null) => {
+      (event, session: Session | null) => {
         console.log('AuthProvider: Auth state changed:', {
           event,
           user: session?.user?.email,
@@ -74,7 +41,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(session.user);
           } else {
             setUser(null);
-            setUser(null);
           }
           setIsLoading(false);
 
@@ -84,7 +50,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             router.refresh();
           } else if (event === 'SIGNED_OUT') {
             console.log('AuthProvider: User signed out, clearing state');
-            setUser(null);
             setUser(null);
             router.refresh();
           } else if (event === 'TOKEN_REFRESHED') {
@@ -156,7 +121,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Clear user data from state
       setUser(null);
-      setUser(null);
       
       // Clear local storage data
       localStorage.removeItem('aolbeamGuestInteractionCount');
@@ -180,7 +144,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: { user: newUser }, error } = await supabase.auth.getUser();
       if (error) throw error;
       
-      setUser(newUser);
       setUser(newUser);
       return newUser;
     } catch (error) {

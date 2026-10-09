@@ -1,4 +1,4 @@
-import { createServerClient as createSupabaseServerClientInternal, type CookieOptions } from '@supabase/ssr';
+import { createServerClient as createSupabaseServerClientInternal } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 export async function createSupabaseServerClient(useServiceRole = false) {
@@ -17,25 +17,14 @@ export async function createSupabaseServerClient(useServiceRole = false) {
     supabaseKey,
     {
       cookies: {
-        get(name: string) {
-          return (cookieStore as any).get(name)?.value;
+        getAll() {
+          return cookieStore.getAll();
         },
-        set(name: string, value: string, options: CookieOptions) {
+        setAll(cookiesToSet) {
           try {
-            (cookieStore as any).set({ name, value, ...options });
-          } catch (error) {
-            // The `set` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
-          }
-        },
-        remove(name: string, options: CookieOptions) {
-          try {
-            (cookieStore as any).set({ name, value: '', ...options });
-          } catch (error) {
-            // The `delete` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
+            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+          } catch {
+            // Server Components cannot write cookies; middleware refreshes them.
           }
         },
       },

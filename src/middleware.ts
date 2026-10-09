@@ -1,3 +1,4 @@
+import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { FEATURES, isHiddenRoute } from '@/config/features';
@@ -25,7 +26,7 @@ const publicPaths = [
   '/((?!_next).*)',
 ];
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   // Redirect deep links to hidden (not-yet-launched) features back home.
   const pathname = req.nextUrl.pathname;
   if (!FEATURES.payments && (
@@ -38,54 +39,41 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/', req.nextUrl.origin));
   }
 
-  // Skip middleware for public paths
-  const path = req.nextUrl.pathname;
-  if (publicPaths.some(p => 
-    p.endsWith('/*') ? path.startsWith(p.slice(0, -2)) : path === p
-  )) {
-    return NextResponse.next();
-  }
-
-  // Check for Supabase auth session.
-  // The auth cookie is named `sb-<project-ref>-auth-token`, where <project-ref>
-  // is the subdomain of NEXT_PUBLIC_SUPABASE_URL. Derive it from env so nothing
-  // is hardcoded (survives a Supabase project change). Falls back to a generic
-  // `sb-` prefix if the URL is missing/malformed.
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const projectRef = supabaseUrl.match(/^https?:\/\/([^.]+)\./)?.[1];
-  const cookieBaseName = projectRef ? `sb-${projectRef}-auth-token` : 'sb-';
-  const allCookies = req.cookies.getAll();
-  
-  // Check for any cookie that starts with the base name
-  const hasAuthCookie = allCookies.some(cookie => 
-    cookie.name.startsWith(cookieBaseName)
-  );
-  
-  // Debug logging
-  console.log('=== Middleware Debug ===');
-  console.log('Request URL:', req.url);
-  console.log('All cookies:', allCookies.map(c => ({
-    name: c.name,
-    value: c.value.length > 50 ? c.value.substring(0, 50) + '...' : c.value
-  })));
-  console.log('Looking for cookie base:', cookieBaseName);
-  console.log('Has auth cookie:', hasAuthCookie);
-  console.log('=======================');
-
-  // If no auth cookie, redirect to login with return URL
-  if (!hasAuthCookie) {
-    // Skip auth check for API routes
-    if (req.nextUrl.pathname.startsWith('/api/')) {
-      return NextResponse.next();
+  // Refresh sessions for public pages too, and send rotated cookies to both
+  // the browser and the server rendering this request.
+  let response = NextResponse.next({ request: req });
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => req.cookies.getAll(),
+        setAll: cookiesToSet => {
+          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
+          response = NextResponse.next({ request: req });
+          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+          response.headers.set('Cache-Control', 'private, no-store');
+        },
+      },
     }
-    
-    console.log('No auth cookie found, redirecting to login');
+  );
+  const { data: { user }, error } = await supabase.auth.getUser();
+  const isPublic = publicPaths.some(p =>
+    p.endsWith('/*') ? pathname.startsWith(p.slice(0, -2)) : pathname === p
+  );
+  if (!user && !isPublic && !pathname.startsWith('/api/')) {
+    // A temporary auth-server outage should not discard a persisted session.
+    if (error && (error.status === 0 || (error.status ?? 0) >= 500 || error.name === 'AuthRetryableFetchError')) {
+      return response;
+    }
     const loginUrl = new URL('/login', req.nextUrl.origin);
-    loginUrl.searchParams.set('redirectedFrom', req.nextUrl.pathname);
-    return NextResponse.redirect(loginUrl);
+    loginUrl.searchParams.set('redirect', pathname + req.nextUrl.search);
+    const redirect = NextResponse.redirect(loginUrl);
+    response.cookies.getAll().forEach(cookie => redirect.cookies.set(cookie));
+    redirect.headers.set('Cache-Control', 'private, no-store');
+    return redirect;
   }
-
-  return NextResponse.next();
+  return response;
 }
 
 // Specify which routes should be handled by the middleware

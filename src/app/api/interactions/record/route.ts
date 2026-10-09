@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     
     // Get current user
     const { data: { user }, error: userError } = await (await supabase).auth.getUser();

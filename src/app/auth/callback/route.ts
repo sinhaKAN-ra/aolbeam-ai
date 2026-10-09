@@ -1,6 +1,6 @@
 // src/app/auth/callback/route.ts
 
-import { createSupabaseServerClient } from '@/lib/supabaseServer';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
@@ -31,7 +31,21 @@ export async function GET(request: Request) {
       );
     }
 
-    const supabase = await createSupabaseServerClient();
+    // Attach every session cookie directly to the redirect response.
+    const response = NextResponse.redirect(new URL('/', requestUrl.origin));
+    response.headers.set('Cache-Control', 'private, no-store');
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll: () => cookieStore.getAll(),
+          setAll: cookiesToSet => {
+            cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+          },
+        },
+      }
+    );
 
     // Exchange the code for a session
     const { data: { session }, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
@@ -58,7 +72,7 @@ export async function GET(request: Request) {
       safeDestination.pathname = '/';
       safeDestination.search = '';
     }
-    const response = NextResponse.redirect(safeDestination);
+    response.headers.set('Location', safeDestination.toString());
     response.cookies.delete('aolbeam-auth-next');
     // The Supabase SSR client sets its project-specific session cookies during exchange.
 

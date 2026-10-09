@@ -5,7 +5,7 @@ import { ProblemType, DifficultyLevel } from '@/types'; // Corrected import path
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(request: Request) {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   console.log('Authenticated user:', user);
 

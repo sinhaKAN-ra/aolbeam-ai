@@ -44,7 +44,7 @@ async function getUserUsage(userId: string, planId: string) {
 // GET handler to fetch current user's usage data
 export async function GET() {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     
     // Get current user
     const { data: { user } } = await supabase.auth.getUser();
@@ -94,7 +94,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { feature } = await request.json();
 
     if (!['chat', 'test_creation'].includes(feature)) {

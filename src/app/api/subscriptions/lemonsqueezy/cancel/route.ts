@@ -5,7 +5,7 @@ const LEMONSQUEEZY_API_KEY = process.env.LEMONSQUEEZY_API_KEY;
 
 export async function POST(request: Request) {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data: { user }, error: authError } = await (await supabase).auth.getUser();
 
     if (authError || !user) {

@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: Request) {
   // Auth optional — guests can expand too (chat itself is guest-allowed).
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   await supabase.auth.getUser().catch(() => null);
 
   const { topic } = await request.json().catch(() => ({ topic: '' }));
