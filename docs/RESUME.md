@@ -1,5 +1,16 @@
 # Resume / Handoff — aolbeam-ai chat & learning rebuild
 
+## Supabase setup update — 2026-10-09
+
+- New project: **aolbeam2026**, ref `ooymzqrqlovuhdsghqyq` (Singapore). CLI linked; `.env.local` now uses its URL, project ID, anon key and server-only service-role key. No secrets are stored here.
+- Initialized `supabase/config.toml`. Applied the 12 existing migrations plus `20261009000000_complete_interaction_history.sql`.
+- Fresh-project migration fixes: generated dates use explicit UTC; UUID defaults use built-in `gen_random_uuid()` so extension search paths do not break setup.
+- Added missing problem-history fields and owner-only interaction RLS; removed the per-user/type/day unique constraint so repeated chat/problem events can be recorded.
+- Supabase Auth Site URL: `http://localhost:9002`; allowed redirect: `http://localhost:9002/auth/callback`. Fixed app OAuth callback to preserve the incoming port instead of defaulting to 3000.
+- Verified core table REST reads with the server key, auth settings with the anon key, homepage HTTP 200, and the logged-out interaction-check response. Full signed-in flow still needs user verification.
+- **Google configured:** user entered OAuth credentials and enabled the provider. Verified auth settings report Google enabled and OAuth authorization returns HTTP 302 to accounts.google.com with the new Supabase callback. User confirmed browser Google sign-in works locally. Google Cloud authorized redirect URI must be `https://ooymzqrqlovuhdsghqyq.supabase.co/auth/v1/callback`. Add production app URLs in Supabase when deploying. Old-project data has not been migrated.
+- Strict typecheck still has 44 pre-existing errors; payment code was not modified.
+
 _Session: 2026-10-04. Branch `feat/ai-fallback-and-simplify`, merged into `master` (local only, NOT pushed)._
 
 ## TL;DR — where we are

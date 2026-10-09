@@ -1,13 +1,13 @@
--- Enable the uuid-ossp extension for uuid_generate_v4()
+-- Retain the legacy UUID extension; defaults use built-in gen_random_uuid().
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create user_interactions table
 CREATE TABLE IF NOT EXISTS public.user_interactions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   interaction_type TEXT NOT NULL, -- 'evaluate' or 'insight'
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  created_date DATE GENERATED ALWAYS AS (created_at::date) STORED,
+  created_date DATE GENERATED ALWAYS AS ((created_at AT TIME ZONE 'UTC')::date) STORED,
   UNIQUE(user_id, interaction_type, created_date)
 );
 

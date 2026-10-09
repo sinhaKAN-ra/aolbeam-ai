@@ -57,10 +57,10 @@ export async function GET(request: Request) {
     if (isLocalhost && redirectTo.startsWith('http')) {
       const url = new URL(redirectTo);
       url.hostname = 'localhost';
-      url.port = process.env.PORT || '3000';
+      url.port = requestUrl.port;
       redirectUrl = url.toString();
     } else if (!redirectTo.startsWith('http')) {
-      redirectUrl = `${isLocalhost ? `http://localhost:${process.env.PORT || '3000'}` : requestUrl.origin}${redirectTo}`;
+      redirectUrl = `${requestUrl.origin}${redirectTo}`;
     }
     
     // Create a response that will redirect the user

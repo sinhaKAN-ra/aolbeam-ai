@@ -1,6 +1,6 @@
 -- Create chat_sessions table
 CREATE TABLE IF NOT EXISTS public.chat_sessions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS public.chat_sessions (
 
 -- Create chat_messages table
 CREATE TABLE IF NOT EXISTS public.chat_messages (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id UUID REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),

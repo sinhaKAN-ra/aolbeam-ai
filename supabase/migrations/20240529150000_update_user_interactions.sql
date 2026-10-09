@@ -15,7 +15,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                    WHERE table_name = 'user_interactions' AND column_name = 'created_date') THEN
         ALTER TABLE public.user_interactions 
-        ADD COLUMN created_date DATE GENERATED ALWAYS AS (created_at::date) STORED;
+        ADD COLUMN created_date DATE GENERATED ALWAYS AS ((created_at AT TIME ZONE 'UTC')::date) STORED;
     END IF;
 END
 $$;

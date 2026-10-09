@@ -5,7 +5,7 @@ BEGIN
   IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'test_series_shares') THEN
     -- Create test_series_shares table to track test series shared with users
     CREATE TABLE test_series_shares (
-      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       test_series_id UUID NOT NULL REFERENCES test_series(id) ON DELETE CASCADE,
       shared_with_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
       shared_by_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,

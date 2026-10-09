@@ -1,13 +1,12 @@
--- STEP 0: Ensure uuid-ossp extension is available for uuid_generate_v4()
--- This MUST be run successfully before creating tables that use uuid_generate_v4().
--- In Supabase, you typically enable this via the "Extensions" tab in the dashboard.
+-- STEP 0: Retain the legacy UUID extension.
+-- Table defaults use built-in gen_random_uuid() and do not depend on its search path.
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 ---
 
 -- STEP 1: Create test series table
 CREATE TABLE test_series (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   title TEXT NOT NULL,
@@ -23,7 +22,7 @@ CREATE TABLE test_series (
 
 -- STEP 2: Create test_series_problems table to store problems in a test series
 CREATE TABLE test_series_problems (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   test_series_id UUID NOT NULL,
   CONSTRAINT fk_test_series FOREIGN KEY (test_series_id) REFERENCES test_series(id) ON DELETE CASCADE,
   problem_statement TEXT NOT NULL,
@@ -42,7 +41,7 @@ CREATE TABLE test_series_problems (
 
 -- STEP 3: Create test_series_shares table to track shared tests
 CREATE TABLE test_series_shares (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   test_series_id UUID NOT NULL REFERENCES test_series(id) ON DELETE CASCADE,
   shared_with_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   shared_by_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -54,7 +53,7 @@ CREATE TABLE test_series_shares (
 
 -- STEP 4: Create test_attempts table to track user attempts
 CREATE TABLE test_attempts (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   test_series_id UUID NOT NULL REFERENCES test_series(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -69,7 +68,7 @@ CREATE TABLE test_attempts (
 
 -- STEP 5: Create test_problem_responses table to store user responses to each problem
 CREATE TABLE test_problem_responses (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   test_attempt_id UUID NOT NULL REFERENCES test_attempts(id) ON DELETE CASCADE,
   test_problem_id UUID NOT NULL,
   CONSTRAINT fk_test_series_problem FOREIGN KEY (test_problem_id) REFERENCES test_series_problems(id) ON DELETE CASCADE,

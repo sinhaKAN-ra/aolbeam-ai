@@ -23,15 +23,15 @@ npx supabase init          # creates supabase/config.toml (commit it)
 npx supabase link --project-ref <new-ref>   # prompts for the DB password
 npx supabase db push       # applies all migrations in supabase/migrations/
 ```
-This runs all 12 migrations, **including** `20251004000000_create_user_profiles.sql` (added this session — the app reads `user_profiles` but no migration existed; without it `/api/interactions/check` 500s).
+This runs all 13 migrations, **including** `20251004000000_create_user_profiles.sql` and `20261009000000_complete_interaction_history.sql` (history columns, repeated interaction records and owner-only RLS).
 
 ## 4. Google OAuth (NOT in migrations — must redo)
 Dashboard → **Authentication → Providers → Google**:
 - Enable it, paste your Google **Client ID** + **Client Secret** (from Google Cloud Console → OAuth credentials).
-- Authorised redirect URLs must include:
+- Supabase **Authentication → URL Configuration**: set Site URL to `http://localhost:9002` for local development. Redirect URLs must include:
   - `http://localhost:9002/auth/callback`
   - your production URL's `/auth/callback` when you deploy
-- In Google Cloud Console, add the same redirect URIs to the OAuth client.
+- In Google Cloud Console, add `https://<new-ref>.supabase.co/auth/v1/callback` to the OAuth client's **Authorized redirect URIs**. This is Supabase's callback, separate from the app's `/auth/callback` above.
 
 ## 5. Middleware auth cookie (now automatic)
 `src/middleware.ts` derives the Supabase auth cookie name (`sb-<project-ref>-auth-token`)
