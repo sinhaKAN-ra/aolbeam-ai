@@ -10,6 +10,7 @@ const publicPaths = [
   '/login',
   '/signup',
   '/auth/callback',
+  '/auth/error',
   '/pricing',
   '/about',
   '/contact-us',
@@ -89,4 +90,4 @@ export const config = {
      */
     '/((?!_next/static|_next/image|favicon.ico|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
-}; 
+};
