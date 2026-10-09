@@ -1,461 +1,74 @@
-// src/app/profile/dashboard.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { formatDistanceToNow } from 'date-fns';
+import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
-
-// Auth and Data
+import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { BookOpen, MessageSquare, ArrowRight, RefreshCw, Settings } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import supabaseClient from '@/lib/supabase/client';
-import type { Subscription, UsageMetrics, PlanLimit, Payment } from '@/services/subscriptionService';
-import { getUserUsageMetrics, getSubscriptionPlan, getPaymentHistory } from '@/services/subscriptionService';
-import { useToast } from '@/hooks/use-toast';
-
-// UI Components
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { useSupabase } from '@/hooks/useSupabase';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { SubscriptionStatus } from '@/components/usage/SubscriptionStatus';
-import {
-  BarChart2,
-  BookOpen,
-  CheckCircle,
-  Clock,
-  CreditCard,
-  Sparkles,
-  Zap,
-  UserCircle,
-  ArrowRight
-} from 'lucide-react';
-
-// Types for user profile and stats
-interface UserProfile {
-  id: string;
-  email?: string;
-  full_name?: string;
-  avatar_url?: string;
-  created_at: string;
-  updated_at?: string;
-  total_questions?: number;
-  correct_answers?: number;
-  average_time?: number;
-  accuracy?: number;
-  is_subscribed?: boolean;
-  subscription_plan?: string | null;
-  last_active?: string | null; // Added last_active field
-}
-
-interface Stats {
-  totalQuestions: number;
-  correctAnswers: number;
-  averageTime: number;
-  accuracy: number;
-  topics: Array<{ name: string; count: number }>;
-  lastActive: string;
-}
+import { Skeleton } from '@/components/ui/skeleton';
+import ChatMarkdown from '@/components/chat-feature/ChatMarkdown';
 
 export default function Dashboard() {
-  const router = useRouter();
-  const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
-  const [isLoading, setIsLoading] = useState(true);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [currentPlan, setCurrentPlan] = useState<PlanLimit | null>(null);
-  const [isSubscriptionLoading, setIsSubscriptionLoading] = useState(true);
-  const [usageMetrics, setUsageMetrics] = useState<UsageMetrics | null>(null);
-  const [isUsageLoading, setIsUsageLoading] = useState(true);
-  const [usageError, setUsageError] = useState<string | null>(null);
-  const [hasOneTimePayment, setHasOneTimePayment] = useState(false); // New state for one-time payments
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [stats, setStats] = useState<Stats | null>(null);
-
+  const supabase = useSupabase();
+  const router = useRouter();
+  const chatHref = useMemo(() => `/chat/${crypto.randomUUID()}`, [user?.id]);
   useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        router.push('/login?redirect=/profile');
-        return;
-      }
-      
-      fetchProfileAndStats();
-    }
-  }, [user, authLoading, router]);
+    if (!authLoading && !user) router.replace('/login?redirect=/profile');
+  }, [authLoading, user, router]);
 
-  const fetchProfileAndStats = useCallback(async () => {
-    if (!user?.id) {
-      console.error('No user ID available');
-      return;
-    }
-    
-    setIsLoading(true);
-    try {
-      // First try to get the user's profile
-      const { data, error } = await supabaseClient.from('user_profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      // Handle profile data
-      if (error) {
-        console.error('Error getting profile:', error);
-        // Set a default profile if one doesn't exist
-        setProfile({
-          id: user.id,
-          full_name: user.user_metadata?.full_name || 'User',
-          email: user.email,
-          avatar_url: user.user_metadata?.avatar_url,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          is_subscribed: false,
-          subscription_plan: null
-        });
-      } else {
-        setProfile(data as UserProfile);
-      }
-
-      // Fetch real stats from user_profiles
-      const fetchedStats: Stats = {
-        totalQuestions: data?.total_questions || 0,
-        correctAnswers: data?.correct_answers || 0,
-        averageTime: data?.average_time || 0,
-        accuracy: data?.accuracy || 0,
-        topics: [], // Will fetch real topics below
-        lastActive: data?.last_active ? formatDistanceToNow(new Date(data.last_active), { addSuffix: true }) : 'N/A',
-      };
-
-      // Fetch topic-wise performance from user_interactions
-      const { data: interactionData, error: interactionError } = await supabaseClient
-        .from('user_interactions')
-        .select('interaction_type')
-        .eq('user_id', user.id);
-
-      if (interactionError) {
-        console.error('Error fetching interaction data:', interactionError.message);
-      } else if (interactionData) {
-        const topicCounts: { [key: string]: number } = {};
-        interactionData.forEach((item: any) => {
-          if (item.interaction_type) {
-            topicCounts[item.interaction_type] = (topicCounts[item.interaction_type] || 0) + 1;
-          }
-        });
-        fetchedStats.topics = Object.entries(topicCounts)
-          .map(([name, count]) => ({ name, count }))
-          .sort((a, b) => b.count - a.count);
-      }
-
-      setStats(fetchedStats);
-
-      // Now fetch the subscription data and usage metrics
-      await fetchSubscriptionAndUsage();
-    } catch (error) {
-      console.error('Error fetching profile and stats:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load profile data',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user, toast]);
-
-  const fetchSubscriptionAndUsage = async () => {
-    if (!user) {
-      return;
-    }
-    
-    // Get subscription data
-    setIsSubscriptionLoading(true);
-    setIsUsageLoading(true);
-    setUsageError(null);
-    
-    try {
-      // Get subscription and plan info from supabase directly
-      const { data: subData, error: subError } = await supabaseClient.from('subscriptions')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('status', 'ACTIVE')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      
-      if (subError) {
-        console.error('Error fetching subscription:', subError);
-        // Do not return here, continue to fetch payment history
-      }
-      
-      setSubscription(subData as unknown as Subscription);
-      console.log('Dashboard: fetchSubscriptionAndUsage: subscription data', subData);
-
-      // Fetch payment history to check for one-time payments
-      try {
-        const payments: Payment[] = await getPaymentHistory();
-        const oneTimeSuccess = payments.some(
-          (p) => p.subscription_id === null && p.status?.toLowerCase() === 'success'
-        );
-        setHasOneTimePayment(oneTimeSuccess);
-        console.log('Dashboard: fetchSubscriptionAndUsage: payment history', payments);
-        console.log('Dashboard: fetchSubscriptionAndUsage: hasOneTimePayment calculated as', oneTimeSuccess);
-      } catch (paymentsErr) {
-        console.error('Dashboard: Error loading payment history:', paymentsErr);
-      }
-
-      // Get usage metrics
-      try {
-        const metrics = await getUserUsageMetrics();
-        setUsageMetrics(metrics);
-      } catch (usageError) {
-        setUsageError('Failed to load usage metrics');
-        console.error('Dashboard: Error fetching usage metrics:', usageError);
-      } finally {
-        setIsUsageLoading(false);
-      }
-      
-      // Get current plan details
-      if (subData?.plan_id) {
-        const plan = await getSubscriptionPlan(subData.plan_id);
-        setCurrentPlan(plan);
-      }
-      
-      setIsSubscriptionLoading(false);
-    } catch (error) {
-      console.error('Error fetching subscription and usage:', error);
-      setIsSubscriptionLoading(false);
-      setIsUsageLoading(false);
-    }
-  };
-
-  if (authLoading || isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[70vh]">
-        <div className="flex flex-col items-center gap-2">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-          <p className="text-sm text-muted-foreground">Loading your dashboard...</p>
-        </div>
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
+    queryKey: ['profile-overview', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const userId = user!.id;
+      const practices = () => supabase.from('user_interactions').select('*', { count: 'exact', head: true })
+        .eq('user_id', userId).eq('interaction_type', 'problem_generation').not('problem_statement', 'is', null);
+      const results = await Promise.all([
+        supabase.from('user_profiles').select('full_name').eq('id', userId).maybeSingle(),
+        practices(),
+        practices().not('evaluation_is_correct', 'is', null),
+        practices().eq('evaluation_is_correct', true),
+        supabase.from('user_interactions').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('interaction_type', 'chat'),
+        supabase.from('user_interactions').select('id, topic, problem_statement, created_at, evaluation_is_correct')
+          .eq('user_id', userId).eq('interaction_type', 'problem_generation').not('problem_statement', 'is', null)
+          .order('created_at', { ascending: false }).limit(5),
+      ]);
+      for (const result of results) if (result.error) throw new Error(result.error.message);
+      return { name: results[0].data?.full_name, generated: results[1].count ?? 0,
+        evaluated: results[2].count ?? 0, correct: results[3].count ?? 0,
+        chats: results[4].count ?? 0, recent: results[5].data ?? [] };
+    },
+  });
+  if (authLoading || !user) return <div className="py-12 text-center text-muted-foreground">Loading your profile…</div>;
+  const name = data?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Learner';
+  const accuracy = data?.evaluated ? `${Math.round(data.correct / data.evaluated * 100)}%` : '—';
+  const metrics = [
+    { label: 'Problems generated', value: data?.generated, detail: 'Saved practice problems' },
+    { label: 'Answers evaluated', value: data?.evaluated, detail: 'Submitted practice answers' },
+    { label: 'Accuracy', value: accuracy, detail: 'Correct answers / evaluated answers' },
+    { label: 'Tutor messages', value: data?.chats, detail: 'Messages sent to your AI tutor' },
+  ];
+  return <div className="mx-auto max-w-6xl space-y-8 pb-8">
+    <header className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex items-center gap-4">
+        <Avatar className="h-14 w-14"><AvatarImage src={user.user_metadata?.avatar_url} alt="" /><AvatarFallback>{String(name).slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
+        <div><p className="text-sm text-muted-foreground">Your learning space</p><h1 className="text-2xl font-semibold">{name}</h1><p className="text-sm text-muted-foreground">{user.email}</p></div>
       </div>
-    );
-  }
-
-  if (!user || !profile) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[70vh] text-center p-8">
-        <UserCircle className="h-12 w-12 text-muted-foreground mb-4"/>
-        <h2 className="text-2xl font-bold text-foreground mb-2">Access Denied</h2>
-        <p className="text-muted-foreground mb-4">Please log in to view your profile.</p>
-        <Button onClick={() => router.push('/login?redirect=/profile')}>Login / Sign Up</Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6 pb-8">
-      {/* Page header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <h2 className="text-xl font-semibold">Welcome back, {profile.full_name || 'User'}!</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={fetchProfileAndStats}>
-            <Zap className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
-          <Link href="/profile/subscriptions">
-            <Button size="sm">
-              <CreditCard className="mr-2 h-4 w-4" />
-              {profile.is_subscribed ? 'Manage Subscription' : 'Upgrade'}
-            </Button>
-          </Link>
-        </div>
-      </div>
-
-      {/* Subscription notice (for free users) */}
-      {!profile.is_subscribed && (
-        <Card className="bg-primary/5 border-primary/20">
-          <CardContent className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6">
-            <div className="flex items-start gap-4">
-              <div className="rounded-full bg-primary/10 p-2">
-                <Sparkles className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Upgrade to Premium</h3>
-                <p className="text-sm text-muted-foreground mt-1">Get unlimited access to all features and premium content.</p>
-              </div>
-            </div>
-            <Link href="/pricing">
-              <Button>View Plans</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Stats overview */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Questions</CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="px-2">
-            {isLoading ? (
-              <div className="flex flex-col space-y-2">
-                <div className="h-8 w-20 bg-gray-200 animate-pulse rounded" />
-                <div className="h-4 w-28 bg-gray-200 animate-pulse rounded" />
-              </div>
-            ) : (
-              <>
-                <div className="text-2xl font-bold">{stats?.totalQuestions || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  Total questions answered
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Correct Answers</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex flex-col space-y-2">
-                <div className="h-8 w-20 bg-gray-200 animate-pulse rounded" />
-                <div className="h-4 w-28 bg-gray-200 animate-pulse rounded" />
-              </div>
-            ) : (
-              <>
-                <div className="text-2xl font-bold">{stats?.correctAnswers || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  Total correct answers
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Accuracy</CardTitle>
-            <BarChart2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex flex-col space-y-2">
-                <div className="h-8 w-20 bg-gray-200 animate-pulse rounded" />
-                <div className="h-4 w-28 bg-gray-200 animate-pulse rounded" />
-              </div>
-            ) : (
-              <>
-                <div className="text-2xl font-bold">{stats?.accuracy !== undefined ? `${stats.accuracy.toFixed(2)}%` : 'N/A'}</div>
-                <p className="text-xs text-muted-foreground">
-                  Overall accuracy rate
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Time / Question</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex flex-col space-y-2">
-                <div className="h-8 w-20 bg-gray-200 animate-pulse rounded" />
-                <div className="h-4 w-28 bg-gray-200 animate-pulse rounded" />
-              </div>
-            ) : (
-              <>
-                <div className="text-2xl font-bold">{stats?.averageTime !== undefined ? `${stats.averageTime.toFixed(2)}s` : 'N/A'}</div>
-                <p className="text-xs text-muted-foreground">
-                  Average time spent per question
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Last Active</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {stats?.lastActive || 'N/A'}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Last active time
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent progress */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-        <Card className="col-span-1">
-          <CardHeader>
-            <CardTitle>Top Topics</CardTitle>
-            <CardDescription>Your most practiced areas</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {stats && stats.topics && stats.topics.length > 0 ? (
-                stats.topics.map((topic, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
-                        <BookOpen className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="truncate text-sm font-medium">
-                        {topic.name}
-                      </div>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {topic.count} questions
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-sm text-muted-foreground">No topics practiced yet</div>
-              )}
-            </div>
-          </CardContent>
-          <CardFooter className="border-t px-6 py-4">
-            <Link href="/" className="w-full">
-              <Button variant="outline" className="w-full">
-                Practice More Topics
-              </Button>
-            </Link>
-          </CardFooter>
-        </Card>
-
-        <div className="col-span-1 space-y-4">
-          <SubscriptionStatus />
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex flex-col space-y-4">
-                <h3 className="text-lg font-medium">Usage Analytics</h3>
-                <p className="text-sm text-muted-foreground">
-                  View detailed usage statistics and manage your subscription
-                </p>
-                <Button asChild variant="outline" className="w-full">
-                  <Link href="/account/usage">
-                    View Detailed Usage
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
+      <div className="flex gap-2"><Button variant="outline" size="sm" disabled={isFetching} onClick={() => refetch()}><RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />Refresh</Button><Button variant="outline" size="sm" asChild><Link href="/profile/settings"><Settings className="mr-2 h-4 w-4" />Settings</Link></Button></div>
+    </header>
+    {error && <div role="alert" className="rounded-lg border border-destructive/30 p-4 text-sm">Could not load your learning activity. <Button variant="link" onClick={() => refetch()}>Try again</Button></div>}
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{metrics.map(metric => <Card key={metric.label}><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">{metric.label}</CardTitle></CardHeader><CardContent>{isLoading ? <Skeleton className="h-8 w-16" /> : <p className="text-3xl font-semibold">{error ? '—' : metric.value ?? 0}</p>}<p className="mt-2 text-xs text-muted-foreground">{metric.detail}</p></CardContent></Card>)}</div>
+    <section className="grid gap-4 md:grid-cols-3" aria-label="Continue learning">
+      {[{ href: '/', title: 'Practice a problem', description: 'Generate a question and get feedback on your answer.', icon: BookOpen }, { href: chatHref, title: 'Ask your tutor', description: 'Explore a concept or work through a tricky question.', icon: MessageSquare }, { href: '/learning-paths', title: 'Learning paths', description: 'Follow a course and keep building your understanding.', icon: ArrowRight }].map(item => <Link href={item.href} key={item.href} className="rounded-xl border p-5 transition-colors hover:bg-muted/50"><item.icon className="mb-4 h-5 w-5 text-primary" /><h2 className="font-semibold">{item.title}</h2><p className="mt-2 text-sm text-muted-foreground">{item.description}</p></Link>)}
+    </section>
+    <Card><CardHeader className="flex flex-row items-center justify-between gap-4"><div><CardTitle>Recent practice</CardTitle><CardDescription>Your latest saved problems</CardDescription></div><Button variant="ghost" size="sm" asChild><Link href="/profile/history">View history<ArrowRight className="ml-2 h-4 w-4" /></Link></Button></CardHeader><CardContent>
+      {isLoading ? <Skeleton className="h-24 w-full" /> : error ? <p className="text-sm text-muted-foreground">Activity is unavailable. Try refreshing.</p> : data?.recent.length ? <div className="divide-y">{data.recent.map(item => <div key={item.id} className="py-4 first:pt-0"><div className="mb-2 flex flex-wrap justify-between gap-2 text-xs text-muted-foreground"><span>{item.topic || 'Practice'} · {new Date(item.created_at).toLocaleDateString()}</span><span>{item.evaluation_is_correct === true ? 'Correct' : item.evaluation_is_correct === false ? 'Needs review' : 'Not evaluated'}</span></div><div className="max-h-36 overflow-hidden text-sm"><ChatMarkdown content={item.problem_statement} /></div></div>)}</div> : <div className="py-6 text-center"><p className="text-muted-foreground">Your practice history starts with your first problem.</p><Button className="mt-4" asChild><Link href="/">Start practicing</Link></Button></div>}
+    </CardContent></Card>
+  </div>;
 }

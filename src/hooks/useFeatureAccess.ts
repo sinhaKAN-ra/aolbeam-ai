@@ -2,9 +2,8 @@ import { useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createSupabaseBrowserClient } from '@/lib/supabase';
-import { plans } from '@/app/pricing/page';
 import { SubscriptionPlan } from '@/types';
-import { CHAT_LIMITS, AI_GENERATION_LIMITS, TEST_CREATION_LIMITS } from '@/config/limits';
+import { CHAT_LIMITS, AI_GENERATION_LIMITS, TEST_CREATION_LIMITS, chatLimitFor } from '@/config/limits';
 
 // Define the structure of the usage data from the API
 export type UsageData = {
@@ -137,10 +136,9 @@ const fetchUsage = async (userId: string): Promise<UsageData> => {
     .maybeSingle();
 
   const planId = subscription?.plan_id || 'free';
-  const currentPlan = plans.find(p => p.id === planId) || plans.find(p => p.id === 'free');
   
-  const chatLimit = currentPlan?.chat_limit ?? featureLimits.chat[planId] as number;
-  const testCreationLimit = currentPlan?.test_creation_limit ?? featureLimits.test_creation[planId] as number;
+  const chatLimit = chatLimitFor(planId);
+  const testCreationLimit = TEST_CREATION_LIMITS[planId as keyof typeof TEST_CREATION_LIMITS] ?? TEST_CREATION_LIMITS.free;
 
   return {
     user_id: userId,

@@ -44,3 +44,9 @@ next-env.d.ts
 firebase-debug.log
 firestore-debug.log
 .env*.local
+
+# Local agent instructions and tooling
+AGENTS.md
+.kiro/
+.agents/
+.codex/

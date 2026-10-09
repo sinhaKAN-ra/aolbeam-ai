@@ -3,10 +3,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { createSupabaseBrowserClient } from '@/lib/supabase';
+import ChatMarkdown from '@/components/chat-feature/ChatMarkdown';
+import { useSupabase } from '@/hooks/useSupabase';
 import { ArrowLeft, ArrowRight, BookOpen, CheckCircle, Clock, XCircle, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -32,7 +34,7 @@ interface HistoryItem {
 }
 
 const formatTimeTaken = (seconds?: number | null) => {
-  if (!seconds) return 'N/A';
+  if (seconds == null) return 'N/A';
   
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
@@ -50,7 +52,9 @@ const getProblemTypeLabel = (type: ProblemType) => {
     conceptual: 'Conceptual',
     numerical: 'Numerical',
     diagram_based: 'Diagram',
-    random: 'Random'
+    random: 'Random',
+    mcq: 'Multiple choice',
+    practical_mcq: 'Practical multiple choice'
   };
   return labels[type] || 'Unknown';
 };
@@ -83,11 +87,12 @@ export default function HistoryPage() {
   const { user, isLoading: authLoading } = useAuth();
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 10;
   
-  const supabase = createSupabaseBrowserClient();
+  const supabase = useSupabase();
   
   const fetchHistory = useCallback(async (page: number) => {
     console.log('fetchHistory called. user?.id:', user?.id);
@@ -97,16 +102,20 @@ export default function HistoryPage() {
     }
     
     setIsLoading(true);
+    setLoadError(null);
     try {
       const from = (page - 1) * itemsPerPage;
       const to = from + itemsPerPage - 1;
       
       // Fetch total count first
-      const { count } = await supabase
-        .from('interactions')
+      const { count, error: countError } = await supabase
+        .from('user_interactions')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .eq('interaction_type', 'problem_generation')
+        .not('problem_statement', 'is', null);
       
+      if (countError) throw countError;
       // Calculate total pages
       const total = count || 0;
       setTotalPages(Math.max(1, Math.ceil(total / itemsPerPage)));
@@ -116,6 +125,8 @@ export default function HistoryPage() {
         .from('user_interactions')
         .select('*')
         .eq('user_id', user.id)
+        .eq('interaction_type', 'problem_generation')
+        .not('problem_statement', 'is', null)
         .order('created_at', { ascending: false })
         .range(from, to);
       
@@ -123,6 +134,7 @@ export default function HistoryPage() {
       
       setHistory(data || []);
     } catch (error: any) {
+      setLoadError('Could not load practice history. Please try again.');
       console.error('Error fetching history:', error);
       toast({
         title: 'Error',
@@ -171,13 +183,14 @@ export default function HistoryPage() {
     <div className="container max-w-5xl py-6">
       <div className="flex flex-col space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Interaction History</h1>
+          <Button variant="link" asChild className="px-0"><Link href="/profile">Back to profile</Link></Button>
+          <h1 className="text-3xl font-bold tracking-tight">Practice history</h1>
           <p className="text-muted-foreground mt-2">
-            Review your past learning interactions and track your progress over time.
+            Review your saved problems, answers, and feedback.
           </p>
         </div>
         
-        {isLoading ? (
+        {loadError ? <div role="alert" className="rounded-lg border p-4"><p>{loadError}</p><Button variant="outline" className="mt-3" onClick={() => fetchHistory(currentPage)}>Try again</Button></div> : isLoading ? (
           // Loading skeletons
           <div className="space-y-4">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -226,7 +239,7 @@ export default function HistoryPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm mb-4 line-clamp-2">{item.problem_statement}</p>
+                    <ChatMarkdown content={item.problem_statement} />
                     <div className="flex flex-wrap gap-2 mb-3">
                       <Badge variant="secondary">
                         {getProblemTypeLabel(item.problem_type)}
@@ -244,7 +257,7 @@ export default function HistoryPage() {
                         <span className="text-sm">Time: {formatTimeTaken(item.time_taken_seconds)}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {item.evaluation_is_correct ? (
+                        {item.evaluation_is_correct == null ? <span className="text-sm text-muted-foreground">Not evaluated</span> : item.evaluation_is_correct ? (
                           <>
                             <CheckCircle className="h-4 w-4 text-green-500" />
                             <span className="text-sm text-green-600">Correct Answer</span>
@@ -258,15 +271,10 @@ export default function HistoryPage() {
                       </div>
                     </div>
                   </CardContent>
-                  <CardFooter>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => router.push(`/practice/${item.id}`)}
-                      className="ml-auto"
-                    >
-                      Review Details
-                    </Button>
+                  <CardFooter className="block">
+                    <details className="w-full text-sm"><summary className="cursor-pointer font-medium">Review answer and feedback</summary>
+                      <div className="mt-4 space-y-4"><div><p className="mb-2 font-medium">Your answer</p><ChatMarkdown content={item.user_answer || item.selected_option || 'No answer submitted.'} /></div><div><p className="mb-2 font-medium">Feedback</p><ChatMarkdown content={item.evaluation_feedback || 'This problem has not been evaluated yet.'} /></div></div>
+                    </details>
                   </CardFooter>
                 </Card>
               ))}

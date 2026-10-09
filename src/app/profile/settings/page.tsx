@@ -1,444 +1,67 @@
-// src/app/profile/settings/page.tsx
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSupabase } from '@/hooks/useSupabase';
 import { useToast } from '@/hooks/use-toast';
-import { createSupabaseBrowserClient } from '@/lib/supabase';
-import { Loader2, Save, UserCircle, LogOut, Shield, AlertCircle } from 'lucide-react';
-
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-
-import type { UserProfile } from '@/types';
-import { getUserSubscription, hasPremiumAccess, getPaymentHistory, Subscription, Payment } from '@/services/subscriptionService';
-
-interface ProfileFormData {
-  full_name: string;
-  email: string;
-  email_notifications: boolean;
-}
+import { Loader2, LogOut } from 'lucide-react';
 
 export default function SettingsPage() {
+  const { user, isLoading: authLoading, signOut } = useAuth();
+  const supabase = useSupabase();
+  const queryClient = useQueryClient();
   const router = useRouter();
   const { toast } = useToast();
-  const { user, isLoading: authLoading, signOut } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState<ProfileFormData>({
-    full_name: '',
-    email: '',
-    email_notifications: false,
-  });
-  const [activeTab, setActiveTab] = useState('account');
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [hasOneTimePayment, setHasOneTimePayment] = useState(false);
-
-  const supabase = createSupabaseBrowserClient();
-  
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
   useEffect(() => {
-    console.log('useEffect - authLoading:', authLoading, 'user:', user);
-    if (!authLoading && !user) {
-      console.log('Redirecting to login: user is null and not loading.');
-      router.push('/login');
-      return;
-    }
-    
-    if (!authLoading && user) {
-      console.log('Fetching user profile: user is present and not loading.');
-      fetchUserProfile();
-    }
-  }, [authLoading, user]);
-  
-  const fetchUserProfile = async () => {
-    console.log('fetchUserProfile called. user?.id:', user?.id);
-    if (!user?.id) {
-      console.log('fetchUserProfile aborted: user.id is null or undefined.');
-      return;
-    }
-    
-    setIsLoading(true);
-    try {
-      const { data: profileData, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      
-      if (profileError) throw profileError;
-
-      // Fetch live subscription status and premium access
-      const fetchedSubscription = await getUserSubscription();
-      setSubscription(fetchedSubscription);
-
-      const payments = await getPaymentHistory();
-      const oneTimeSuccess = payments.some(
-        (p) => p.subscription_id === null && p.status?.toLowerCase() === 'success'
-      );
-      setHasOneTimePayment(oneTimeSuccess);
-
-      const updatedProfile = {
-        ...profileData,
-        is_subscribed: !!fetchedSubscription || oneTimeSuccess,
-        subscription_plan: fetchedSubscription?.plan_id || (oneTimeSuccess ? 'one-time' : null),
-      };
-      
-      setProfile(updatedProfile);
-      setFormData({
-        full_name: updatedProfile?.full_name || '',
-        email: updatedProfile?.email || user.email || '',
-        email_notifications: updatedProfile?.email_notifications || false,
-      });
-    } catch (error: any) {
-      console.error('Error fetching profile:', error.message || error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load your profile. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
-    setFormData({
-      ...formData,
-      [name]: type === 'checkbox' ? checked : value,
+    if (authLoading) return;
+    if (!user) { router.replace('/login?redirect=/profile/settings'); return; }
+    let cancelled = false;
+    setLoading(true); setError(null);
+    supabase.from('user_profiles').select('full_name').eq('id', user.id).maybeSingle().then(({ data, error: loadError }) => {
+      if (cancelled) return;
+      if (loadError) setError('Could not load your profile. Please try again.');
+      else setName(data?.full_name || user.user_metadata?.full_name || '');
+      setLoading(false);
     });
-  };
-  
-  const handleSwitchChange = (checked: boolean, name: string) => {
-    setFormData({
-      ...formData,
-      [name]: checked,
-    });
-  };
-  
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user?.id) return;
-    
-    setIsSaving(true);
+    return () => { cancelled = true; };
+  }, [user, authLoading, router, supabase, reload]);
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (!user || !name.trim() || saving) return;
+    setSaving(true);
     try {
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({
-          full_name: formData.full_name,
-          email_notifications: formData.email_notifications,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id);
-      
+      const { error } = await supabase.from('user_profiles').upsert({ id: user.id, email: user.email || '', full_name: name.trim() }, { onConflict: 'id' });
       if (error) throw error;
-      
-      toast({
-        title: 'Success',
-        description: 'Your profile has been updated successfully.',
-      });
-    } catch (error: any) {
-      console.error('Error updating profile:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update your profile. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-  
-  const handleLogout = async () => {
-    try {
-      await signOut();
-      router.push('/login');
-      toast({
-        title: 'Logged out',
-        description: 'You have been successfully logged out.',
-      });
-    } catch (error: any) {
-      console.error('Error signing out:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to log out. Please try again.',
-        variant: 'destructive',
-      });
-    }
-  };
-  
-  if (authLoading || isLoading) {
-    return (
-      <div className="container py-6">
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </div>
-    );
+      setName(name.trim());
+      await queryClient.invalidateQueries({ queryKey: ['profile-overview', user.id] });
+      toast({ title: 'Profile updated', description: 'Your display name has been saved.' });
+    } catch { toast({ title: 'Could not save profile', description: 'Please try again.', variant: 'destructive' }); }
+    finally { setSaving(false); }
   }
-  
-  return (
-    <div className="container max-w-5xl py-6">
-      <div className="flex flex-col space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Account Settings</h1>
-          <p className="text-muted-foreground mt-2">
-            Manage your account preferences and personal information.
-          </p>
-        </div>
-        
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="account">Account</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="security">Security</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="account" className="space-y-4">
-            <Card>
-              <form onSubmit={handleSubmit}>
-                <CardHeader>
-                  <CardTitle className="text-xl">Profile Information</CardTitle>
-                  <CardDescription>
-                    Update your personal details and public profile information.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-center mb-6">
-                    <div className="relative">
-                      <div className="h-24 w-24 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
-                        <UserCircle className="h-16 w-16 text-primary" />
-                      </div>
-                      {/* Future avatar upload functionality could be added here */}
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="full_name">Full Name</Label>
-                    <Input
-                      id="full_name"
-                      name="full_name"
-                      value={formData.full_name}
-                      onChange={handleInputChange}
-                      placeholder="Your full name"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email Address</Label>
-                    <Input
-                      id="email"
-                      name="email"
-                      value={formData.email}
-                      disabled
-                      placeholder="Your email address"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Email address cannot be changed. This is managed by your authentication provider.
-                    </p>
-                  </div>
-                  
-                  {profile && (
-                    <div className="space-y-2">
-                      <Label>Account Status</Label>
-                      <div className="flex items-center gap-2">
-                        <div className={`h-2.5 w-2.5 rounded-full ${subscription ? 'bg-green-500' : (hasOneTimePayment ? 'bg-blue-500' : 'bg-yellow-500')}`}></div>
-                        <p className="text-sm font-medium leading-none">
-                          {subscription ? 'Premium Account' : (hasOneTimePayment ? 'One-Time Purchase' : 'Free Account')}
-                        </p>
-                        {!subscription && !hasOneTimePayment && (
-                          <p className="text-sm text-muted-foreground">
-                            Upgrade to a premium plan for more features.
-                          </p>
-                        )}
-                        {hasOneTimePayment && !subscription && (
-                          <p className="text-sm text-muted-foreground">
-                            Thank you for your one-time purchase! Consider upgrading for full access.
-                          </p>
-                        )}
-                        {!subscription && !hasOneTimePayment && (
-                          <Button 
-                            type="button" 
-                            variant="link" 
-                            className="p-0 h-auto text-sm"
-                            onClick={() => router.push('/profile/subscriptions')}
-                          >
-                            Upgrade Now
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {profile?.subscription_started_at && (
-                    <div className="space-y-2">
-                      <Label>Member Since</Label>
-                      <p className="text-sm">
-                        {new Date(profile.subscription_started_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-                <CardFooter className="flex justify-between border-t pt-6">
-                  <Button type="button" variant="outline" onClick={() => router.push('/profile')}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={isSaving}>
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="mr-2 h-4 w-4" />
-                        Save Changes
-                      </>
-                    )}
-                  </Button>
-                </CardFooter>
-              </form>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="notifications" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-xl">Notification Preferences</CardTitle>
-                <CardDescription>
-                  Manage how and when you receive notifications from AOLBEAM.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-medium">Email Notifications</h4>
-                      <p className="text-sm text-muted-foreground">Receive email updates about your account and learning progress.</p>
-                    </div>
-                    <Switch
-                      checked={formData.email_notifications}
-                      onCheckedChange={(checked) => handleSwitchChange(checked, 'email_notifications')}
-                      aria-label="Toggle email notifications"
-                    />
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-medium">Email Notifications</h4>
-                      <p className="text-sm text-muted-foreground">Receive email notifications.</p>
-                    </div>
-                    <Switch
-                      checked={formData.email_notifications}
-                      onCheckedChange={(checked) => setFormData({ ...formData, email_notifications: checked })}
-                      aria-label="Toggle email notifications"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="justify-end border-t pt-6">
-                <Button onClick={handleSubmit} disabled={isSaving}>
-                  {isSaving ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Save Preferences
-                    </>
-                  )}
-                </Button>
-              </CardFooter>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="security" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-xl">Account Security</CardTitle>
-                <CardDescription>
-                  Manage your account security settings and session controls.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Authentication</h4>
-                    <div className="flex items-center gap-2">
-                      <Shield className="h-4 w-4 text-muted-foreground" />
-                      <p className="text-sm">Your account is secured via email authentication.</p>
-                    </div>
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Account Actions</h4>
-                    <div className="space-y-4">
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="destructive" size="sm">
-                            <LogOut className="mr-2 h-4 w-4" />
-                            Sign Out
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure you want to sign out?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              You will need to sign in again to access your account and learning materials.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleLogout}>Sign Out</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                      
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600">
-                            <AlertCircle className="mr-2 h-4 w-4" />
-                            Delete Account
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This action cannot be undone. This will permanently delete your account and remove all your data from our servers.
-                              If you have an active subscription, you will need to cancel it separately.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction className="bg-red-500 hover:bg-red-600">
-                              Delete Account
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </div>
-  );
+  async function logout() {
+    setSigningOut(true);
+    try { await signOut(); router.replace('/'); }
+    catch { setSigningOut(false); }
+  }
+  if (authLoading || !user || loading) return <div className="flex justify-center py-12"><Loader2 aria-label="Loading profile" className="h-6 w-6 animate-spin" /></div>;
+  return <div className="mx-auto max-w-2xl space-y-6 pb-8">
+    <div><Button variant="link" asChild className="px-0"><Link href="/profile">Back to profile</Link></Button><h1 className="text-2xl font-semibold">Account settings</h1><p className="mt-2 text-muted-foreground">Your profile and sign-in details.</p></div>
+    <Card><CardHeader><CardTitle>Profile</CardTitle><CardDescription>Your name appears on your learning dashboard.</CardDescription></CardHeader><CardContent>
+      {error ? <div role="alert"><p>{error}</p><Button variant="outline" className="mt-4" onClick={() => setReload(value => value + 1)}>Try again</Button></div> : <form onSubmit={save} className="space-y-5"><div className="space-y-2"><Label htmlFor="display-name">Display name</Label><Input id="display-name" value={name} onChange={event => setName(event.target.value)} required maxLength={100} autoComplete="name" /></div><div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" value={user.email || ''} readOnly /><p className="text-xs text-muted-foreground">Managed by your sign-in provider.</p></div><Button type="submit" disabled={saving || !name.trim()}>{saving ? 'Saving…' : 'Save changes'}</Button></form>}
+    </CardContent></Card>
+    <Card><CardHeader><CardTitle>Session</CardTitle><CardDescription>Signed in with {user.app_metadata?.provider === 'google' ? 'Google' : 'your account provider'}.</CardDescription></CardHeader><CardContent><Button variant="outline" disabled={signingOut} onClick={logout}><LogOut className="mr-2 h-4 w-4" />{signingOut ? 'Signing out…' : 'Sign out'}</Button></CardContent></Card>
+  </div>;
 }
