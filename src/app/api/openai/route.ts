@@ -1,3 +1,14 @@
+import { NextResponse } from 'next/server';
+
+// This legacy endpoint was retired in favor of the shared provider chain.
+// Keep an explicit route handler so Next.js can validate the route module.
+export async function POST() {
+  return NextResponse.json(
+    { error: 'This endpoint has been retired. Use /api/gemini or /api/chat/stream.' },
+    { status: 410 }
+  );
+}
+
 // import { NextResponse } from 'next/server';
 // import OpenAI from 'openai';
 

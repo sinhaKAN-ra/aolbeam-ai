@@ -1,15 +1,13 @@
 'use client';
 
 import React from 'react';
+import { useParams } from 'next/navigation';
 import TestAttemptPage from '@/components/tests/TestAttemptPage';
 
-interface TakeTestPageProps {
-  params: {
-    id: string;
-  };
-}
 
-const TakeTestPage: React.FC<TakeTestPageProps> = ({ params }) => {
+const TakeTestPage: React.FC = () => {
+  const params = useParams<{ id: string }>();
+  if (!params?.id) return null;
   return (
     <div className="max-w-screen-lg mx-auto">
       <div className="py-16">

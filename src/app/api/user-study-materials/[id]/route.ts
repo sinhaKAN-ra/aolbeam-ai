@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -15,7 +15,7 @@ export async function DELETE(
     });
   }
 
-  const { id } = params;
+  const { id } = await params;
 
   if (!id) {
     return new NextResponse(JSON.stringify({ error: 'Material ID is required' }), {

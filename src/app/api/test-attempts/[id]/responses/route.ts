@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 // GET /api/test-attempts/[id]/responses - Get all responses for a test attempt
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createSupabaseServerClient();
@@ -18,7 +18,7 @@ export async function GET(
     }
     
     const userId = user.id;
-    const { id } = params;
+    const { id } = await params;
     
     // Check if user is authorized to access this attempt's responses
     const { data: attempt, error: fetchError } = await supabase
@@ -67,7 +67,7 @@ export async function GET(
 // POST /api/test-attempts/[id]/responses - Submit a response for a problem in this attempt
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createSupabaseServerClient();
@@ -79,8 +79,8 @@ export async function POST(
     }
     
     const userId = user.id;
-    // Fix Next.js warning by using params.id directly
-    const id = params.id;
+    // Next.js 15 provides dynamic parameters asynchronously.
+    const id = (await params).id;
     const body = await request.json();
     
     // Validate required fields

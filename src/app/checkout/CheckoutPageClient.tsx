@@ -6,7 +6,7 @@ import { AuthGuard } from '@/components/auth/AuthGuard';
 import { CheckoutContent } from '@/components/checkout/CheckoutContent';
 import { CheckoutPlanInfo, PlanId, PaymentProvider } from '@/app/checkout/types';
 import { SubscriptionPlan } from '@/types';
-import { plans } from '@/app/pricing/page'; // Import the plans array from pricing page
+import { plans } from '@/config/plans'; // Shared plan definitions
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 

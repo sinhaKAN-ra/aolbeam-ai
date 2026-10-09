@@ -6,9 +6,9 @@ export const dynamic = 'force-dynamic';
 // GET /api/test-series/[id]/problems - Get all problems in a test series
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const { id } = context.params;
+  const { id } = await context.params;
   try {
     const supabase = await createSupabaseServerClient();
     
@@ -57,7 +57,7 @@ export async function GET(
 // POST /api/test-series/[id]/problems - Add a problem to a test series
 export async function POST(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
   try {
@@ -160,9 +160,9 @@ export async function POST(
 // PUT /api/test-series/[id]/problems - Update problem order or bulk update
 export async function PUT(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const { id } = context.params;
+  const { id } = await context.params;
   try {
     const supabase = await createSupabaseServerClient();
     

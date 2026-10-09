@@ -9,11 +9,8 @@ import { createSupabaseBrowserClient } from '../../../lib/supabase';
 import { TopicTag } from '@/types/chat-feature';
 import { useParams, useSearchParams } from 'next/navigation';
 
-interface ChatPageProps {
-  searchParams?: { [key: string]: string | string[] | undefined };
-}
 
-const ChatTeacherPage: React.FC<ChatPageProps> = () => {
+const ChatTeacherPage: React.FC = () => {
   const params = useParams();
   const sessionId = params && typeof params === 'object' && 'sessionId' in params ? params.sessionId as string : undefined;
   if (!sessionId) {

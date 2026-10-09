@@ -56,11 +56,11 @@ const getPostData = async (slug: string) => {
 };
 
 interface BlogPostPageProps {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }
 
 export async function generateMetadata({ params }: BlogPostPageProps): Promise<Metadata> {
-  const post = await getPostData(params.slug);
+  const post = await getPostData((await params).slug);
   return {
     title: `${post.title} - AOLBEAM Blog`,
     description: post.content.substring(0, 160).replace(/<[^>]*>?/gm, '') + '...', // Simple excerpt
@@ -68,7 +68,7 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
 }
 
 export default async function BlogPostPage({ params }: BlogPostPageProps) {
-  const post = await getPostData(params.slug);
+  const post = await getPostData((await params).slug);
 
   return (
     <>

@@ -6,10 +6,10 @@ export const dynamic = 'force-dynamic';
 // GET /api/test-series/[id] - Get a single test series by ID
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const params = await Promise.resolve(context.params);
-  const { id } = params;
+  const { id } = await params;
   console.log(`GET request for test series with ID: ${id}`);
   try {
     const supabase = await createSupabaseServerClient();
@@ -68,7 +68,7 @@ export async function GET(
 // PUT /api/test-series/[id] - Update a specific test series
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createSupabaseServerClient();
@@ -135,7 +135,7 @@ export async function PUT(
 // DELETE /api/test-series/[id] - Delete a specific test series
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createSupabaseServerClient();

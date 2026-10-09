@@ -1,15 +1,13 @@
 'use client';
 
 import React from 'react';
+import { useParams } from 'next/navigation';
 import TestResultsPage from '@/components/tests/TestResultsPage';
 
-interface TestResultsPageProps {
-  params: {
-    id: string;
-  };
-}
 
-const ViewTestResultsPage: React.FC<TestResultsPageProps> = ({ params }) => {
+const ViewTestResultsPage: React.FC = () => {
+  const params = useParams<{ id: string }>();
+  if (!params?.id) return null;
   return (
     <div className="max-w-screen-lg mx-auto">
       <div className="py-4">

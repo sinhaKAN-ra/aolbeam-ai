@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { plans } from '@/app/pricing/page'; // Import the plans array from pricing page
+import { plans } from '@/config/plans'; // Shared plan definitions
 import { SubscriptionPlan } from '@/types'; // Import SubscriptionPlan type
 
 const LEMONSQUEEZY_API_KEY = process.env.LEMONSQUEEZY_API_KEY;

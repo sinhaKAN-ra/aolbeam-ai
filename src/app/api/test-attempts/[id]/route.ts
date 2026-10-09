@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 // GET /api/test-attempts/[id] - Get a specific test attempt with all responses
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createSupabaseServerClient();
@@ -18,8 +18,8 @@ export async function GET(
     }
     
     const userId = user.id;
-    // Fix Next.js warning by using params.id directly
-const id = params.id;
+    // Next.js 15 provides dynamic parameters asynchronously.
+const id = (await params).id;
     
     // Get the test attempt
     const { data: attempt, error: attemptError } = await supabase
@@ -91,7 +91,7 @@ const id = params.id;
 // PUT /api/test-attempts/[id] - Update a test attempt (complete or update time)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createSupabaseServerClient();
@@ -103,8 +103,8 @@ export async function PUT(
     }
     
     const userId = user.id;
-    // Fix Next.js warning by using params.id directly
-const id = params.id;
+    // Next.js 15 provides dynamic parameters asynchronously.
+const id = (await params).id;
     const body = await request.json();
     
     // Check if user is authorized to update this attempt

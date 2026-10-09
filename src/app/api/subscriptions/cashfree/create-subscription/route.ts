@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabaseServer';
 import { v4 as uuidv4 } from 'uuid';
 import { getCashfreeServiceInstance } from '@/services/payment/cashfree/CashfreePaymentService';
 import type { CashfreeSubscriptionRequestPayload } from '@/services/payment/cashfree/types';
-import { plans } from '@/app/pricing/page'; // Import the plans array from pricing page
+import { plans } from '@/config/plans'; // Shared plan definitions
 import type { SubscriptionPlan } from '@/types'; // Import the centralized SubscriptionPlan type
 
 
