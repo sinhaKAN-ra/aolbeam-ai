@@ -36,10 +36,8 @@ const problemTypeIcons: Record<ProblemType, React.ElementType> = {
   numerical: NumericalIcon,
   diagram_based: DiagramIcon,
   random: Shuffle,
-  code: CodeIcon,
+  practical_mcq: ListChecks,
   mcq: ListChecks,
-  essay: MessageSquareText,
-  multiple_choice: ListChecks
 };
 
 const formatTimeTaken = (seconds: number): string => {

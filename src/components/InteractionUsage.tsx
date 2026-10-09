@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { useInteractionLimit } from '@/hooks/useInteractionLimit';
+import { useCurrentInteractionLimit } from '@/hooks/useCurrentInteractionLimit';
 import { InteractionType } from '@/types/interaction';
 import { Loader2 } from 'lucide-react';
 
@@ -18,7 +18,7 @@ export function InteractionUsage({ type, title, description }: InteractionUsageP
     isUnlimited: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(true);
-  const { checkInteractionLimit } = useInteractionLimit();
+  const { checkInteractionLimit } = useCurrentInteractionLimit();
 
   useEffect(() => {
     async function fetchUsage() {
@@ -77,7 +77,7 @@ export function InteractionUsage({ type, title, description }: InteractionUsageP
             <Progress value={getProgressValue()} className="h-2" />
             {!usage.isUnlimited && usage.remaining === 0 && (
               <p className="text-xs text-destructive mt-1">
-                You've reached your daily limit. Upgrade for unlimited access.
+                You've reached your daily limit. Your allowance resets tomorrow.
               </p>
             )}
           </div>

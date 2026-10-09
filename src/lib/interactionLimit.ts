@@ -1,4 +1,4 @@
-import { useInteractionLimit } from '@/hooks/useInteractionLimit';
+import { useCurrentInteractionLimit } from '@/hooks/useCurrentInteractionLimit';
 import { useState } from 'react';
 
 type InteractionType = 'evaluate' | 'insight';
@@ -12,7 +12,7 @@ interface InteractionLimitResult {
 export function useLimitedInteraction(interactionType: InteractionType): InteractionLimitResult {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { requireInteraction } = useInteractionLimit();
+  const { requireInteraction } = useCurrentInteractionLimit();
 
   const execute = async (): Promise<boolean> => {
     try {

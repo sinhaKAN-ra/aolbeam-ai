@@ -1,3 +1,4 @@
+import { FEATURES } from '@/config/features';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRouter } from 'next/navigation';
@@ -54,22 +55,22 @@ export function InteractionLimitModal({
           <DialogDescription className="pt-3">
             {!isLoggedIn ? (
               <div className="space-y-2">
-                <p>You've used all 15 free AI interactions available to guests.</p>
-                <p className="font-medium">Sign up now to get 25 total interactions and unlock more features!</p>
+                <p>You've used your guest allowance of {limit} AI interactions.</p>
+                <p className="font-medium">Sign in to continue learning and save your progress.</p>
               </div>
             ) : isPaidPlan ? (
               <div className="space-y-2">
                 <p>
                   You've used <span className="font-medium text-primary">{limit - remaining}</span> out of your <span className="font-medium text-primary">{limit}</span> daily AI interactions.
                 </p>
-                <p>Upgrade to our higher tier plan to get even more daily interactions!</p>
+                <p>Your daily allowance resets tomorrow.</p>
               </div>
             ) : (
               <div className="space-y-2">
                 <p>
                   You've used <span className="font-medium text-primary">{limit - remaining}</span> out of your <span className="font-medium text-primary">{limit}</span> total AI interactions.
                 </p>
-                <p>Upgrade to a premium plan to get <span className="font-medium">100-1,500 interactions per day</span> and unlock ✨ Smart Suggestions and ⚡ Genius Mode!</p>
+                <p>Your daily allowance resets tomorrow.</p>
               </div>
             )}
           </DialogDescription>
@@ -81,9 +82,9 @@ export function InteractionLimitModal({
               Sign Up for Free Access
             </Button>
           ) : (
-            <Button onClick={handleUpgrade} className="w-full" size="lg">
+            <Button onClick={FEATURES.payments ? handleUpgrade : () => onOpenChange(false)} className="w-full" size="lg">
               <Sparkles className="mr-2 h-5 w-5" />
-              Upgrade to Premium
+              {FEATURES.payments ? "Upgrade to Premium" : "Close"}
             </Button>
           )}
         </DialogFooter>

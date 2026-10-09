@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { isHiddenRoute } from '@/config/features';
+import { FEATURES, isHiddenRoute } from '@/config/features';
 
 // Public paths that don't require authentication
 const publicPaths = [
@@ -28,6 +28,12 @@ const publicPaths = [
 export function middleware(req: NextRequest) {
   // Redirect deep links to hidden (not-yet-launched) features back home.
   const pathname = req.nextUrl.pathname;
+  if (!FEATURES.payments && (
+    /^\/api\/payments\/(create-order|create-paypal-order|store-paypal-order|cashfree\/create-order|lemonsqueezy\/create-checkout)(?:\/|$)/.test(pathname) ||
+    /^\/api\/subscriptions\/(cashfree\/(create|create-subscription)|lemonsqueezy\/create)(?:\/|$)/.test(pathname)
+  )) {
+    return NextResponse.json({ error: 'Payments are unavailable for this release.' }, { status: 503 });
+  }
   if (!pathname.startsWith('/api/') && isHiddenRoute(pathname)) {
     return NextResponse.redirect(new URL('/', req.nextUrl.origin));
   }

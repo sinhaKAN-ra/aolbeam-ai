@@ -14,6 +14,7 @@ export const FEATURES = {
   learningPaths: true,
 
   // --- Hidden for now (build later) ---
+  payments: false,
   tests: false,
   testSeries: false,
   blog: false,
@@ -31,6 +32,7 @@ export function isFeatureEnabled(key: FeatureKey): boolean {
  * middleware to redirect deep links to hidden pages back home.
  */
 export const HIDDEN_ROUTE_PREFIXES: string[] = [
+  ...(!FEATURES.payments ? ['/pricing', '/checkout', '/trial', '/profile/subscriptions', '/payment', '/subscription'] : []),
   ...(!FEATURES.tests ? ['/tests'] : []),
   ...(!FEATURES.testSeries ? ['/test-series'] : []),
   ...(!FEATURES.blog ? ['/blog', '/admin/blog'] : []),

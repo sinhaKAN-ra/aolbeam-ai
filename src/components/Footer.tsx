@@ -1,6 +1,7 @@
 // src/components/Footer.tsx
 "use client"; // Make it a client component to fetch user session
 
+import { FEATURES } from '@/config/features';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import type { User } from '@supabase/supabase-js';
@@ -100,9 +101,9 @@ export default function Footer() {
           <Link href="/privacy-policy" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
             <ShieldCheck size={16} /> Privacy
           </Link>
-          <Link href="/pricing" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+          {FEATURES.payments && (<Link href="/pricing" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
             <DollarSign size={16} /> Pricing
-          </Link>
+          </Link>)}
           <Link href="/contact-us" className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
             <Mail size={16} /> Contact
           </Link>

@@ -26,7 +26,7 @@ export function AuthGuard({
     if (!isLoading) {
       if (requireAuth && !user) {
         // If auth is required but no user is logged in, redirect to login
-        router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+        router.push(`/login?redirect=${encodeURIComponent(pathname || "/")}`);
       } else if (!requireAuth && user) {
         // If auth is not required but user is logged in, redirect away
         router.push(redirectTo);

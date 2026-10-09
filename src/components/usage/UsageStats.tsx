@@ -1,3 +1,4 @@
+import { FEATURES } from '@/config/features';
 import React from 'react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -93,14 +94,14 @@ export const UsageStats = ({
               <Info className="mr-2 h-4 w-4" />
             )}
             <span>
-              {isLimitReached 
+              {isLimitReached
                 ? `You've reached your ${title.toLowerCase()} limit.`
                 : `You're almost out of ${title.toLowerCase()}!`}
             </span>
           </div>
-          <Button 
+          {FEATURES.payments && (<Button
             variant={isLimitReached ? 'destructive' : 'outline'}
-            size="sm" 
+            size="sm"
             className="w-full"
             onClick={onUpgrade}
             asChild
@@ -108,7 +109,7 @@ export const UsageStats = ({
             <Link href="/pricing">
               {isLimitReached ? 'Upgrade Now' : 'Upgrade for More'}
             </Link>
-          </Button>
+          </Button>)}
         </CardFooter>
       )}
     </Card>
@@ -125,9 +126,9 @@ export const UsageStatsWithTooltip = (props: UsageStatsProps) => (
       </TooltipTrigger>
       <TooltipContent side="bottom" className="max-w-xs">
         <p className="text-sm">
-          {props.used} of {props.limit} {props.feature === 'chat' ? 'messages' : 'tests'} used today. 
-          {props.limit - props.used > 0 
-            ? ` ${props.limit - props.used} remaining.` 
+          {props.used} of {props.limit} {props.feature === 'chat' ? 'messages' : 'tests'} used today.
+          {props.limit - props.used > 0
+            ? ` ${props.limit - props.used} remaining.`
             : ' You\'ve reached your limit.'}
         </p>
       </TooltipContent>

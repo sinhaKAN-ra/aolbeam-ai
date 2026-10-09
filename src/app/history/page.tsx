@@ -15,6 +15,7 @@ import { Loader2, AlertTriangle } from 'lucide-react';
 const transformSupabaseRecordToHistoryItem = (record: any): InteractionHistoryItem => {
   // Ensure problem structure matches GeneratePracticeProblemOutput
   const problemData: GeneratePracticeProblemOutput = {
+    problemType: record.problem_type === 'mcq' ? 'practical_mcq' : record.problem_type === 'random' ? 'practical' : (record.problem_type || 'theory'),
     problemStatement: record.problem_statement || '',
     answerFormat: record.answer_format || 'text', // default if not present
     multipleChoiceOptions: record.multiple_choice_options || undefined,

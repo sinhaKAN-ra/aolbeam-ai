@@ -58,7 +58,7 @@ import { useSidebar } from '@/components/ui/sidebar';
 import Image from 'next/image';
 import ChatHistorySidebar from '@/components/chat-feature/ChatHistorySidebar';
 import { useChatHistory } from '@/hooks/useChatHistory';
-import { FEATURES, isFeatureEnabled, type FeatureKey } from '@/config/features';
+import { FEATURES, isHiddenRoute, isFeatureEnabled, type FeatureKey } from '@/config/features';
 
 const ADMIN_EMAIL = "sinhakaran01235@gmail.com";
 
@@ -607,7 +607,7 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
                     )}
                   </div>
                 </div>
-                {userMenuItems.map((item, index) => (
+                {userMenuItems.filter(item => !item.href || !isHiddenRoute(item.href)).map((item, index) => (
                   item.divider ? (
                     <DropdownMenuSeparator key={`sep-${index}`} />
                   ) : (
@@ -698,7 +698,7 @@ export default function SidebarContent({ isCollapsed = false, onToggleCollapse }
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-72" align="end">
-                      {publicMenuItems.map((item, index) => (
+                      {publicMenuItems.filter(item => !item.href || !isHiddenRoute(item.href)).map((item, index) => (
                         item.divider ? (
                           <DropdownMenuSeparator key={`sep-${index}`} />
                         ) : (

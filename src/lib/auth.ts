@@ -1,6 +1,5 @@
 import { NextAuthOptions } from 'next-auth';
 import { SupabaseAdapter } from '@auth/supabase-adapter';
-import { supabase } from './supabase';
 import type { User } from '@supabase/supabase-js';
 
 // Extend the built-in session types

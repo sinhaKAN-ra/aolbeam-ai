@@ -310,12 +310,8 @@ console.log('[create-subscription API] Using Supabase URL:', process.env.NEXT_PU
 
     if (!subscription || !subscription.id) {
       console.error('Initial subscription record is null or missing ID after insert. Error:', subInsertError);
-      const errorDetails = subInsertError ? 
-        (typeof subInsertError === 'object' ? 
-          (subInsertError === null ? 'null error object' : 
-            ('message' in subInsertError ? String(subInsertError.message) : JSON.stringify(subInsertError))
-          ) : String(subInsertError)
-        ) : 'Unknown error';
+      // Insert errors have already returned above; this branch has no error object.
+      const errorDetails = 'Unknown error';
       
       return NextResponse.json(
         { error: 'Failed to retrieve subscription ID after creation.', details: errorDetails },

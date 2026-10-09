@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PaywallModal, type PaywallModalProps } from '@/components/PaywallModal';
@@ -52,7 +52,7 @@ const FREE_INTERACTION_LIMIT = 50; // guest problem generations before the login
 const CONCRETE_AI_PROBLEM_TYPES: AIGeneratedProblemType[] = ['theory', 'practical', 'practical_mcq', 'conceptual', 'numerical', 'diagram_based'];
 
 
-export default function AOLBEAMPage() {
+function AOLBEAMPage() {
 
   const isAIServiceOverloadError = (errorMessage: string): boolean => {
     const lowerMessage = errorMessage.toLowerCase();
@@ -469,7 +469,7 @@ export default function AOLBEAMPage() {
     }
   }, [setHistory, supabase, currentUser, toast, history, saveHistoryToLocalStorage]);
 
-const handleGenerateProblem = useCallback(async (topic: string, type: AIGeneratedProblemType, difficulty: DifficultyLevel) => {
+const handleGenerateProblem = useCallback(async (topic: string, type: ProblemType, difficulty: DifficultyLevel) => {
   setIsLoadingProblem(true);
 
   if (currentUser && isLoadingPageProfile) return; // Still loading user profile
@@ -496,8 +496,8 @@ const handleGenerateProblem = useCallback(async (topic: string, type: AIGenerate
       setShowPaywall(true);
       toast({
         variant: "destructive",
-        title: "Upgrade Required",
-        description: "Please upgrade to continue generating problems."
+        title: "Daily limit reached",
+        description: "Your daily allowance resets tomorrow."
       });
     }
     return; // Do not proceed with the AI action
@@ -591,7 +591,7 @@ const handleGenerateProblem = useCallback(async (topic: string, type: AIGenerate
       toast({
         variant: "destructive",
         title: "Interaction Limit Reached",
-        description: "Your current plan's interaction limit has been reached. Please upgrade to continue."
+        description: "Your daily allowance resets tomorrow."
       });
     }
   }
@@ -643,8 +643,8 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
       setShowPaywall(true);
       toast({
         variant: "destructive",
-        title: "Upgrade Required",
-        description: "Please upgrade to continue evaluating answers."
+        title: "Daily limit reached",
+        description: "Your daily allowance resets tomorrow."
       });
     }
     return;
@@ -752,7 +752,7 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
       toast({
         variant: "destructive",
         title: "Interaction Limit Reached",
-        description: "Your current plan's interaction limit has been reached. Please upgrade to continue."
+        description: "Your daily allowance resets tomorrow."
       }); // Closes the toast call for interactionResult.showUpgradeModal
     } // Closes 'else if (interactionResult.showUpgradeModal)'
   } // Closes 'if (evaluationSuccessful)' or a similar block that contains these interaction limit checks
@@ -779,8 +779,8 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
         setShowPaywall(true);
         toast({
           variant: "destructive",
-          title: "Upgrade Required",
-          description: "Please upgrade to continue generating insights."
+          title: "Daily limit reached",
+          description: "Your daily allowance resets tomorrow."
         });
       }
       return; // Exit early if not allowed
@@ -1049,7 +1049,7 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
         if (remaining > 0) {
           return `Free interactions remaining: ${remaining} / ${limit}`;
         } else if (requiresUpgrade) {
-          return "Free interactions exhausted. Please upgrade to continue.";
+          return "Daily allowance used. Please try again tomorrow.";
         } else {
           return "Interactions: N/A"; // Should not happen if logic is correct
         }
@@ -1253,3 +1253,7 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
   );
 }
 
+
+export default function Page() {
+  return <Suspense fallback={<p className="p-8">Loading practice...</p>}><AOLBEAMPage /></Suspense>;
+}

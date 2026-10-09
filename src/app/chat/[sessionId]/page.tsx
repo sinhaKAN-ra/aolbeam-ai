@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Suspense, useState, useEffect, useRef } from 'react';
 import ChatInterface from '../../../components/chat-feature/ChatInterface';
 import useChat from '../../../hooks/chat-feature/useChat';
 import { Button } from '@/components/ui/button';
@@ -122,4 +122,6 @@ const ChatTeacherPage: React.FC = () => {
   );
 };
 
-export default ChatTeacherPage;
+export default function ChatPage() {
+  return <Suspense fallback={<p className="p-8">Loading chat...</p>}><ChatTeacherPage /></Suspense>;
+}

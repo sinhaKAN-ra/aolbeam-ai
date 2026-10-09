@@ -1,10 +1,11 @@
+import { FEATURES } from '@/config/features';
 import { useEffect, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useRouter } from 'next/navigation';
-import { useInteractionLimit } from '@/hooks/useInteractionLimit';
+import { useCurrentInteractionLimit } from '@/hooks/useCurrentInteractionLimit';
 import { InteractionType } from '@/types/interaction';
 
 interface InteractionLimitBannerProps {
@@ -19,7 +20,7 @@ export function InteractionLimitBanner({ type, className = '' }: InteractionLimi
     isUnlimited: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(true);
-  const { checkInteractionLimit } = useInteractionLimit();
+  const { checkInteractionLimit } = useCurrentInteractionLimit();
   const router = useRouter();
 
   useEffect(() => {
@@ -27,7 +28,7 @@ export function InteractionLimitBanner({ type, className = '' }: InteractionLimi
       try {
         setLoading(true);
         const result = await checkInteractionLimit(type);
-        
+
         setUsage({
           remaining: result.remaining,
           limit: result.limit,
@@ -54,7 +55,7 @@ export function InteractionLimitBanner({ type, className = '' }: InteractionLimi
   const actionType = type === 'evaluate' ? 'evaluations' : 'insights';
 
   return (
-    <Alert variant="warning" className={`mb-4 ${className}`}>
+    <Alert variant="default" className={`mb-4 ${className}`}>
       <AlertCircle className="h-4 w-4" />
       <AlertTitle>Usage Limit Approaching</AlertTitle>
       <AlertDescription>
@@ -69,25 +70,25 @@ export function InteractionLimitBanner({ type, className = '' }: InteractionLimi
           {usage.remaining === 0 ? (
             <div className="mt-2">
               <p className="text-sm mb-2">You've reached your daily limit for {actionType}.</p>
-              <Button 
-                onClick={() => router.push('/pricing')} 
-                size="sm" 
+              {FEATURES.payments && <Button
+                onClick={() => router.push('/pricing')}
+                size="sm"
                 variant="outline"
                 className="w-full sm:w-auto"
               >
                 Upgrade for Unlimited Access
-              </Button>
+              </Button>}
             </div>
           ) : (
             <p className="text-sm">
-              You have {usage.remaining} {actionType} remaining today. 
-              <Button 
-                onClick={() => router.push('/pricing')} 
-                variant="link" 
+              You have {usage.remaining} {actionType} remaining today. Your allowance resets tomorrow.
+              {FEATURES.payments && <Button
+                onClick={() => router.push('/pricing')}
+                variant="link"
                 className="p-0 h-auto font-normal"
               >
                 Upgrade for unlimited access
-              </Button>
+              </Button>}
             </p>
           )}
         </div>

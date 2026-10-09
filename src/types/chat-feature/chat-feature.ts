@@ -58,6 +58,8 @@ export interface LearningResource {
 export type PathType = 'skill' | 'advancement' | 'career-change';
 
 export interface LearningPath {
+  difficulty?: string;
+  tags?: string[];
   id: string;
   user_id?: string; // Added server-side
   title: string;

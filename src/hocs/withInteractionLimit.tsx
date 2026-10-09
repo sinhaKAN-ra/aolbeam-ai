@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useInteractionLimit } from '@/hooks/useInteractionLimit';
+import { useCurrentInteractionLimit } from '@/hooks/useCurrentInteractionLimit';
 import { InteractionLimitModal } from '@/components/InteractionLimitModal';
 import type { InteractionType, InteractionLimitResult } from '@/types/interaction';
 
@@ -30,7 +30,7 @@ export function withInteractionLimit<T extends object>(
       isLoggedIn: boolean;
     } | null>(null);
 
-    const { requireInteraction, isLoading } = useInteractionLimit();
+    const { requireInteraction, isLoading } = useCurrentInteractionLimit();
 
     const handleAction = async (): Promise<boolean> => {
     const result = await requireInteraction(interactionType);
