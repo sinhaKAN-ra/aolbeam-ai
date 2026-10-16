@@ -1,5 +1,21 @@
 # Resume / Handoff — aolbeam-ai chat & learning rebuild
 
+## Related projects — 2026-10-16
+
+- About page now includes an Explore section linking to Ask (`https://ask.aolbeam.com`) and Anumana (`https://anumana.aolbeam.com`). Both returned HTTP 200; descriptions match their live metadata. Also included as optional related projects in llms.txt. These are outgoing cross-project links; reciprocal links require edits to those separate projects.
+
+## Favicon — 2026-10-16
+
+- Added `src/app/icon.svg`, multi-size `favicon.ico` (16/32/48px) and `apple-icon.png` (180px). Crisp gold A/beam on dark green follows the existing logo silhouette; Next.js file metadata wires the icons automatically.
+
+## Search & AI discovery — 2026-10-16
+
+- Added public `/practice` guide with examples across maths, science, languages, humanities, business and coding. Homepage now explains this breadth and links to the guide; footer and about page link to it too.
+- Added `/llms.txt` and `/llm.txt` alias, generated robots/sitemap routes, public discovery middleware bypass, canonical/social metadata and factual structured data. Application/private routes send noindex headers. Sitemap includes launched public pages only.
+- Shared origin in `src/lib/site.ts` uses `NEXT_PUBLIC_SITE_URL`, defaulting to the existing `https://www.aolbeam.com`. Owner confirmed www.aolbeam.com; host redirects must agree. No Search Console submission or external backlinks created. See `docs/SEARCH_DISCOVERY.md` for owner setup and outreach suggestions.
+- Validation: TypeScript and production build passed; local production HTTP checks confirmed all discovery resources and public pages return 200 without login for PerplexityBot, canonical links and public-only sitemap are correct, and login sends noindex. Local verification server stopped afterward. Visual review of the new guide remains outstanding.
+- Homepage client workspace moved unchanged to `src/components/home/PracticeWorkspace.tsx` so the server page can export canonical metadata and structured data.
+
 ## Navigation feedback & manual modules — 2026-10-16
 
 - Added immediate route-change feedback (top progress bar plus accessible “Opening page…” status) in `src/components/NavigationProgress.tsx`, root `src/app/loading.tsx` skeletons, and `src/hooks/useAppRouter.ts` for programmatic page changes. Internal links, query changes and back/forward navigation are covered; same-page anchors, downloads, external/new-tab links are excluded. Provider is wired through `components/Providers.tsx`. Throttled Chrome review confirmed feedback appears before the destination changes and clears on completion; network throttling was restored afterward.

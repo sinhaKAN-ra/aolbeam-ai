@@ -42,7 +42,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {!isChat && (
           <footer className="workspace-footer">
             <span>Made for curious minds.</span>
-            <div className="flex gap-5">
+            <div className="flex flex-wrap gap-5">
+              <LinkFooter href="/practice">Practice subjects</LinkFooter>
+              <LinkFooter href="/about">About</LinkFooter>
               <LinkFooter href="/privacy-policy">Privacy</LinkFooter>
               <LinkFooter href="/terms-of-service">Terms</LinkFooter>
               <LinkFooter href="/contact-us">Get in touch ↗</LinkFooter>

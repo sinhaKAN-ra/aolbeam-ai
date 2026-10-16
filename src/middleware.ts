@@ -13,6 +13,7 @@ const publicPaths = [
   '/auth/error',
   '/pricing',
   '/about',
+  '/practice',
   '/contact-us',
   '/privacy-policy',
   '/terms-of-service',
@@ -28,6 +29,11 @@ const publicPaths = [
 ];
 
 export async function middleware(req: NextRequest) {
+  // Discovery resources contain only public information and must never require auth.
+  if (['/robots.txt', '/sitemap.xml', '/llms.txt', '/llm.txt'].includes(req.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
+
   // Redirect deep links to hidden (not-yet-launched) features back home.
   const pathname = req.nextUrl.pathname;
   if (!FEATURES.payments && (

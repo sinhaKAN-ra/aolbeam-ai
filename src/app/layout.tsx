@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { SITE_URL, SITE_DESCRIPTION } from '@/lib/site';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import 'katex/dist/katex.min.css';
@@ -14,8 +15,17 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Aolbeam — your learning workspace',
-  description: 'Understand difficult concepts, practice at your level, and follow an AI learning path made around your goals.',
+  metadataBase: new URL(SITE_URL),
+  title: 'Aolbeam AI — practice questions and learn across subjects',
+  description: SITE_DESCRIPTION,
+  openGraph: {
+    type: 'website',
+    siteName: 'Aolbeam AI',
+    title: 'Aolbeam AI — practice questions and learn across subjects',
+    description: SITE_DESCRIPTION,
+    images: [{ url: '/assets/logo.png', alt: 'Aolbeam AI' }],
+  },
+  twitter: { card: 'summary', title: 'Aolbeam AI — learn through practice', description: SITE_DESCRIPTION, images: ['/assets/logo.png'] },
 };
 
 export default function RootLayout({
@@ -25,6 +35,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className={`h-full ${inter.variable}`}>
+      <head><link rel="describedby" href="/llms.txt" type="text/plain" /></head>
       <body className="antialiased flex flex-col min-h-full font-sans overflow-y-auto">
         <Providers>
           <AppShell>{children}</AppShell>

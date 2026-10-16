@@ -1,0 +1,1262 @@
+"use client";
+import { useAppRouter } from "@/hooks/useAppRouter";
+
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { PaywallModal, type PaywallModalProps } from '@/components/PaywallModal';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import type { User } from '@supabase/supabase-js';
+import {
+  generatePracticeProblem,
+  type GeneratePracticeProblemOutput,
+  type GeneratePracticeProblemInput,
+} from '@/ai/flows/generate-practice-problem';
+import {
+  evaluateTheoryAnswer,
+  type EvaluateTheoryAnswerOutput,
+  type EvaluateTheoryAnswerInput,
+} from '@/ai/flows/evaluate-theory-answer';
+import {
+  generateProblemInsights,
+  type GenerateProblemInsightsInput,
+  type GenerateProblemInsightsOutput,
+} from '@/ai/flows/generate-problem-insights';
+import { RefreshCw, FilePlus2, ArrowRight, Loader2, History } from 'lucide-react';
+
+import type { InteractionHistoryItem, ProblemType, UserProfile, DifficultyLevel, AIGeneratedProblemType } from '@/types';
+import { ProblemGenerator, ProblemGeneratorHandles } from '@/components/ProblemGenerator';
+import { ProblemDisplay, ProblemDisplayRefs } from '@/components/ProblemDisplay';
+import { EvaluationResult } from '@/components/EvaluationResult';
+import { ProblemInsights } from '@/components/ProblemInsights';
+
+import Link from 'next/link';
+import { HeroSection } from '@/components/home/HeroSection';
+import { GenerateSection } from '@/components/home/GenerateSection';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import MainLayoutContainer from '@/components/MainLayoutContainer';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useSupabase } from '@/hooks/useSupabase';
+import {useSearchParams} from 'next/navigation';
+import { useInteractionLimit } from '@/hooks/useInteractionLimit';
+import { InteractionType, InteractionLimitResult } from '@/types/interaction';
+import { GUEST_CHAT_TRIAL_LIMIT } from '@/config/limits';
+import { FEATURES } from '@/config/features';
+
+// This is a client component that will be hydrated on the client
+// Server-side data fetching should be moved to a Server Component
+// and passed as props to this component
+
+const FREE_INTERACTION_LIMIT = GUEST_CHAT_TRIAL_LIMIT; // guest problem generations before the login prompt
+const CONCRETE_AI_PROBLEM_TYPES: AIGeneratedProblemType[] = ['theory', 'practical', 'practical_mcq', 'conceptual', 'numerical', 'diagram_based'];
+
+
+function AOLBEAMPage() {
+
+  const isAIServiceOverloadError = (errorMessage: string): boolean => {
+    const lowerMessage = errorMessage.toLowerCase();
+    return (
+      lowerMessage.includes('503') ||
+      lowerMessage.includes('service unavailable') ||
+      lowerMessage.includes('model is overloaded') ||
+      lowerMessage.includes('[googlegenerativeaierror]') // Specific to Google errors
+    );
+  };
+
+  const { toast } = useToast();
+  const { user: currentUser, isLoading: isAuthLoading } = useAuth();
+  const supabase = useSupabase();
+  const router = useAppRouter();
+
+
+  // User profile state
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isLoadingPageProfile, setIsLoadingPageProfile] = useState<boolean>(true);
+  const hasFetchedProfile = useRef(false);
+
+  // Problem generation state
+  const [currentTopic, setCurrentTopic] = useState<string>('');
+  const [currentProblemType, setCurrentProblemType] = useState<ProblemType>('theory');
+  const [currentDifficulty, setCurrentDifficulty] = useState<DifficultyLevel>('medium');
+  const [currentProblem, setCurrentProblem] = useState<GeneratePracticeProblemOutput | null>(null);
+  const [evaluationResult, setEvaluationResult] = useState<EvaluateTheoryAnswerOutput | null>(null);
+  const [problemInsights, setProblemInsights] = useState<string | null>(null);
+
+  const problemDisplayRef = useRef<ProblemDisplayRefs>(null);
+
+  useEffect(() => {
+    console.log('AOLBEAMPage: currentProblem state changed to:', currentProblem);
+  }, [currentProblem]);
+  const evaluationResultRef = useRef<HTMLDivElement>(null);
+
+  // State for 'Add to Test Series' feature
+  const [showAddToTestSeriesModal, setShowAddToTestSeriesModal] = useState<boolean>(false);
+  const [userTestSeries, setUserTestSeries] = useState<{ id: string; title: string }[]>([]);
+  const [selectedTestSeriesId, setSelectedTestSeriesId] = useState<string | null>(null);
+  const [isLoadingTestSeries, setIsLoadingTestSeries] = useState<boolean>(false);
+  const [isAddingProblem, setIsAddingProblem] = useState<boolean>(false);
+
+  // Loading states
+  const [isLoadingProblem, setIsLoadingProblem] = useState<boolean>(false);
+  const [isLoadingEvaluation, setIsLoadingEvaluation] = useState<boolean>(false);
+  const [isLoadingInsights, setIsLoadingInsights] = useState<boolean>(false);
+
+  useEffect(() => {
+    // Cleanup function to remove highlight when component unmounts or state changes
+    return () => {
+      if (evaluationResultRef.current) {
+        evaluationResultRef.current.classList.remove('highlight-border');
+      }
+    };
+  }, [currentProblem, evaluationResult]);
+
+  const [history, setHistory] = useState<InteractionHistoryItem[]>([]);
+  const [guestInteractionCount, setGuestInteractionCount] = useLocalStorage<number>('aolbeamGuestInteractionCount', 0);
+  const { checkInteractionLimit, recordInteraction, requireInteraction } = useInteractionLimit(
+    currentUser,
+    guestInteractionCount,
+    setGuestInteractionCount,
+    FREE_INTERACTION_LIMIT,
+    isAuthLoading
+  );
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [paywallContext, setPaywallContext] = useState<PaywallModalProps['displayContext']>(null);
+  const [isClientMounted, setIsClientMounted] = useState(false);
+
+  // Refs
+  const problemGeneratorRef = useRef<HTMLDivElement>(null);
+  const problemGeneratorComponentRef = useRef<ProblemGeneratorHandles>(null);
+  const paywallModalRef = useRef<PaywallModalProps | null>(null);
+
+
+
+  // Initialize client-side state and fetch initial data
+  useEffect(() => {
+    setIsClientMounted(true);
+
+    // Load history from localStorage if available
+    const savedHistory = localStorage.getItem('aolbeamHistory_guest');
+    if (savedHistory) {
+      try {
+        setHistory(JSON.parse(savedHistory));
+      } catch (e) {
+        console.error("Error parsing history from localStorage", e);
+        setHistory([]);
+      }
+    }
+
+    // Initial profile fetch handled by the useEffect below that watches isAuthLoading
+    // No need to call fetchAndSetUserProfile here based on initial currentUser state
+
+    return () => {
+      // Cleanup if needed
+    };
+  }, []); // Empty dependency array to run only once on mount
+
+  // Save history to localStorage when it changes
+  const saveHistoryToLocalStorage = useCallback((newHistory: InteractionHistoryItem[]) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('aolbeamHistory_guest', JSON.stringify(newHistory));
+    }
+  }, []);
+
+  // Scroll to problem generator helper
+  const scrollToProblemGenerator = useCallback(() => {
+    problemGeneratorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // After scrolling, wait a bit for the scroll to finish, then focus the input
+    setTimeout(() => {
+      problemGeneratorComponentRef.current?.focusTopicInput();
+    }, 500); // Adjust timeout as needed
+  }, []);
+
+  const handleHashChange = useCallback(() => {
+    if (window.location.hash) {
+      const hash = window.location.hash.substring(1); // Remove the '#'
+      const params = new URLSearchParams(hash.split('?')[1]);
+      const topic = params.get('topic');
+
+      if (hash.startsWith('generate') && topic) {
+        setCurrentTopic(decodeURIComponent(topic));
+        // Small timeout to ensure component is rendered before scrolling
+        setTimeout(scrollToProblemGenerator, 100);
+      }
+    }
+  }, [setCurrentTopic, scrollToProblemGenerator]);
+
+  useEffect(() => {
+    // Check on initial load
+    handleHashChange();
+
+    // Add event listener for hash changes
+    window.addEventListener('hashchange', handleHashChange);
+
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, [handleHashChange]);
+
+  const fetchAndSetUserProfile = useCallback(
+    async (user: User | null) => {
+      if (!user?.id) {
+        // console.log('Page: No user ID available');
+        setUserProfile(null);
+        setIsLoadingPageProfile(false);
+        return;
+      }
+
+      // Prevent multiple fetches
+      if (hasFetchedProfile.current) return;
+      hasFetchedProfile.current = true;
+
+      // console.log(`Page: fetchAndSetUserProfile called for user: ${user.id}`);
+      setIsLoadingPageProfile(true);
+      setUserProfile(null);
+
+      const fetchUserProfile = async (user: User) => {
+        try {
+          // console.log(`Page: Attempting to query user_profiles for user ${user.id}...`);
+
+          // Use the client-side Supabase client for client-side operations
+          const { data: profileData, error: fetchError } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+          if (fetchError) {
+            if (fetchError.code === 'PGRST116') {
+              // console.log(`Page: Profile not found for ${user.id}, attempting to create one.`);
+              const newProfilePayload: Partial<UserProfile> = {
+                id: user.id,
+                email: user.email || '',
+                full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+                interaction_count: 0,
+                is_subscribed: false,
+              };
+
+              const { data: createdProfile, error: createError } = await supabase
+                .from('user_profiles')
+                .insert([newProfilePayload])
+                .select()
+                .single();
+
+              if (createError) {
+                console.error(`Page: Error creating profile:`, createError);
+                toast({
+                  variant: "destructive",
+                  title: "Profile Error",
+                  description: "Failed to create user profile."
+                });
+                return;
+              }
+
+              // console.log(`Page: Created new profile for ${user.id}`);
+              setUserProfile(createdProfile as UserProfile);
+              return;
+            }
+
+            // If it's another type of error, throw it
+            throw fetchError;
+          }
+
+          if (profileData) {
+            // console.log(`Page: Found existing profile for ${user.id}`);
+
+            // Check if we need to update any profile fields
+            const updates: Partial<UserProfile> = {};
+            let needsUpdate = false;
+
+            if (!profileData.email && user.email) {
+              updates.email = user.email;
+              needsUpdate = true;
+            }
+
+            if (!profileData.full_name && (user.user_metadata?.full_name || user.email)) {
+              updates.full_name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'User';
+              needsUpdate = true;
+            }
+
+            if (needsUpdate) {
+              // console.log(`Page: Profile for ${user.id} missing fields, attempting update:`, updates);
+              const { data: updatedProfileData, error: updateError } = await supabase
+                .from('user_profiles')
+                .update(updates)
+                .eq('id', user.id)
+                .select()
+                .single();
+
+              if (updateError) {
+                console.error(`Page: Error updating profile for ${user.id}:`, updateError);
+                // Continue with the existing profile data even if update fails
+                setUserProfile(profileData as UserProfile);
+              } else if (updatedProfileData) {
+                // console.log(`Page: Successfully updated profile for ${user.id}:`, updatedProfileData);
+                setUserProfile(updatedProfileData as UserProfile);
+              }
+            } else {
+              // console.log(`Page: Using existing profile for ${user.id}`);
+              setUserProfile(profileData as UserProfile);
+            }
+          } else {
+            console.warn(`Page: No profile data received for ${user.id} and no error was thrown.`);
+            setUserProfile(null);
+          }
+        } catch (error) {
+          console.error(`Page: Error in fetchUserProfile for ${user.id}:`, error);
+          toast({
+            variant: "destructive",
+            title: "Profile Error",
+            description: error instanceof Error ? error.message : "An error occurred while loading your profile.",
+          });
+        } finally {
+          // console.log(`Page: Finished loading profile for ${user.id}`);
+          setIsLoadingPageProfile(false);
+        }
+      };
+
+      fetchUserProfile(user);
+    },
+    [supabase, toast]
+  );
+
+  // Effect to handle auth state changes and fetch profile
+  useEffect(() => {
+    if (!isAuthLoading) {
+      if (currentUser) {
+        // Reset the fetch flag when user changes
+        hasFetchedProfile.current = false;
+        fetchAndSetUserProfile(currentUser);
+      } else {
+        // If auth loading is done and there's no current user, profile loading is also done
+        setUserProfile(null);
+        setIsLoadingPageProfile(false);
+        hasFetchedProfile.current = false;
+      }
+    } else {
+      // Still loading auth, so profile loading is also ongoing
+      setIsLoadingPageProfile(true);
+    }
+  }, [currentUser, isAuthLoading, fetchAndSetUserProfile]);
+
+  useEffect(() => {
+    // console.log(
+      // `Page: Profile state updated - isLoadingProfile: ${isLoadingPageProfile} pageCurrentUser: ${!!currentUser} pageUserProfile email: ${userProfile?.email || 'undefined'}`
+    // );
+  }, [isLoadingPageProfile, currentUser, userProfile]);
+
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      // console.log("Page: Cleaning up AOLBEAMPage component");
+      hasFetchedProfile.current = false;
+    };
+  }, []);
+
+  const addToHistory = useCallback(async (itemToAdd: Omit<InteractionHistoryItem, 'id' | 'timestamp' | 'supabase_id' | 'timeTakenSeconds' | 'feedbackRating' | 'feedbackComment'> & { actualProblemType: Exclude<ProblemType, 'random'>; topic: string }) => {
+    const newHistoryItem: InteractionHistoryItem = {
+        ...itemToAdd,
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        isTopicRevised: false,
+        topicDetails: null,
+        userAnswer: itemToAdd.userAnswer,
+        selectedOption: itemToAdd.selectedOption,
+        evaluation: itemToAdd.evaluation,
+        difficulty: itemToAdd.difficulty,
+        problemType: itemToAdd.problemType,
+    };
+
+    setHistory(prevHistory => {
+      const updatedHistory = [newHistoryItem, ...prevHistory].slice(0, 50);
+      saveHistoryToLocalStorage(updatedHistory);
+      return updatedHistory;
+    });
+
+    if (currentUser && itemToAdd.problem && itemToAdd.problem.problemStatement) {
+        const dbRecord: any = {
+            user_id: currentUser.id,
+            topic: itemToAdd.topic,
+            problem_type: itemToAdd.actualProblemType,
+            difficulty: itemToAdd.difficulty,
+            problem_statement: itemToAdd.problem.problemStatement,
+            answer_format: itemToAdd.problem.answerFormat,
+            multiple_choice_options: itemToAdd.problem.multipleChoiceOptions,
+            correct_answer: itemToAdd.problem.correctAnswer,
+            is_topic_revised: false,
+            topic_details_content: null
+        };
+        try {
+          // console.log("Page: Attempting to save new problem to Supabase:", dbRecord);
+          const { data: dbData, error: dbError } = await supabase.from('user_interactions').insert({ ...dbRecord, interaction_type: 'problem_generation' }).select('id').single();
+          if (dbError) {
+              console.error("Page: Error saving history to Supabase:", dbError);
+              toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account. " + dbError.message });
+          } else if (dbData) {
+            // console.log("Page: Successfully saved new problem to Supabase, ID:", dbData.id);
+            setHistory(prev => {
+                const updatedHistory = prev.map(hItem =>
+                    hItem.id === newHistoryItem.id ? { ...hItem, supabase_id: dbData.id } : hItem
+                );
+                saveHistoryToLocalStorage(updatedHistory);
+                return updatedHistory;
+            });
+          }
+        } catch (e) {
+            console.error("Page: Exception saving history to Supabase:", e);
+            toast({ variant: "destructive", title: "Save Error", description: "Could not save new problem to your account." });
+        }
+    }
+  }, [setHistory, supabase, currentUser, toast, saveHistoryToLocalStorage]);
+
+  const updateLastHistoryItem = useCallback(async (updates: any) => {
+    let itemToUpdateSupabaseId: string | undefined;
+    let updatedItemForSupabase: InteractionHistoryItem | undefined;
+
+    setHistory(prevHistory => {
+      if (prevHistory.length === 0) return prevHistory;
+      const updatedItem: InteractionHistoryItem = {
+        ...prevHistory[0],
+        ...updates,
+        problem: updates.problem ? { ...prevHistory[0].problem!, ...updates.problem } : prevHistory[0].problem,
+      };
+      itemToUpdateSupabaseId = updatedItem.supabase_id;
+      updatedItemForSupabase = updatedItem;
+      const newHistory = [updatedItem, ...prevHistory.slice(1)];
+      saveHistoryToLocalStorage(newHistory);
+      return newHistory;
+    });
+
+    if (supabase && currentUser && itemToUpdateSupabaseId && updatedItemForSupabase) {
+      const dbUpdatePayload: any = {};
+      if (updates.userAnswer !== undefined) dbUpdatePayload.user_answer = updates.userAnswer;
+      if (updates.selectedOption !== undefined) dbUpdatePayload.selected_option = updates.selectedOption;
+      if (updates.evaluation !== undefined) {
+        dbUpdatePayload.evaluation_is_correct = updates.evaluation.isCorrect;
+        dbUpdatePayload.evaluation_feedback = updates.evaluation.feedback;
+        if ('correctAnswer' in updates.evaluation && updates.evaluation.correctAnswer !== undefined) {
+            dbUpdatePayload.evaluation_correct_answer_detail = updates.evaluation.correctAnswer;
+        }
+        if ('explanation' in updates.evaluation && updates.evaluation.explanation !== undefined) {
+            dbUpdatePayload.evaluation_explanation_detail = updates.evaluation.explanation;
+        }
+      }
+      if (updates.isTopicRevised !== undefined) dbUpdatePayload.is_topic_revised = updates.isTopicRevised;
+      if (updates.topicDetails !== undefined) dbUpdatePayload.topic_details_content = updates.topicDetails;
+      if (updates.feedbackRating !== undefined) dbUpdatePayload.feedback_rating = updates.feedbackRating;
+      if (updates.feedbackComment !== undefined) dbUpdatePayload.feedback_comment = updates.feedbackComment;
+      if (updates.timeTakenSeconds !== undefined) dbUpdatePayload.time_taken_seconds = updates.timeTakenSeconds;
+
+      if (Object.keys(dbUpdatePayload).length > 0) {
+        // console.log("Page: Attempting to update Supabase history item ID:", itemToUpdateSupabaseId, "with payload:", dbUpdatePayload);
+        try {
+          const { error: dbError } = await supabase.from('user_interactions').update(dbUpdatePayload).eq('id', itemToUpdateSupabaseId).eq('user_id', currentUser.id);
+          if (dbError) {
+            console.error("Page: Error updating history in Supabase:", dbError);
+            toast({ variant: "destructive", title: "Update Error", description: "Could not save updates to your account. " + dbError.message });
+          } else {
+            // console.log("Page: Successfully updated history item in Supabase, ID:", itemToUpdateSupabaseId);
+          }
+        } catch (e) {
+            console.error("Page: Exception updating history in Supabase:", e);
+            toast({ variant: "destructive", title: "Update Error", description: "Could not save updates to your account." });
+        }
+      }
+    } else if (supabase && currentUser && !itemToUpdateSupabaseId && history.length > 0 && history[0] && Object.keys(updates).length > 0) {
+      // This condition seems to be the end of the updateLastHistoryItem's else-if chain.
+      // The following content was part of the corruption and will be replaced by the correct functions.
+      console.warn("Page: Attempted to update history item in Supabase, but supabase_id was missing for the last item. Local history updated.", history[0]);
+    }
+  }, [setHistory, supabase, currentUser, toast, history, saveHistoryToLocalStorage]);
+
+const handleGenerateProblem = useCallback(async (topic: string, type: ProblemType, difficulty: DifficultyLevel) => {
+  setIsLoadingProblem(true);
+
+  if (currentUser && isLoadingPageProfile) return; // Still loading user profile
+
+  const interactionResult = await requireInteraction('problem_generation');
+
+  // If the action is NOT allowed from the start (e.g., already over limit, or auth still loading)
+  if (!interactionResult.allowed) {
+    if (interactionResult.isLoading) {
+      toast({
+        title: "Loading",
+        description: "Please wait while we verify your authentication status.",
+      });
+    } else if (interactionResult.showLoginModal) {
+      setPaywallContext('guestLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Login Required",
+        description: "Please sign up or log in to continue."
+      });
+    } else if (interactionResult.showUpgradeModal) {
+      setPaywallContext('loggedInLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Daily limit reached",
+        description: "Your daily allowance resets tomorrow."
+      });
+    }
+    return; // Do not proceed with the AI action
+  }
+
+  // If the action IS allowed, proceed with problem generation
+  setCurrentTopic(topic);
+  setCurrentDifficulty(difficulty);
+  setCurrentProblem(null);
+  setEvaluationResult(null);
+  setProblemInsights(null);
+
+  // Determine the actual problem type to send to the AI.
+  // If the user selected 'random' or 'mcq', we map it to a concrete type.
+  const actualProblemTypeForAI: AIGeneratedProblemType =
+    type === 'random' ? 'practical' :
+    type === 'mcq' ? 'practical_mcq' :
+    type;
+
+  // DO NOT set currentProblemType here. It will be set *after* the AI responds.
+
+  let problemGeneratedSuccessfully = false;
+  try {
+    const result = await generatePracticeProblem({ topic, problemType: actualProblemTypeForAI, difficulty });
+    const problemDifficulty = result.difficulty || difficulty;
+    const problemWithDifficulty = {...result, difficulty: problemDifficulty};
+    console.log('handleGenerateProblem: Setting currentProblem with:', problemWithDifficulty);
+
+    // THIS IS THE FIX: Update state with the *actual* problem type returned by the AI
+    setCurrentProblemType(result.problemType as ProblemType);
+
+    setCurrentProblem(problemWithDifficulty);
+    console.log('Page: Attempting to highlight and scroll with direct refs');
+    if (problemDisplayRef.current?.timerRef.current) {
+      // Add highlight border class
+      problemDisplayRef.current.timerRef.current.classList.add('highlight-border');
+      // Scroll to timer
+      problemDisplayRef.current.timerRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      // Set a timer to scroll to the answer input after 2 seconds
+      setTimeout(() => {
+        if (problemDisplayRef.current?.answerInputRef.current) {
+          problemDisplayRef.current.answerInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 2000); // 2 second delay before scrolling to answer section
+    }
+    await addToHistory({
+      topic,
+      problemType: result.problemType as ProblemType, // Log the actual generated type
+      actualProblemType: actualProblemTypeForAI, // This can be useful for analytics
+      difficulty: problemDifficulty,
+      problem: problemWithDifficulty,
+    });
+    toast({ title: "Problem Generated!", description: `A new ${actualProblemTypeForAI} problem on "${topic}" (${problemDifficulty}) is ready.` });
+    problemGeneratedSuccessfully = true;
+  } catch (error: any) {
+    console.error("Page: Error generating problem:", error);
+    if (error.message && isAIServiceOverloadError(error.message)) {
+      toast({
+        variant: "destructive",
+        title: "AI Service Busy",
+        description: "The AI model is currently experiencing high demand. Please try again in a few moments.",
+      });
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Error Generating Problem",
+        description: error.message || "An unexpected error occurred. Please try again.",
+      });
+    }
+    problemGeneratedSuccessfully = false;
+  } finally {
+    setIsLoadingProblem(false);
+    // No refreshInteractionStatus here, it's handled by requireInteraction and the logic below for paywall
+  }
+
+  // After the AI action has been attempted, if it was successful,
+  // check the interactionResult again to see if *this action* resulted in hitting the limit.
+  if (problemGeneratedSuccessfully) {
+    if (interactionResult.showLoginModal) { // Guest user hit limit with this action
+      setPaywallContext('guestLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Free Limit Reached",
+        description: "Please sign up or log in to continue generating problems."
+      });
+    } else if (interactionResult.showUpgradeModal) { // Logged-in user hit limit with this action
+      setPaywallContext('loggedInLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Interaction Limit Reached",
+        description: "Your daily allowance resets tomorrow."
+      });
+    }
+  }
+  await refreshInteractionStatus();
+}, [currentUser, isLoadingPageProfile]);
+
+// Deep-link from the Learning Paths "Practice" button: /?topic=X&generate=1.
+// Fill the topic and auto-generate once (after auth is settled). Query params
+// are reliable on cross-route navigation where a hash fragment was flaky.
+const searchParams = useSearchParams();
+const practiceSeededRef = useRef(false);
+useEffect(() => {
+  if (practiceSeededRef.current) return;
+  const topicParam = searchParams?.get('topic');
+  if (!topicParam) return;
+  // Wait for auth to settle so the interaction gate reads correctly.
+  if (currentUser && isLoadingPageProfile) return;
+  practiceSeededRef.current = true;
+  const decoded = decodeURIComponent(topicParam);
+  setCurrentTopic(decoded);
+  setTimeout(scrollToProblemGenerator, 150);
+  if (searchParams?.get('generate') === '1') {
+    // Auto-generate with current defaults so the user lands on a ready problem.
+    handleGenerateProblem(decoded, currentProblemType as AIGeneratedProblemType, currentDifficulty);
+  }
+}, [searchParams, currentUser, isLoadingPageProfile, handleGenerateProblem, scrollToProblemGenerator, currentProblemType, currentDifficulty]);
+
+const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) => {
+  if (!currentProblem || !currentTopic || (currentUser && isLoadingPageProfile)) return;
+
+  const interactionResult = await requireInteraction('evaluate');
+
+  if (!interactionResult.allowed) {
+    if (interactionResult.isLoading) {
+      toast({
+        title: "Loading",
+        description: "Please wait while we verify your authentication status.",
+      });
+    } else if (interactionResult.showLoginModal) {
+      setPaywallContext('guestLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Login Required",
+        description: "Please sign up or log in to continue evaluating answers."
+      });
+    } else if (interactionResult.showUpgradeModal) {
+      setPaywallContext('loggedInLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Daily limit reached",
+        description: "Your daily allowance resets tomorrow."
+      });
+    }
+    return;
+  }
+
+  setIsLoadingEvaluation(true);
+  setEvaluationResult(null);
+
+  let evaluationSuccessful = false;
+  try {
+    let evalOutput: EvaluateTheoryAnswerOutput | { isCorrect: boolean; feedback: string; correctAnswer: string };
+    const updatesForHistory: Partial<InteractionHistoryItem> = { timeTakenSeconds };
+
+    const isMcqStyleProblem = currentProblem.multipleChoiceOptions && currentProblem.multipleChoiceOptions.length > 0;
+
+    if (!isMcqStyleProblem) {
+      let insightsForEval: string;
+
+      if (problemInsights) {
+        insightsForEval = problemInsights;
+      } else if (currentProblem?.problemStatement && currentTopic) {
+        try {
+          // console.log("Page: No existing insights for evaluation, attempting to generate on-the-fly using AI utility.");
+          const insightGenResult: GenerateProblemInsightsOutput = await generateProblemInsights({
+            problemStatement: currentProblem.problemStatement,
+            topic: currentTopic
+          });
+          insightsForEval = JSON.stringify(insightGenResult, null, 2);
+          // Optionally, consider if these on-the-fly insights should update the 'problemInsights' state:
+          // setProblemInsights(insightsForEval);
+        } catch (insightsError) {
+          console.warn("Page: Failed to auto-generate insights for evaluation, proceeding with default.", insightsError);
+          insightsForEval = "No detailed insights available for this problem at the moment.";
+        }
+      } else {
+        insightsForEval = "No detailed insights available due to missing problem details or topic.";
+      }
+
+      const evalInput: EvaluateTheoryAnswerInput = {
+        question: currentProblem.problemStatement,
+        studentAnswer: answer,
+        answerFormat: currentProblem.answerFormat,
+        topicDetails: insightsForEval, // insightsForEval is now guaranteed to be a string
+      };
+      evalOutput = await evaluateTheoryAnswer(evalInput);
+
+      if (!evalOutput.correctAnswer) {
+        evalOutput.correctAnswer = currentProblem.correctAnswer;
+      }
+      updatesForHistory.userAnswer = answer;
+    } else {
+      const isCorrect = answer === currentProblem.correctAnswer;
+      const stepByStepSolution = `## Step-by-Step Solution\n\n${currentProblem.answerFormat}\n\n### Correct Answer: ${currentProblem.correctAnswer}\n\n${currentProblem.correctAnswer ? `### Explanation:\n${currentProblem.answerFormat}` : ''}`;
+      evalOutput = {
+        isCorrect,
+        feedback: isCorrect
+          ? `Correct! ${currentProblem.answerFormat}`
+          : `Incorrect. The correct option was: ${currentProblem.correctAnswer}`,
+        correctAnswer: stepByStepSolution
+      };
+      updatesForHistory.selectedOption = answer;
+    }
+    updatesForHistory.evaluation = evalOutput;
+    await updateLastHistoryItem(updatesForHistory);
+    setEvaluationResult(evalOutput);
+    if (evaluationResultRef.current) {
+      evaluationResultRef.current.classList.add('highlight-border');
+      evaluationResultRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    toast({ title: "Answer Evaluated", description: evalOutput.isCorrect ? "Your answer is correct!" : "Your answer needs improvement." });
+    evaluationSuccessful = true;
+  } catch (error: any) {
+    console.error("Page: Error evaluating answer:", error);
+    if (error.message && isAIServiceOverloadError(error.message)) {
+      toast({
+        variant: "destructive",
+        title: "AI Service Busy",
+        description: "The AI model is currently experiencing high demand and could not evaluate. Please try again in a few moments.",
+      });
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Error Evaluating Answer",
+        description: error.message || "An unexpected error occurred. Please try again.",
+      });
+    }
+    evaluationSuccessful = false;
+  } finally {
+    setIsLoadingEvaluation(false);
+    // No refreshInteractionStatus here, it's handled by requireInteraction and the logic below for paywall
+  }
+
+  if (evaluationSuccessful) {
+    if (interactionResult.showLoginModal) {
+      setPaywallContext('guestLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Free Limit Reached",
+        description: "Please sign up or log in to continue."
+      });
+    } else if (interactionResult.showUpgradeModal) {
+      setPaywallContext('loggedInLimitReached');
+      setShowPaywall(true);
+      toast({
+        variant: "destructive",
+        title: "Interaction Limit Reached",
+        description: "Your daily allowance resets tomorrow."
+      }); // Closes the toast call for interactionResult.showUpgradeModal
+    } // Closes 'else if (interactionResult.showUpgradeModal)'
+  } // Closes 'if (evaluationSuccessful)' or a similar block that contains these interaction limit checks
+  await refreshInteractionStatus();
+}; // Closes 'handleEvaluateAnswer'
+  const handleGenerateProblemInsights = async (problemStatement: string, topicToFetch: string) => {
+    // console.log("handleGenerateProblemInsights called with:", { problemStatement, topicToFetch });
+
+    if (currentUser && isLoadingPageProfile) return; // Still loading user profile
+
+    const interactionResult = await requireInteraction('insight');
+
+    if (!interactionResult.allowed) {
+      if (interactionResult.showLoginModal) {
+        setPaywallContext('guestLimitReached');
+        setShowPaywall(true);
+        toast({
+          variant: "destructive",
+          title: "Login Required",
+          description: "Please sign up or log in to continue generating insights."
+        });
+      } else if (interactionResult.showUpgradeModal) {
+        setPaywallContext('loggedInLimitReached');
+        setShowPaywall(true);
+        toast({
+          variant: "destructive",
+          title: "Daily limit reached",
+          description: "Your daily allowance resets tomorrow."
+        });
+      }
+      return; // Exit early if not allowed
+    }
+
+    setIsLoadingInsights(true); // Set loading state before starting the async operation
+
+    try {
+      // console.log("Fetching insights for:", { problemStatement, topicToFetch });
+      const result = await generateProblemInsights({
+        problemStatement,
+        topic: topicToFetch
+      });
+
+      // console.log("Generated insights:", result);
+
+      const insightsString = JSON.stringify(result, null, 2);
+      setProblemInsights(insightsString);
+
+      if (currentUser) {
+        await updateLastHistoryItem({
+          isTopicRevised: true,
+          topicDetails: insightsString
+        });
+      }
+
+      toast({
+        title: "Problem Insights Fetched",
+        description: `Insights for the current problem are now available.`
+      });
+      // If 'result' needs to be returned by handleGenerateProblemInsights, do it here.
+      // return result;
+
+    } catch (error: any) {
+      console.error("Page: Error in handleGenerateProblemInsights:", error);
+      if (error.message && isAIServiceOverloadError(error.message)) {
+        toast({
+          variant: "destructive",
+          title: "AI Service Busy",
+          description: "The AI model is currently experiencing high demand and could not generate insights. Please try again in a few moments.",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error Generating Insights",
+          description: error.message || "Failed to fetch problem insights. Please try again."
+        });
+      }
+      setProblemInsights(prev => prev || "Failed to load insights due to an error. Please try again.");
+    } finally {
+      setIsLoadingInsights(false);
+      await refreshInteractionStatus();
+    }
+  };
+
+  const handleProblemFeedback = async (rating: string, comment: string) => {
+    if (!currentProblem || (currentUser && isLoadingPageProfile)) {
+      toast({variant: "destructive", title: "Cannot Submit Feedback", description: "No active problem or profile still loading."});
+      return;
+    };
+    // console.log("Page: Submitting feedback to history - Rating:", rating, "Comment:", comment);
+    await updateLastHistoryItem({
+      feedbackRating: rating,
+      feedbackComment: comment,
+    });
+  };
+
+  const handleNewProblemSameTopic = () => {
+    if (currentTopic) {
+      const problemTypeToUse = (history[0]?.problemType && CONCRETE_AI_PROBLEM_TYPES.includes(history[0].problemType as AIGeneratedProblemType)) ? (history[0].problemType as AIGeneratedProblemType) : CONCRETE_AI_PROBLEM_TYPES[Math.floor(Math.random() * CONCRETE_AI_PROBLEM_TYPES.length)];
+      handleGenerateProblem(currentTopic, problemTypeToUse, currentDifficulty);
+    } else {
+      toast({ title: "No Topic", description: "Please generate a problem first to use this option.", variant: "default" });
+    }
+  };
+
+  const handleStartNew = () => {
+    setCurrentTopic('');
+    setCurrentProblem(null);
+    setEvaluationResult(null);
+    setProblemInsights(null);
+    toast({ title: "Ready for New Topic", description: "Enter a new topic and problem type." });
+  };
+
+  const handleSubscribe = async (planId: string) => {
+    if (!currentUser || !userProfile) {
+      toast({ variant: "destructive", title: "Error", description: "Authentication service not ready or user not logged in."});
+      return;
+    }
+    try {
+        const { data, error } = await supabase
+            .from('user_profiles')
+            .update({
+                is_subscribed: true,
+                subscription_plan_id: planId,
+                interaction_count: 0,
+                subscription_started_at: new Date().toISOString()
+            })
+            .eq('id', currentUser.id)
+            .select()
+            .single();
+        if (error) throw error;
+        if (data) {
+            setUserProfile(data as UserProfile);
+            setShowPaywall(false);
+            toast({ title: "Subscription Activated!", description: "You now have unlimited access and your progress will be saved to your account." });
+        }
+    } catch (error: any) {
+        console.error("Page: Error subscribing user:", error);
+        toast({ variant: "destructive", title: "Subscription Failed", description: "Could not activate your subscription. " + error.message });
+    }
+  };
+
+  const handleLoginForPaywall = async () => {
+    setShowPaywall(false);
+    // console.log('Attempting to redirect to /login?redirect=%2F'); // Debug log
+    router.push('/login?redirect=%2F');
+    toast({title: "Redirecting", description: "Please wait while we take you to the login page."}) // Updated toast
+  };
+
+  const refreshInteractionStatus = useCallback(async () => {
+    if (isClientMounted && !isLoadingPageProfile) {
+      // console.log("Page: Refreshing interaction status explicitly...");
+      const status = await checkInteractionLimit('problem_generation'); // Using a general type for status display
+      setInteractionStatus(status);
+    }
+  }, [isClientMounted, isLoadingPageProfile, checkInteractionLimit]);
+
+  useEffect(() => {
+    if (isClientMounted && !isLoadingPageProfile && !currentUser && !currentProblem && !isLoadingProblem && history.length > 0) {
+      const lastItem = history[0];
+      if (lastItem) {
+        setCurrentTopic(lastItem.topic);
+        setCurrentProblemType(lastItem.actualProblemType || lastItem.problemType);
+        setCurrentDifficulty(lastItem.difficulty || 'medium');
+        setCurrentProblem(lastItem.problem);
+        if (lastItem.evaluation) setEvaluationResult(lastItem.evaluation);
+        if (lastItem.isTopicRevised && lastItem.topicDetails) {
+          setProblemInsights(lastItem.topicDetails);
+        }
+      }
+    }
+  }, [currentUser, history, isLoadingProblem, currentProblem, isLoadingPageProfile, isClientMounted]);
+
+  const [interactionStatus, setInteractionStatus] = useState<InteractionLimitResult | null>(null);
+
+  useEffect(() => {
+    const fetchInteractionStatus = async () => {
+      if (isClientMounted && !isLoadingPageProfile) {
+        const status = await checkInteractionLimit('problem_generation'); // Use a generic interaction type for display
+        setInteractionStatus(status);
+      }
+    };
+    fetchInteractionStatus();
+  }, [isClientMounted, isLoadingPageProfile, checkInteractionLimit, currentUser, guestInteractionCount, userProfile]);
+
+  // Function to fetch user's test series
+  const fetchUserTestSeries = useCallback(async () => {
+    if (!currentUser) return;
+
+    // Explicitly refresh session to ensure cookies are up-to-date
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    console.log('Supabase session in fetchUserTestSeries:', user);
+    if (userError || !user) {
+      console.error('No active user found:', userError?.message);
+      toast({
+        title: 'Authentication Error',
+        description: 'Could not refresh user session. Please try logging in again.',
+        variant: 'destructive',
+      });
+      setIsLoadingTestSeries(false);
+      return;
+    }
+
+    setIsLoadingTestSeries(true);
+    try {
+      const response = await fetch('/api/test-series/my-series', {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error(`Error fetching test series: ${response.statusText}`);
+      }
+      const data = await response.json();
+      setUserTestSeries(data);
+    } catch (error: any) {
+      console.error('Failed to fetch user test series:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to load your test series: ${error.message || 'Unknown error'}`,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingTestSeries(false);
+    }
+  }, [currentUser, toast]);
+
+  // Function to handle adding problem to test series
+  const handleAddProblemToTestSeries = useCallback(async () => {
+    if (!currentProblem || !selectedTestSeriesId || !currentUser) {
+      toast({
+        title: 'Error',
+        description: 'Problem data, selected test series, or user not available.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsAddingProblem(true);
+    try {
+      const response = await fetch('/api/test-series/add-problem', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          problemData: {
+            problemStatement: currentProblem.problemStatement,
+            // Map 'mcq' to 'practical_mcq' to match database enum
+            problemType: currentProblemType === 'mcq' ? 'practical_mcq' : currentProblemType,
+            difficulty: currentDifficulty,
+            correctAnswer: currentProblem.correctAnswer || null,
+            explanation: currentProblem.answerFormat || null,
+            multipleChoiceOptions: currentProblem.multipleChoiceOptions || [],
+            answerFormat: currentProblem.answerFormat,
+            topic: currentTopic,
+          },
+          testSeriesId: selectedTestSeriesId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Error adding problem: ${errorData.error || response.statusText}`);
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Problem successfully added to your test series!',
+      });
+      setShowAddToTestSeriesModal(false);
+      setSelectedTestSeriesId(null);
+    } catch (error: any) {
+      console.error('Failed to add problem to test series:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to add problem: ${error.message || 'Unknown error'}`,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAddingProblem(false);
+    }
+  }, [currentProblem, selectedTestSeriesId, currentUser, toast, currentProblemType, currentDifficulty, currentTopic]);
+
+  const interactionsLeftText = useCallback(() => {
+    if (!isClientMounted || !interactionStatus) {
+      return "Loading interactions...";
+    }
+
+    const { allowed, remaining, limit, isLoggedIn, requiresLogin, requiresUpgrade } = interactionStatus;
+
+    if (isLoggedIn) {
+      if (userProfile?.is_subscribed) {
+        return `${remaining} of ${limit} interactions remaining`;
+      } else {
+        // Logged-in, not subscribed
+        if (remaining > 0) {
+          return `Free interactions remaining: ${remaining} / ${limit}`;
+        } else if (requiresUpgrade) {
+          return "Daily allowance used. Please try again tomorrow.";
+        } else {
+          return "Interactions: N/A"; // Should not happen if logic is correct
+        }
+      }
+    } else {
+      // Guest user
+      const guestRemaining = Math.max(0, FREE_INTERACTION_LIMIT - guestInteractionCount);
+      if (guestRemaining > 0) {
+        return `Free interactions remaining (guest): ${guestRemaining} / ${FREE_INTERACTION_LIMIT}`;
+      } else if (requiresLogin) {
+        return "Free interactions exhausted. Please log in to continue.";
+      } else {
+        return "Interactions: N/A"; // Should not happen if logic is correct
+      }
+    }
+  }, [isClientMounted, interactionStatus, guestInteractionCount, userProfile]);
+
+  return (
+    <>
+      <HeroSection scrollToProblemGenerator={scrollToProblemGenerator} />
+      <GenerateSection />
+
+      <div id="generate" className="flex-1 bg-background">
+        <div className="py-4 sm:py-8 overflow-hidden">
+          <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
+            <div className="max-w-5xl mx-auto space-y-6 w-full">
+              <div ref={problemGeneratorRef}>
+                <ProblemGenerator
+                  ref={problemGeneratorComponentRef}
+                  onGenerate={handleGenerateProblem}
+                  isLoading={isLoadingProblem || (!!currentUser && isLoadingPageProfile)}
+                  defaultTopic={currentTopic}
+                  defaultProblemType={currentProblemType}
+                  defaultDifficulty={currentDifficulty}
+                />
+              </div>
+
+              {currentProblem && (
+                <>
+
+                <div className="flex flex-col sm:flex-row gap-3 w-full mb-4">
+                  <Button
+                    onClick={handleNewProblemSameTopic}
+                    variant="outline"
+                    className="flex-1 text-xs sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis px-2 sm:px-4"
+                    disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
+                  >
+                    <RefreshCw className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                    <span className="truncate">Another (Same Topic)</span>
+                  </Button>
+                  {FEATURES.testSeries && currentUser && currentProblem && (
+                    <Button
+                      onClick={() => {
+                        setShowAddToTestSeriesModal(true);
+                        fetchUserTestSeries(); // Fetch series when modal opens
+                      }}
+                      variant="outline"
+                      className="flex-1 text-xs sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis px-2 sm:px-4"
+                      disabled={isLoadingProblem || isLoadingPageProfile || isLoadingTestSeries}
+                    >
+                      <FilePlus2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                      <span className="truncate">Add to Test Series</span>
+                    </Button>
+                  )}
+                  <Button
+                    onClick={handleStartNew}
+                    variant="outline"
+                    className="flex-1 text-xs sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis px-2 sm:px-4"
+                    disabled={!!(isLoadingProblem || (!!currentUser && isLoadingPageProfile))}
+                  >
+                    <FilePlus2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                    <span className="truncate">Start New Topic</span>
+                  </Button>
+                </div>
+
+                <ProblemDisplay
+                  ref={problemDisplayRef}
+                  problem={currentProblem}
+                  problemType={currentProblemType}
+                  onSubmitAnswer={handleEvaluateAnswer}
+                  onFeedbackSubmit={handleProblemFeedback}
+                  isLoading={!!(isLoadingEvaluation || (!!currentUser && isLoadingPageProfile))}
+                  currentTopic={currentTopic}
+                  evaluationSubmitted={!!evaluationResult}
+                />
+
+
+                  {evaluationResult && (
+                    <>
+                      <EvaluationResult ref={evaluationResultRef} evaluation={evaluationResult} />
+                      {currentProblem && evaluationResult.isCorrect !== undefined && ( // Only show insights prompt if there's a current problem and evaluation is complete
+                        <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm text-primary">
+                          <p>Want to understand how to solve similar problems? Click "View Insights" below!</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+              {isClientMounted && history.length > 0 && (
+                <Card className="mt-8">
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span>Interaction History</span>
+                      <History className="h-6 w-6 text-muted-foreground" />
+                    </CardTitle>
+                    <CardDescription>
+                      {history.length > 0
+                        ? `You have ${history.length} item(s) in your history. Review your past practice problems and evaluations.`
+                        : "Review your past practice problems and evaluations."}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Link href="/history" passHref>
+                      <Button className="w-full" variant="outline">
+                        View Full History
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              )}
+              <div className="pt-4 w-full">
+                <ProblemInsights
+                  problem={currentProblem}
+                  topic={currentTopic}
+                  insights={problemInsights}
+                  onFetchInsights={handleGenerateProblemInsights}
+                  isLoading={!!(isLoadingInsights || (!!currentUser && isLoadingPageProfile))}
+                />
+              </div>
+            </div>
+
+
+          </div>
+        </div>
+      </div>
+
+      <PaywallModal
+        isOpen={showPaywall}
+        onClose={() => {
+          setShowPaywall(false);
+          setPaywallContext(null); // Reset context on close
+        }}
+        onSubscribe={handleSubscribe}
+        onLoginRegister={handleLoginForPaywall}
+        displayContext={paywallContext}
+      />
+
+      {/* Add to Test Series Modal */}
+      <Dialog open={showAddToTestSeriesModal} onOpenChange={setShowAddToTestSeriesModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add Problem to Test Series</DialogTitle>
+            <DialogDescription>
+              Select a test series to add the current problem to.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="test-series" className="text-right">
+                Test Series
+              </Label>
+              <Select onValueChange={setSelectedTestSeriesId} value={selectedTestSeriesId || ''} disabled={isLoadingTestSeries || isAddingProblem}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select a test series" />
+                </SelectTrigger>
+                <SelectContent>
+                  {isLoadingTestSeries ? (
+                    <SelectItem value="loading" disabled>Loading...</SelectItem>
+                  ) : userTestSeries.length === 0 ? (
+                    <SelectItem value="no-series" disabled>No test series found. Create one first!</SelectItem>
+                  ) : (
+                    userTestSeries.map((series) => (
+                      <SelectItem key={series.id} value={series.id}>
+                        {series.title}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={handleAddProblemToTestSeries}
+              disabled={!selectedTestSeriesId || isAddingProblem || isLoadingTestSeries}
+            >
+              {isAddingProblem ? 'Adding...' : 'Add Problem'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 pb-4 text-center">
+        <p className="text-xs text-muted-foreground">
+          {interactionsLeftText()}
+        </p>
+      </div>
+    </>
+  );
+}
+
+
+export default function Page() {
+  return <Suspense fallback={<p className="p-8">Loading practice...</p>}><AOLBEAMPage /></Suspense>;
+}

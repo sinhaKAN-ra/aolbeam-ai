@@ -2,15 +2,18 @@ import Link from "next/link";
 import {
   ArrowRight,
   BookOpen,
-  GraduationCap,
+  ExternalLink,
+  Terminal,
+  Database,
   MessageSquare,
   Route,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 export const metadata = {
   title: "A little clarity, a lot of possibility | Aolbeam",
+  alternates: { canonical: "/about" },
   description:
-    "Meet Aolbeam, your personal space for understanding, practice and steady progress.",
+    "Learn about Aolbeam AI: practice questions, tutor explanations and personal learning paths across maths, science, languages, humanities, business and coding.",
 };
 export default function AboutPage() {
   return (
@@ -39,6 +42,8 @@ export default function AboutPage() {
             Aolbeam helps connect understanding with application. Ask your AI
             tutor to explain a difficult idea, practice a problem at your level,
             and build a learning path that gives your study time some direction.
+            Explore maths, science, languages, humanities, business and coding in
+            our <Link href="/practice" className="text-primary underline">guide to practice across subjects</Link>.
           </p>
         </div>
       </section>
@@ -68,6 +73,32 @@ export default function AboutPage() {
             </p>
           </div>
         ))}
+      </section>
+      <section aria-labelledby="explore-projects" className="mb-12 space-y-5">
+        <div>
+          <p className="eyebrow mb-3">More from Aolbeam</p>
+          <h2 id="explore-projects" className="text-2xl font-semibold">Explore our other projects</h2>
+          <p className="mt-3 text-sm leading-7 text-muted-foreground">
+            Tools for curious builders, from asking better questions to understanding database queries.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {[
+            { name: "Ask", href: "https://ask.aolbeam.com", domain: "ask.aolbeam.com", icon: Terminal, description: "Ask questions, inspect code and search the web from your terminal with a lightweight Python CLI." },
+            { name: "Anumana", href: "https://anumana.aolbeam.com", domain: "anumana.aolbeam.com", icon: Database, description: "Understand database query plans and estimated costs before running queries, with an MCP server for AI tools." },
+          ].map(project => (
+            <a key={project.name} href={project.href} target="_blank" rel="noopener noreferrer"
+              className="group rounded-2xl border bg-card p-6 transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+              <div className="mb-5 flex items-center justify-between">
+                <project.icon className="h-5 w-5 text-primary" aria-hidden="true" />
+                <ExternalLink className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              </div>
+              <h3 className="text-lg font-semibold group-hover:text-primary">{project.name}</h3>
+              <p className="mt-3 text-sm leading-7 text-muted-foreground">{project.description}</p>
+              <p className="mt-5 text-xs font-medium text-primary">{project.domain} <span className="sr-only">(opens in a new tab)</span></p>
+            </a>
+          ))}
+        </div>
       </section>
       <section className="flex flex-wrap items-center gap-5 rounded-2xl border bg-primary/[0.04] p-7">
         <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-lg font-semibold text-primary">

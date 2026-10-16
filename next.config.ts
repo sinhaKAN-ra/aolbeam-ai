@@ -1,7 +1,12 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async headers() {
+    return [{
+      source: '/:section(chat|profile|account|history|learning-paths|login|signup|auth|admin)/:path*',
+      headers: [{ key: 'X-Robots-Tag', value: 'noindex' }],
+    }];
+  },
   typescript: {
     ignoreBuildErrors: false,
   },

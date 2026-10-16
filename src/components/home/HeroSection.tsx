@@ -38,15 +38,16 @@ export const HeroSection = ({
               `Your next chapter, ${firstName}.`
             ) : (
               <>
-                Big ambitions.
+                Learn any subject.
                 <br />
-                Small, steady steps.
+                One question at a time.
               </>
             )}
           </h1>
           <p className="mt-5 max-w-md text-sm leading-7 text-muted-foreground sm:text-[15px]">
-            Understand the tricky bits. Practice until it clicks. Build a path
-            that takes you from “where do I start?” to “I’ve got this.”
+            Practice maths, science, languages, humanities, business or coding.
+            Get AI explanations and answer feedback, or build a learning path
+            around what you want to understand.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Button size="lg" onClick={scrollToProblemGenerator}>
@@ -57,7 +58,8 @@ export const HeroSection = ({
             </Button>
           </div>
           <p className="mt-5 text-[11px] text-muted-foreground">
-            At your pace. Around your goals.
+            At your pace. Around your goals.{" "}
+            <Link href="/practice" className="underline underline-offset-4">Explore subjects and how practice works →</Link>
           </p>
         </div>
         <div
