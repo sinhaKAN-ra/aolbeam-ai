@@ -84,6 +84,7 @@ export default function HistoryPage() {
             .from('user_interactions')
             .select('*')
             .eq('user_id', currentUser.id)
+            .eq('interaction_type', 'problem_generation').not('problem_statement', 'is', null)
             .order('created_at', { ascending: false }) // Get newest first
             .limit(100); // Limit to last 100 interactions, adjust as needed
 
@@ -139,7 +140,7 @@ export default function HistoryPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] p-4">
         <AlertTriangle className="h-12 w-12 text-destructive" />
-        <p className="mt-4 text-destructive-foreground font-semibold">Error Loading History</p>
+        <p className="mt-4 text-destructive font-semibold">Error Loading History</p>
         <p className="mt-2 text-muted-foreground text-center">{error}</p>
         {currentUser && (
             <p className="mt-2 text-sm text-muted-foreground text-center">
@@ -152,13 +153,13 @@ export default function HistoryPage() {
   }
   
   return (
-    <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8">
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle className="text-3xl font-bold">Interaction History</CardTitle>
+    <div className="page-shell">
+      <Card className="mb-7 border-0 bg-transparent shadow-none">
+        <CardHeader className="p-0">
+          <p className="eyebrow mb-3">Small efforts add up</p><CardTitle className="text-3xl font-semibold">Your practice, revisited.</CardTitle>
           <CardDescription>
             Review your past practice problems and evaluations.
-            {currentUser ? ` History for ${currentUser.email}.` : " You are viewing history as a guest."}
+            {currentUser ? ` Saved to your account.` : " You are viewing history as a guest."}
           </CardDescription>
         </CardHeader>
       </Card>

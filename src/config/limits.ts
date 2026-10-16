@@ -56,3 +56,6 @@ export function chatLimitFor(planId: string): number {
 export function aiGenerationLimitFor(planId: string): number {
   return AI_GENERATION_LIMITS[(planId as PlanId)] ?? AI_GENERATION_LIMITS.free;
 }
+
+/** Maximum size of a course, including modules added by the learner. */
+export const LEARNING_PATH_MAX_MODULES = 40;

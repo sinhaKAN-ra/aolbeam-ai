@@ -1,3 +1,5 @@
+import type { LearningLesson } from '@/lib/learning-paths/schema';
+
 // Message types
 export type MessageSender = 'user' | 'ai';
 export type MessageType = 'text' | 'learning_context' | 'practice_problem' | 'practice_problems_list' | 'error' | 'career_advice';
@@ -33,6 +35,11 @@ export interface TopicSuggestion {
 
 // Learning path types
 export interface LearningStep {
+  source?: 'manual' | 'ai';
+  objectives?: string[];
+  estimatedMinutes?: number;
+  lesson?: LearningLesson;
+  completedAt?: string;
   id: string;
   title: string;
   description: string;

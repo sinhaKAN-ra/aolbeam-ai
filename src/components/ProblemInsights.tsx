@@ -41,29 +41,7 @@ export const ProblemInsights = forwardRef<HTMLDivElement, ProblemInsightsProps>(
     }
   };
 
-  if (!problem || !topic) {
-    return (
-      <Card className="shadow-lg" ref={ref as React.RefObject<HTMLDivElement> | null | undefined}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl font-semibold">
-            <Lightbulb className="text-primary" /> Problem-Solving Insights
-          </CardTitle>
-          <CardDescription className="text-sm mt-1">
-            Generate a problem first to get specific solving insights and pattern recognition tips.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto p-6">
-          <Button 
-            variant="outline" 
-            className="w-full"
-            disabled
-          >
-            Generate a problem to see insights
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (!problem || !topic) return null;
 
   console.log('Rendering ProblemInsights with:', { 
     hasProblem: !!problem, 

@@ -14,8 +14,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'AOLBEAM',
-  description: 'AI-powered learning platform',
+  title: 'Aolbeam — your learning workspace',
+  description: 'Understand difficult concepts, practice at your level, and follow an AI learning path made around your goals.',
 };
 
 export default function RootLayout({
@@ -29,7 +29,7 @@ export default function RootLayout({
         <Providers>
           <AppShell>{children}</AppShell>
         </Providers>
-        <Analytics />
+        {process.env.VERCEL === '1' && <Analytics />}
       </body>
     </html>
   );

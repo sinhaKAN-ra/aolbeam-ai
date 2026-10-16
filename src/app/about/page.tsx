@@ -1,138 +1,103 @@
-// src/app/about/page.tsx
-import type { Metadata } from 'next';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Lightbulb, Target, Rocket, Users, Mail, Phone, ExternalLink } from 'lucide-react';
-// Footer is now global
-
-export const metadata: Metadata = {
-  title: 'About AOLBEAM - Our Mission & Vision',
-  description: 'Learn about the mission, vision, and the problem AOLBEAM aims to solve for students preparing for competitive exams.',
+import Link from "next/link";
+import {
+  ArrowRight,
+  BookOpen,
+  GraduationCap,
+  MessageSquare,
+  Route,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+export const metadata = {
+  title: "A little clarity, a lot of possibility | Aolbeam",
+  description:
+    "Meet Aolbeam, your personal space for understanding, practice and steady progress.",
 };
-
-export default function AboutUsPage() {
+export default function AboutPage() {
   return (
-    <>
-      <div className="pb-8">
-        <div>
-          <Card className="shadow-xl">
-            <CardHeader className="text-center">
-              <div className="mx-auto mb-4">
-                 <Rocket className="h-16 w-16 text-primary" />
-              </div>
-              <CardTitle className="text-3xl font-bold">About AOLBEAM</CardTitle>
-              <CardDescription className="text-lg text-muted-foreground">
-                Our Mission, Vision, and the Path to Smarter Learning
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-8 text-base md:text-lg leading-relaxed">
-              <section>
-                <h2 className="text-2xl font-semibold mb-3 flex items-center gap-2 text-primary">
-                  <Users className="h-6 w-6" /> Why We Built AOLBEAM
-                </h2>
-                <p className="text-muted-foreground">
-                  We observed that many students, despite their hard work, struggle to bridge the gap between knowing concepts and applying them effectively under exam pressure. The key to excelling in competitive exams often lies in rapidly recognizing problem patterns and recalling relevant solution strategies. AOLBEAM was born from a desire to leverage the power of Artificial Intelligence to make this crucial skill-building process more efficient, personalized, and accessible to every student aiming for success.
-                </p>
-              </section>
-
-              <section>
-                <h2 className="text-2xl font-semibold mb-3 flex items-center gap-2 text-primary">
-                  <Target className="h-6 w-6" /> The Challenge: Mastering Problem-Solving Patterns
-                </h2>
-                <p className="text-muted-foreground">
-                  Getting better at solving complex problems isn't just about understanding individual topics; it's about <strong className="text-foreground">knowing or swiftly recalling similar patterns</strong> used for solving that kind of problem. Traditional study methods can sometimes be slow in helping students internalize the vast array of patterns encountered in competitive exams. This is the core challenge AOLBEAM is designed to address.
-                </p>
-              </section>
-
-              <section>
-                <h2 className="text-2xl font-semibold mb-3 flex items-center gap-2 text-primary">
-                  <Lightbulb className="h-6 w-6" /> Our Solution: AI-Powered Learning & Pattern Recognition
-                </h2>
-                <p className="text-muted-foreground">
-                  AOLBEAM provides a dynamic platform where students can:
-                </p>
-                <ul className="list-disc list-inside space-y-2 mt-2 text-muted-foreground pl-4">
-                  <li><strong className="text-foreground">Practice Endlessly:</strong> Generate a wide variety of problems across different topics, types, and difficulty levels, tailored by AI.</li>
-                  <li><strong className="text-foreground">Revise Strategically:</strong> Instantly access concise topic details relevant to the problem at hand, reinforcing the underlying principles and patterns.</li>
-                  <li><strong className="text-foreground">Learn from Feedback:</strong> Receive immediate evaluations on answers, helping to correct misunderstandings and solidify learning.</li>
-                </ul>
-                <p className="mt-3 text-muted-foreground">
-                  Our goal is to accelerate your ability to internalize these crucial problem-solving patterns, making you more confident and efficient – just like a topper.
-                </p>
-              </section>
-              
-              <section>
-                <h2 className="text-2xl font-semibold mb-3 flex items-center gap-2 text-primary">
-                  <Rocket className="h-6 w-6" /> Our Vision: The Future of Education
-                </h2>
-                <p className="text-muted-foreground">
-                  We believe in creating a platform for students to learn and become educated in a new, more intuitive way. The journey with AOLBEAM is just beginning. Our long-term vision is to evolve into a comprehensive, <strong className="text-foreground">search-based learning platform</strong>. Imagine a system where you can instantly find, understand, and master any concept or problem-solving technique you need, precisely when you need it, all powered by intelligent assistance.
-                </p>
-              </section>
-
-              <section className="mt-12">
-                <h2 className="text-2xl font-semibold mb-6 text-center text-primary">
-                  Meet the Founder
-                </h2>
-                <div className="bg-muted/50 p-6 rounded-lg">
-                  <div className="flex flex-col md:flex-row items-center gap-6">
-                    <div className="w-32 h-32 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="text-4xl font-bold text-primary">KS</span>
-                    </div>
-                    <div className="text-center md:text-left">
-                      <h3 className="text-xl font-bold">Karan Sinha</h3>
-                      <p className="text-muted-foreground mb-3">
-                        🚀 Tech Founder | Full Stack Developer | AI + Web3 Enthusiast
-                      </p>
-                      <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
-                        <a 
-                          href="https://www.linkedin.com/in/sinhakan-ra/" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                          LinkedIn
-                        </a>
-                        <a 
-                          href="https://x.com/karan_knows" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                          Twitter/X
-                        </a>
-                        <a 
-                          href="mailto:aolbeam@outlook.com" 
-                          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
-                        >
-                          <Mail className="h-4 w-4" />
-                          aolbeam@outlook.com
-                        </a>
-                        <a 
-                          href="tel:+16033240396" 
-                          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
-                        >
-                          <Phone className="h-4 w-4" />
-                          +1 (603) 324-0396
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <div className="text-center mt-10">
-                <Button asChild size="lg">
-                  <Link href="/">Start Your Practice Journey</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+    <div>
+      <header className="mb-12 border-b pb-10">
+        <p className="eyebrow mb-5">The idea behind Aolbeam</p>
+        <h1 className="max-w-2xl text-4xl font-semibold leading-tight sm:text-5xl">
+          Learning should feel like
+          <br />
+          <span className="text-primary">a way forward.</span>
+        </h1>
+        <p className="mt-6 max-w-xl text-base leading-8 text-muted-foreground">
+          Sometimes all it takes is a clearer explanation, the right question,
+          or knowing what to do next. That’s what we’re here for.
+        </p>
+      </header>
+      <section className="mb-12 grid gap-7 sm:grid-cols-[160px_1fr]">
+        <h2 className="text-sm font-semibold">Why we started</h2>
+        <div className="space-y-5 text-sm leading-7 text-muted-foreground">
+          <p>
+            Working hard doesn’t always mean knowing where to focus. Students
+            can understand a concept in class and still feel stuck when an
+            unfamiliar problem appears in an exam.
+          </p>
+          <p>
+            Aolbeam helps connect understanding with application. Ask your AI
+            tutor to explain a difficult idea, practice a problem at your level,
+            and build a learning path that gives your study time some direction.
+          </p>
         </div>
+      </section>
+      <section className="mb-12 grid gap-4 sm:grid-cols-3">
+        {[
+          {
+            icon: MessageSquare,
+            title: "Understand it",
+            text: "A patient tutor that makes room for your follow-up questions.",
+          },
+          {
+            icon: BookOpen,
+            title: "Put it to work",
+            text: "Practice questions and feedback that help you see what to improve.",
+          },
+          {
+            icon: Route,
+            title: "Keep moving",
+            text: "A personal course with clear modules and progress you can return to.",
+          },
+        ].map((item) => (
+          <div key={item.title} className="rounded-2xl border bg-card p-6">
+            <item.icon className="mb-5 h-5 w-5 text-primary" />
+            <h2 className="mb-3 text-base font-semibold">{item.title}</h2>
+            <p className="text-xs leading-6 text-muted-foreground">
+              {item.text}
+            </p>
+          </div>
+        ))}
+      </section>
+      <section className="flex flex-wrap items-center gap-5 rounded-2xl border bg-primary/[0.04] p-7">
+        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-lg font-semibold text-primary">
+          KS
+        </span>
+        <div className="flex-1">
+          <p className="eyebrow mb-1">Built by</p>
+          <h2 className="text-lg font-semibold">Karan Sinha</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Founder & full stack developer
+          </p>
+        </div>
+        <a
+          href="https://www.linkedin.com/in/sinhakan-ra/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs font-medium text-primary hover:underline"
+        >
+          Connect on LinkedIn ↗
+        </a>
+      </section>
+      <div className="mt-12 flex flex-wrap items-center justify-between gap-5">
+        <h2 className="text-xl font-semibold">One small step starts a lot.</h2>
+        <Button asChild>
+          <Link href="/">
+            Find your starting point
+            <ArrowRight />
+          </Link>
+        </Button>
       </div>
-    </>
+    </div>
   );
 }

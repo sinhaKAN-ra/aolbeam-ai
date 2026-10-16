@@ -13,8 +13,8 @@ export default function PrivacyPolicyPage() {
   return (
     <>
       <div className="py-8">
-        <div className="bg-card p-6 sm:p-8 rounded-lg shadow-lg">
-          <h2 className="text-2xl font-semibold mb-6 text-center">Privacy Policy</h2>
+        <div className="bg-card p-6 sm:p-10 rounded-3xl border">
+          <h1 className="text-3xl font-semibold mb-6">Privacy Policy</h1>
           
           <p className="mb-4 text-muted-foreground">Last updated: {new Date().toLocaleDateString()}</p>
 

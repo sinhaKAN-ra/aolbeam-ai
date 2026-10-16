@@ -90,15 +90,15 @@ export const ProblemGenerator = forwardRef<ProblemGeneratorHandles, ProblemGener
     const isTopicValid = Boolean(topic.trim());
 
     return (
-      <Card className="shadow-lg">
-        <CardHeader>
+      <Card className="overflow-hidden shadow-none">
+        <CardHeader className="border-b border-border/60 bg-muted/20 mb-6">
           <CardTitle className="flex items-center gap-2 text-2xl font-semibold">
-            <Sparkles className="text-primary" /> Generate a New Problem
+            <Sparkles className="text-primary" /> What are we working on?
           </CardTitle>
-          <CardDescription>Enter a topic, select type, and choose difficulty.</CardDescription>
+          <CardDescription>Pick a topic and shape your challenge. Your AI will take it from here.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-7">
             <div className="space-y-2">
               <Label htmlFor="topic" className="flex items-center gap-2 text-base font-medium">
                 <BookText className="w-5 h-5" /> Topic
@@ -108,9 +108,9 @@ export const ProblemGenerator = forwardRef<ProblemGeneratorHandles, ProblemGener
                 id="topic"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
-                placeholder="e.g., Quantum Physics, Organic Chemistry"
+                placeholder="Try “Newton’s laws”, “Integration”, or “Organic chemistry”"
                 required
-                className="text-base"
+                className="h-12 text-base"
               />
             </div>
             
@@ -119,19 +119,19 @@ export const ProblemGenerator = forwardRef<ProblemGeneratorHandles, ProblemGener
               <RadioGroup
                 value={problemType}
                 onValueChange={(value: string) => setProblemType(value as UISpecificProblemType)}
-                className="grid grid-cols-2 sm:grid-cols-3 gap-3"
+                className="grid grid-cols-2 sm:grid-cols-4 gap-2"
               >
                 {problemTypeOptions.map(option => (
-                  <div key={option.value} className="flex-1 min-w-[120px]">
+                  <div key={option.value} className="min-w-0">
                     <RadioGroupItem value={option.value} id={option.value} className="sr-only peer"/>
                     <Label 
                       htmlFor={option.value} 
-                      className="flex items-center justify-center gap-2 p-3 border rounded-md cursor-pointer text-base
+                      className="flex items-center justify-center gap-2 p-3 border rounded-xl cursor-pointer text-xs min-h-14 peer-focus-visible:ring-2 peer-focus-visible:ring-ring
                                  hover:border-primary transition-colors 
                                  peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10
                                  peer-data-[state=checked]:text-primary"
                     >
-                      <option.icon className="w-5 h-5" /> {option.label}
+                      <option.icon className="w-4 h-4" /> {option.label}
                     </Label>
                   </div>
                 ))}
@@ -154,8 +154,8 @@ export const ProblemGenerator = forwardRef<ProblemGeneratorHandles, ProblemGener
               </Select>
             </div>
 
-            <Button type="submit" disabled={isLoading || !isTopicValid} className="w-full text-base py-3">
-              {isLoading ? <Loader2 className="animate-spin" /> : "Generate Problem"}
+            <Button type="submit" disabled={isLoading || !isTopicValid} className="w-full h-12 text-sm">
+              {isLoading ? <><Loader2 className="animate-spin" /> Creating your challenge…</> : <><Sparkles className="h-4 w-4" /> Generate my practice problem</>}
             </Button>
           </form>
         </CardContent>

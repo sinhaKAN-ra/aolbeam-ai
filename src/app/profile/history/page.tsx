@@ -1,8 +1,9 @@
 // src/app/profile/history/page.tsx
 "use client";
+import { useAppRouter } from "@/hooks/useAppRouter";
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+
 import Link from 'next/link';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -71,18 +72,18 @@ const getDifficultyLabel = (level?: DifficultyLevel | null) => {
 };
 
 const getDifficultyColor = (level?: DifficultyLevel | null) => {
-  if (!level) return 'bg-gray-200 text-gray-700';
+  if (!level) return 'bg-muted text-muted-foreground';
   
   const colors: Record<DifficultyLevel, string> = {
-    easy: 'bg-green-100 text-green-800',
-    medium: 'bg-yellow-100 text-yellow-800',
-    hard: 'bg-red-100 text-red-800'
+    easy: 'bg-primary/10 text-primary',
+    medium: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    hard: 'bg-destructive/10 text-destructive'
   };
-  return colors[level] || 'bg-gray-200 text-gray-700';
+  return colors[level] || 'bg-muted text-muted-foreground';
 };
 
 export default function HistoryPage() {
-  const router = useRouter();
+  const router = useAppRouter();
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -171,7 +172,7 @@ export default function HistoryPage() {
   
   if (authLoading) {
     return (
-      <div className="container py-6">
+      <div className="mx-auto py-6">
         <div className="flex items-center justify-center min-h-[60vh]">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
@@ -180,7 +181,7 @@ export default function HistoryPage() {
   }
   
   return (
-    <div className="container max-w-5xl py-6">
+    <div className="mx-auto max-w-5xl pb-6">
       <div className="flex flex-col space-y-6">
         <div>
           <Button variant="link" asChild className="px-0"><Link href="/profile">Back to profile</Link></Button>
@@ -260,12 +261,12 @@ export default function HistoryPage() {
                         {item.evaluation_is_correct == null ? <span className="text-sm text-muted-foreground">Not evaluated</span> : item.evaluation_is_correct ? (
                           <>
                             <CheckCircle className="h-4 w-4 text-green-500" />
-                            <span className="text-sm text-green-600">Correct Answer</span>
+                            <span className="text-sm text-primary">Correct Answer</span>
                           </>
                         ) : (
                           <>
                             <XCircle className="h-4 w-4 text-red-500" />
-                            <span className="text-sm text-red-600">Incorrect Answer</span>
+                            <span className="text-sm text-destructive">Incorrect Answer</span>
                           </>
                         )}
                       </div>

@@ -1,7 +1,8 @@
 "use client";
+import { useAppRouter } from "@/hooks/useAppRouter";
 
 import React, { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+
 import type { ChatSession } from '@/types/chat-feature';
 import { Plus, MessageSquare, Pencil, Trash2, Check, X } from 'lucide-react';
 
@@ -57,7 +58,7 @@ const ChatHistoryRail: React.FC<ChatHistoryRailProps> = ({
   onRenameSession,
   onClose,
 }) => {
-  const router = useRouter();
+  const router = useAppRouter();
   const groups = useMemo(() => groupSessions(sessions), [sessions]);
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -102,13 +103,13 @@ const ChatHistoryRail: React.FC<ChatHistoryRailProps> = ({
   };
 
   return (
-    <div className="flex h-full flex-col bg-card/40">
+    <div className="flex h-full flex-col bg-card/30">
       <div className="p-3">
         <button
           onClick={startNew}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
-          <Plus className="h-4 w-4" /> New Chat
+          <Plus className="h-4 w-4" /> New conversation
         </button>
       </div>
 

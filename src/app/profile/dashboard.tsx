@@ -1,8 +1,9 @@
 "use client";
+import { useAppRouter } from "@/hooks/useAppRouter";
 
 import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen, MessageSquare, ArrowRight, RefreshCw, Settings } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,8 +17,8 @@ import ChatMarkdown from '@/components/chat-feature/ChatMarkdown';
 export default function Dashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const supabase = useSupabase();
-  const router = useRouter();
-  const chatHref = useMemo(() => `/chat/${crypto.randomUUID()}`, [user?.id]);
+  const router = useAppRouter();
+  const chatHref = '/chat/new';
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login?redirect=/profile');
   }, [authLoading, user, router]);
@@ -38,11 +39,12 @@ export default function Dashboard() {
         supabase.from('user_interactions').select('id, topic, problem_statement, created_at, evaluation_is_correct')
           .eq('user_id', userId).eq('interaction_type', 'problem_generation').not('problem_statement', 'is', null)
           .order('created_at', { ascending: false }).limit(5),
+        supabase.from('learning_paths').select('id, title, steps').eq('user_id', userId).order('updated_at', { ascending: false }).limit(3),
       ]);
       for (const result of results) if (result.error) throw new Error(result.error.message);
       return { name: results[0].data?.full_name, generated: results[1].count ?? 0,
         evaluated: results[2].count ?? 0, correct: results[3].count ?? 0,
-        chats: results[4].count ?? 0, recent: results[5].data ?? [] };
+        chats: results[4].count ?? 0, recent: results[5].data ?? [], paths: results[6].data ?? [] };
     },
   });
   if (authLoading || !user) return <div className="py-12 text-center text-muted-foreground">Loading your profile…</div>;
@@ -67,6 +69,7 @@ export default function Dashboard() {
     <section className="grid gap-4 md:grid-cols-3" aria-label="Continue learning">
       {[{ href: '/', title: 'Practice a problem', description: 'Generate a question and get feedback on your answer.', icon: BookOpen }, { href: chatHref, title: 'Ask your tutor', description: 'Explore a concept or work through a tricky question.', icon: MessageSquare }, { href: '/learning-paths', title: 'Learning paths', description: 'Follow a course and keep building your understanding.', icon: ArrowRight }].map(item => <Link href={item.href} key={item.href} className="rounded-xl border p-5 transition-colors hover:bg-muted/50"><item.icon className="mb-4 h-5 w-5 text-primary" /><h2 className="font-semibold">{item.title}</h2><p className="mt-2 text-sm text-muted-foreground">{item.description}</p></Link>)}
     </section>
+    {data?.paths.length ? <section className="rounded-2xl border bg-card p-6"><div className="mb-5 flex items-center justify-between"><div><p className="eyebrow mb-2">Keep the momentum</p><h2 className="text-xl font-semibold">Pick up your learning path</h2></div><Link className="text-xs text-primary" href="/learning-paths">All paths ↗</Link></div><div className="space-y-3">{data.paths.map(path => <Link key={path.id} href={`/learning-paths?path=${path.id}`} className="flex items-center justify-between gap-3 rounded-xl border p-4 text-sm transition-colors hover:bg-muted/40"><span className="font-medium">{path.title}</span><ArrowRight className="h-4 w-4 text-primary" /></Link>)}</div></section> : null}
     <Card><CardHeader className="flex flex-row items-center justify-between gap-4"><div><CardTitle>Recent practice</CardTitle><CardDescription>Your latest saved problems</CardDescription></div><Button variant="ghost" size="sm" asChild><Link href="/profile/history">View history<ArrowRight className="ml-2 h-4 w-4" /></Link></Button></CardHeader><CardContent>
       {isLoading ? <Skeleton className="h-24 w-full" /> : error ? <p className="text-sm text-muted-foreground">Activity is unavailable. Try refreshing.</p> : data?.recent.length ? <div className="divide-y">{data.recent.map(item => <div key={item.id} className="py-4 first:pt-0"><div className="mb-2 flex flex-wrap justify-between gap-2 text-xs text-muted-foreground"><span>{item.topic || 'Practice'} · {new Date(item.created_at).toLocaleDateString()}</span><span>{item.evaluation_is_correct === true ? 'Correct' : item.evaluation_is_correct === false ? 'Needs review' : 'Not evaluated'}</span></div><div className="max-h-36 overflow-hidden text-sm"><ChatMarkdown content={item.problem_statement} /></div></div>)}</div> : <div className="py-6 text-center"><p className="text-muted-foreground">Your practice history starts with your first problem.</p><Button className="mt-4" asChild><Link href="/">Start practicing</Link></Button></div>}
     </CardContent></Card>

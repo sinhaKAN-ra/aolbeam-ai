@@ -10,12 +10,12 @@ export const metadata: Metadata = {
 
 export default function RefundPolicy() {
   return (
-    <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8">
+    <div className="rounded-3xl border bg-card p-6 sm:p-10">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <Button variant="ghost" asChild className="mb-6">
-            <Link href="/pricing">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Pricing
+            <Link href="/contact-us">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Help & contact
             </Link>
           </Button>
           <h1 className="text-3xl font-bold tracking-tight mb-4">Refund & Cancellation Policy</h1>

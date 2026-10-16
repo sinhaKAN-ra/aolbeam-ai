@@ -1,247 +1,101 @@
-import { supabase, isSupabaseConfigured } from './supabaseClient';
-import { UserProfile } from '../../types/chat-feature';
-import { CustomLearningGoal } from '@/types/chat-feature/chat-feature';
-import { LearningStep } from '@/types/chat-feature/chat-feature';
-import { LearningPath } from '@/types/chat-feature/chat-feature';
+import type {
+  CustomLearningGoal,
+  LearningPath,
+} from "@/types/chat-feature/chat-feature";
 
+import type { ManualModuleInput } from "@/lib/learning-paths/schema";
+
+async function pathRequest<T>(url: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...options,
+    cache: "no-store",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+  });
+  const data = await response.json();
+  if (!response.ok)
+    throw new Error(
+      data.error || "Could not update your learning path. Please try again.",
+    );
+  return data as T;
+}
 export class LearningPathService {
-  async saveLearningPath(learningPath: LearningPath): Promise<LearningPath> {
+  getUserLearningPaths() {
+    return pathRequest<LearningPath[]>("/api/learning-paths").then((paths) =>
+      paths.map((path) => ({
+        ...path,
+        steps: Array.isArray(path.steps) ? path.steps : [],
+      })),
+    );
+  }
+  createCustomLearningPath(
+    goals: CustomLearningGoal[],
+    _searchHistory: unknown[] = [],
+  ) {
+    return pathRequest<LearningPath>("/api/learning-paths/generate", {
+      method: "POST",
+      body: JSON.stringify({ goals }),
+    });
+  }
+  saveLearningPath(path: LearningPath) {
+    return pathRequest<LearningPath>("/api/learning-paths", {
+      method: "PUT",
+      body: JSON.stringify({ id: path.id, updates: { title: path.title } }),
+    });
+  }
+  addModule(pathId: string, input: ManualModuleInput) {
+    return pathRequest<{ path: LearningPath; stepId: string }>(
+      `/api/learning-paths/${pathId}/modules`,
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  }
+  loadLesson(pathId: string, stepId: string) {
+    return pathRequest<LearningPath>(`/api/learning-paths/${pathId}/lesson`, {
+      method: "POST",
+      body: JSON.stringify({ stepId }),
+    });
+  }
+  updateProgress(
+    pathId: string,
+    stepId: string,
+    completed: boolean,
+    answer?: number,
+  ) {
+    return pathRequest<LearningPath>(`/api/learning-paths/${pathId}/progress`, {
+      method: "PATCH",
+      body: JSON.stringify({ stepId, completed, answer }),
+    });
+  }
+  deleteLearningPath(pathId: string) {
+    return pathRequest<{ success: boolean }>(
+      `/api/learning-paths?id=${encodeURIComponent(pathId)}`,
+      { method: "DELETE" },
+    );
+  }
+  // Recent tutor topics are only a convenience; never substitute them for course generation.
+  async saveSearchHistory(_userId: string, searchTerm: string) {
     try {
-      const response = await fetch('/api/learning-paths', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(learningPath),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save learning path');
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error saving learning path:', error);
-      throw error;
+      const history: string[] = JSON.parse(
+        localStorage.getItem("searchHistory") || "[]",
+      );
+      localStorage.setItem(
+        "searchHistory",
+        JSON.stringify(
+          [searchTerm, ...history.filter((item) => item !== searchTerm)].slice(
+            0,
+            50,
+          ),
+        ),
+      );
+    } catch {
+      /* Optional browser history. */
     }
   }
-
-  async getUserLearningPaths(): Promise<LearningPath[]> {
+  async getUserSearchHistory(_userId: string): Promise<string[]> {
     try {
-      const response = await fetch('/api/learning-paths');
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch learning paths');
-      }
-      const data = await response.json();
-      return data.map(this.mapFromDatabase);
-    } catch (error) {
-      console.error('Error fetching learning paths:', error);
+      return JSON.parse(localStorage.getItem("searchHistory") || "[]");
+    } catch {
       return [];
     }
   }
-
-  async saveSearchHistory(userId: string, searchTerm: string): Promise<void> {
-    if (!isSupabaseConfigured()) {
-      const history = JSON.parse(localStorage.getItem('searchHistory') || '[]');
-      history.unshift(searchTerm);
-      localStorage.setItem('searchHistory', JSON.stringify(history.slice(0, 50)));
-      return;
-    }
-
-    try {
-      const { error } = await supabase!
-        .from('search_history')
-        .insert([{
-          user_id: userId,
-          search_term: searchTerm,
-          created_at: new Date().toISOString()
-        }]);
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error saving search history:', error);
-    }
-  }
-
-  async getUserSearchHistory(userId: string): Promise<string[]> {
-    // Always check localStorage first
-    const localHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
-    
-    // If Supabase is not configured, just return localStorage data
-    if (!isSupabaseConfigured()) {
-      return localHistory;
-    }
-
-    try {
-      // Try to fetch from Supabase
-      const { data, error } = await supabase!
-        .from('search_history')
-        .select('search_term')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      // If there's an error (including missing table), fall back to localStorage
-      if (error) {
-        console.warn('Falling back to localStorage for search history:', error.message);
-        return localHistory;
-      }
-
-      return data.map(item => item.search_term);
-    } catch (error) {
-      console.error('Error fetching search history:', error);
-      // Fall back to localStorage on error
-      return localHistory;
-    }
-  }
-
-  async createCustomLearningPath(
-    goals: CustomLearningGoal[],
-    searchHistory: any[]
-  ): Promise<LearningPath> {
-    try {
-      const mainGoal = goals[0];
-      
-      // Create a basic learning path structure
-      const newPath: Partial<LearningPath> = {
-        id: `path_${Date.now()}`,
-        title: mainGoal.title,
-        description: mainGoal.description || `Custom learning path for ${mainGoal.title}`,
-        main_topic: mainGoal.title,
-        is_custom_path: true,
-        estimated_hours: mainGoal.estimatedHours || 10,
-        steps: [],
-        current_step: 0,
-        total_steps: 0,
-        goals: goals.map(g => g.title),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      
-      // Generate steps: try AI first (robust fallback chain via /api/gemini),
-      // then fall back to a local template if the AI call fails or returns
-      // nothing. This makes the menu "Generate" produce a real, topic-specific
-      // path instead of the generic placeholder steps.
-      let steps: LearningStep[] = [];
-
-      try {
-        const aiRes = await fetch('/api/gemini', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'generateLearningPath', params: { topic: mainGoal.title } }),
-        });
-        if (aiRes.ok) {
-          const aiPath = await aiRes.json();
-          if (Array.isArray(aiPath?.steps) && aiPath.steps.length > 0) {
-            steps = aiPath.steps.map((s: any, i: number) => ({
-              id: `step_${Date.now()}_${i}`,
-              title: String(s.title ?? `Step ${i + 1}`),
-              description: String(s.description ?? ''),
-              completed: false,
-              estimatedTime: String(s.estimatedTime ?? '1-2 weeks'),
-              category: ['beginner', 'intermediate', 'advanced'].includes(s.difficulty)
-                ? s.difficulty
-                : 'beginner',
-              resources: [],
-            }));
-            if (aiPath.title) newPath.title = String(aiPath.title);
-          }
-        }
-      } catch (aiErr) {
-        console.warn('AI learning-path generation failed, using local template:', aiErr);
-      }
-
-      // Local fallback: build steps from goals + topics (original behaviour).
-      if (steps.length === 0) {
-        goals.forEach((goal, goalIndex) => {
-          steps.push({
-            id: `step_${Date.now()}_${goalIndex}`,
-            title: goal.title,
-            description: goal.description || `Learn about ${goal.title}`,
-            completed: false,
-            estimatedTime: `${goal.estimatedHours || 5} hours`,
-            category: goal.difficulty || 'beginner',
-            resources: []
-          });
-
-          if (goal.topics && goal.topics.length > 0) {
-            goal.topics.forEach((topic, topicIndex) => {
-              if (topic.toLowerCase() !== goal.title.toLowerCase()) {
-                steps.push({
-                  id: `step_${Date.now()}_${goalIndex}_${topicIndex}`,
-                  title: topic,
-                  description: `Explore ${topic} as part of ${goal.title}`,
-                  completed: false,
-                  estimatedTime: `${Math.round((goal.estimatedHours || 5) / goal.topics.length)} hours`,
-                  category: goal.difficulty || 'beginner',
-                  resources: []
-                });
-              }
-            });
-          }
-        });
-      }
-
-      newPath.steps = steps;
-      newPath.total_steps = steps.length;
-      
-      // Save the path to the database
-      const response = await fetch('/api/learning-paths', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newPath),
-      });
-  
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save learning path');
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error('Error creating custom learning path:', error);
-      throw error;
-    }
-  }
-
-  async deleteLearningPath(pathId: string): Promise<void> {
-    try {
-      const response = await fetch(`/api/learning-paths/${pathId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete learning path');
-      }
-    } catch (error) {
-      console.error('Error deleting learning path:', error);
-      throw error;
-    }
-  }
-
-  private mapFromDatabase(data: any): Partial<LearningPath> {
-    return {
-      id: data.id,
-      title: data.title,
-      description: data.description,
-      main_topic: data.main_topic || data.topic,
-      steps: data.steps || [],
-      current_step: data.current_step,
-      total_steps: data.total_steps,
-      estimated_hours: data.estimated_hours,
-      completed_topics: data.completed_topics || [],
-      suggested_topics: data.suggested_topics || [],
-      is_custom_path: data.is_custom_path || false,
-      goals: data.goals || [],
-      timeline: data.timeline,
-      created_at: data.created_at,
-      updated_at: data.updated_at
-    };
-  }
 }
-
 export const learningPathService = new LearningPathService();

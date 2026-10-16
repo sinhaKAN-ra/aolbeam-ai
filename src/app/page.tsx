@@ -1,4 +1,5 @@
 "use client";
+import { useAppRouter } from "@/hooks/useAppRouter";
 
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
@@ -40,15 +41,17 @@ import { Label } from '@/components/ui/label';
 import MainLayoutContainer from '@/components/MainLayoutContainer';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSupabase } from '@/hooks/useSupabase';
-import { useRouter, useSearchParams } from 'next/navigation';
+import {useSearchParams} from 'next/navigation';
 import { useInteractionLimit } from '@/hooks/useInteractionLimit';
 import { InteractionType, InteractionLimitResult } from '@/types/interaction';
+import { GUEST_CHAT_TRIAL_LIMIT } from '@/config/limits';
+import { FEATURES } from '@/config/features';
 
 // This is a client component that will be hydrated on the client
 // Server-side data fetching should be moved to a Server Component
 // and passed as props to this component
 
-const FREE_INTERACTION_LIMIT = 50; // guest problem generations before the login prompt
+const FREE_INTERACTION_LIMIT = GUEST_CHAT_TRIAL_LIMIT; // guest problem generations before the login prompt
 const CONCRETE_AI_PROBLEM_TYPES: AIGeneratedProblemType[] = ['theory', 'practical', 'practical_mcq', 'conceptual', 'numerical', 'diagram_based'];
 
 
@@ -67,7 +70,7 @@ function AOLBEAMPage() {
   const { toast } = useToast();
   const { user: currentUser, isLoading: isAuthLoading } = useAuth();
   const supabase = useSupabase();
-  const router = useRouter();
+  const router = useAppRouter();
   
   
   // User profile state
@@ -1043,7 +1046,7 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
 
     if (isLoggedIn) {
       if (userProfile?.is_subscribed) {
-        return "You have unlimited interactions! 🎉";
+        return `${remaining} of ${limit} interactions remaining`;
       } else {
         // Logged-in, not subscribed
         if (remaining > 0) {
@@ -1075,7 +1078,7 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
       <div id="generate" className="flex-1 bg-background">
         <div className="py-4 sm:py-8 overflow-hidden">
           <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
-            <div className="max-w-4xl mx-auto space-y-6 w-full">
+            <div className="max-w-5xl mx-auto space-y-6 w-full">
               <div ref={problemGeneratorRef}>
                 <ProblemGenerator
                   ref={problemGeneratorComponentRef}
@@ -1100,7 +1103,7 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
                     <RefreshCw className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" /> 
                     <span className="truncate">Another (Same Topic)</span>
                   </Button>
-                  {currentUser && currentProblem && ( // Show button only if logged in and problem exists
+                  {FEATURES.testSeries && currentUser && currentProblem && (
                     <Button 
                       onClick={() => { 
                         setShowAddToTestSeriesModal(true);
@@ -1141,7 +1144,7 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
                     <>
                       <EvaluationResult ref={evaluationResultRef} evaluation={evaluationResult} />
                       {currentProblem && evaluationResult.isCorrect !== undefined && ( // Only show insights prompt if there's a current problem and evaluation is complete
-                        <div className="mt-4 p-4 bg-blue-100 border border-blue-200 text-blue-800 rounded-md">
+                        <div className="mt-4 rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm text-primary">
                           <p>Want to understand how to solve similar problems? Click "View Insights" below!</p>
                         </div>
                       )}
@@ -1149,7 +1152,7 @@ const handleEvaluateAnswer = async (answer: string, timeTakenSeconds?: number) =
                   )}
                 </>
               )}
-              {isClientMounted && (
+              {isClientMounted && history.length > 0 && (
                 <Card className="mt-8">
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between">

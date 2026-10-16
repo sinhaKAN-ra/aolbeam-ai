@@ -11,11 +11,11 @@ function ErrorContent() {
   const error = searchParams?.get('error');
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="max-w-md w-full mx-auto p-8">
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="max-w-md w-full mx-auto rounded-3xl border bg-card p-8">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-foreground mb-4">
-            Authentication Error
+            Let’s try that again.
           </h1>
           <p className="text-muted-foreground mb-8">
             {error || 'An unexpected error occurred during authentication.'}
@@ -44,8 +44,8 @@ function ErrorContent() {
 export default function AuthErrorPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="max-w-md w-full mx-auto p-8">
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="max-w-md w-full mx-auto rounded-3xl border bg-card p-8">
           <div className="text-center">
             <h1 className="text-3xl font-bold text-foreground mb-4">
               Loading...
